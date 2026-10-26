@@ -967,6 +967,7 @@ if(ANDROID AND NOT TARGET nectar_launcher)
     add_library(nectar_launcher SHARED
         pc_port/launcher/launcher_android_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/button_style.cpp
         pc_port/launcher/crash_report.cpp
         pc_port/launcher/bti_decode.cpp
         pc_port/launcher/settings_model.cpp
@@ -1036,6 +1037,7 @@ if(PIKMIN_BUILD_LAUNCHER)
     add_executable(pikmin_launcher
         pc_port/launcher/launcher_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/button_style.cpp
         pc_port/launcher/crash_report.cpp
         pc_port/launcher/bti_decode.cpp
         pc_port/launcher/settings_model.cpp
@@ -1144,6 +1146,12 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     add_executable(launcher_scroll_test pc_port/launcher/launcher_scroll_test.cpp)
     target_compile_options(launcher_scroll_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME launcher_scroll_test COMMAND launcher_scroll_test)
+
+    add_executable(button_style_test
+        pc_port/launcher/button_style_test.cpp
+        pc_port/launcher/button_style.cpp)
+    target_compile_options(button_style_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME button_style_test COMMAND button_style_test)
 
     if(PIKMIN_NETPLAY_BUILD)
         # Host Co-op / Join Co-op flow with a fake game.
