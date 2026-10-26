@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <string>
+#include <vector>
 
 namespace pikmin::launcher {
 
@@ -126,6 +128,181 @@ inline SettingsPanelFit fitSettingsPanel(float total)
     }
     out.helpH = std::clamp(total - kSettingsGap - kSettingsRowsComfort, kSettingsHelpMin, kSettingsHelpFull);
     out.rowsH = total - kSettingsGap - out.helpH;
+    return out;
+}
+
+// ── Anchos estrechos ───────────────────────────────────────────────────────
+
+// Una fila de ajustes: etiqueta a la izquierda y control a la derecha. Si la
+// etiqueta no cabe, en paneles estrechos va encima del control; en los anchos
+// se recorta con "..." (y la fila enseña la etiqueta entera al pasar el ratón).
+// Nunca queda debajo del control.
+enum class SettingRowMode { Inline, Ellipsized, Stacked };
+
+struct SettingRowFit {
+    SettingRowMode mode = SettingRowMode::Inline;
+    float controlW = 0.0f;
+    float labelMaxW = 0.0f; // ancho para la etiqueta (recortarla si no cabe)
+};
+
+inline constexpr float kSettingControlMaxW = 300.0f;
+inline constexpr float kSettingLabelGap = 12.0f;
+inline constexpr float kSettingStackBelowW = 520.0f; // ancho interior del panel
+
+inline SettingRowFit fitSettingRow(float innerW, float labelW)
+{
+    SettingRowFit out;
+    innerW = std::max(1.0f, innerW);
+    out.controlW = std::min(kSettingControlMaxW, innerW * 0.45f);
+    out.labelMaxW = std::max(1.0f, innerW - out.controlW - kSettingLabelGap);
+    if (labelW <= out.labelMaxW) return out;
+    if (innerW < kSettingStackBelowW) {
+        out.mode = SettingRowMode::Stacked;
+        out.controlW = std::min(kSettingControlMaxW, innerW);
+        out.labelMaxW = innerW;
+    } else {
+        out.mode = SettingRowMode::Ellipsized;
+    }
+    return out;
+}
+
+// Recorta `text` por el final con "..." para que mida como mucho `maxW`.
+// `measure(std::string)` devuelve el ancho de un texto.
+template <class Measure>
+std::string ellipsizeEnd(const std::string& text, float maxW, Measure measure)
+{
+    if (measure(text) <= maxW) return text;
+    const std::string dots = "...";
+    // Corta en límites de carácter UTF-8.
+    std::size_t keep = text.size();
+    while (keep > 0) {
+        do { --keep; } while (keep > 0 && (static_cast<unsigned char>(text[keep]) & 0xC0) == 0x80);
+        std::string shown = text.substr(0, keep);
+        while (!shown.empty() && shown.back() == ' ') shown.pop_back();
+        shown += dots;
+        if (measure(shown) <= maxW) return shown;
+    }
+    return dots;
+}
+
+// Botones de herramientas bajo cada portada, de dos en dos por fila y del
+// ancho de su texto. Si una pareja no cabe en la columna, la columna se
+// ensancha (las portadas siguen centradas); si ni así, cada botón va en su fila.
+struct ToolButton {
+    float x = 0.0f; // desde el borde izquierdo de la columna
+    float w = 0.0f;
+    int row = 0;
+};
+
+struct ToolColumn {
+    std::vector<ToolButton> buttons;
+    int rows = 0;
+    float neededW = 0.0f; // ancho de columna que pide (sin apilar)
+};
+
+inline constexpr float kToolPad = 14.0f;     // a cada lado del texto
+inline constexpr float kToolPairGap = 12.0f;
+
+// Ancho de columna que necesitan unos textos puestos de dos en dos.
+inline float toolColumnNeed(const std::vector<float>& textW)
+{
+    float need = 0.0f;
+    for (std::size_t i = 0; i < textW.size(); i += 2) {
+        float row = textW[i] + 2.0f * kToolPad;
+        if (i + 1 < textW.size()) row += kToolPairGap + textW[i + 1] + 2.0f * kToolPad;
+        need = std::max(need, row);
+    }
+    return need;
+}
+
+// Reparte los botones en una columna de ancho `columnW`. Cada pareja se
+// estira por igual hasta llenar la columna.
+inline ToolColumn layoutToolColumn(const std::vector<float>& textW, float columnW)
+{
+    ToolColumn out;
+    const bool pairs = toolColumnNeed(textW) <= columnW + 0.01f;
+    out.neededW = toolColumnNeed(textW);
+    int row = 0;
+    for (std::size_t i = 0; i < textW.size();) {
+        if (pairs && i + 1 < textW.size()) {
+            const float a = textW[i] + 2.0f * kToolPad, b = textW[i + 1] + 2.0f * kToolPad;
+            const float extra = (columnW - kToolPairGap - a - b) * 0.5f;
+            out.buttons.push_back({ 0.0f, a + extra, row });
+            out.buttons.push_back({ a + extra + kToolPairGap, b + extra, row });
+            i += 2;
+        } else {
+            out.buttons.push_back({ 0.0f, columnW, row });
+            i += 1;
+        }
+        ++row;
+    }
+    out.rows = row;
+    return out;
+}
+
+// Ensancha las columnas de Games para los botones: `needW` es lo que piden
+// las dos columnas; el hueco entre ellas no baja de `minGap` y todo cabe en
+// la ventana con `margin` a cada lado. Devuelve el ancho de columna usado.
+inline constexpr float kGamesMinGap = 24.0f;
+inline constexpr float kGamesSideMargin = 24.0f;
+
+inline float gamesColumnLimit(float windowW)
+{
+    return std::max(0.0f, (windowW - 2.0f * kGamesSideMargin - kGamesMinGap) * 0.5f);
+}
+
+inline void widenGamesColumns(GamesLayout& layout, float needW, float windowW)
+{
+    const float wanted = std::min(needW, gamesColumnLimit(windowW));
+    if (wanted <= layout.columnW) return;
+    const float centres = layout.columnW + layout.gap; // distancia entre centros de antes
+    layout.columnW = wanted;
+    layout.gap = std::max(kGamesMinGap, centres - wanted);
+}
+
+// Botones de un diálogo: Cancelar a la izquierda, las acciones a la derecha.
+// Si no caben en una fila, las acciones van arriba repartidas a partes iguales
+// y Cancelar debajo; si ni así, una por fila a todo el ancho.
+struct DialogButton {
+    float x = 0.0f;
+    float w = 0.0f;
+    int row = 0;
+};
+
+inline constexpr float kDialogGap = 14.0f;
+inline constexpr float kDialogCancelGap = 32.0f; // mínimo entre Cancelar y las acciones
+
+// widths: anchos deseados de las acciones (de izquierda a derecha); cancelW 0 = sin Cancelar.
+inline std::vector<DialogButton> fitDialogButtons(const std::vector<float>& widths, float cancelW, float innerW, int& rows)
+{
+    std::vector<DialogButton> out;
+    float actions = 0.0f;
+    for (float w : widths) actions += w;
+    actions += kDialogGap * float(widths.empty() ? 0 : widths.size() - 1);
+    const float oneRow = actions + (cancelW > 0.0f ? cancelW + kDialogCancelGap : 0.0f);
+    if (oneRow <= innerW) {
+        float x = innerW - actions;
+        for (float w : widths) { out.push_back({ x, w, 0 }); x += w + kDialogGap; }
+        if (cancelW > 0.0f) out.push_back({ 0.0f, cancelW, 0 });
+        rows = 1;
+        return out;
+    }
+    int row = 0;
+    const float n = float(widths.size());
+    const float even = (innerW - kDialogGap * (n - 1.0f)) / std::max(1.0f, n);
+    float widest = 0.0f;
+    for (float w : widths) widest = std::max(widest, w);
+    if (widest <= even) {
+        float x = 0.0f;
+        for (std::size_t i = 0; i < widths.size(); ++i) { out.push_back({ x, even, 0 }); x += even + kDialogGap; }
+        row = 1;
+    } else {
+        // Una por fila: la principal (la de más a la derecha) arriba.
+        for (std::size_t i = 0; i < widths.size(); ++i) out.push_back({ 0.0f, innerW, int(widths.size() - 1 - i) });
+        row = int(widths.size());
+    }
+    if (cancelW > 0.0f) out.push_back({ 0.0f, std::min(cancelW, innerW), row++ });
+    rows = row;
     return out;
 }
 
