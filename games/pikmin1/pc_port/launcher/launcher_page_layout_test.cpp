@@ -197,6 +197,23 @@ int main()
         const float logoAspect = 2172.0f / 476.0f; // assets/logo.png
         check(hubPageBottom(700.0f) <= 700.0f - kFooterTop - 6.0f, "pages end above the footer pill");
         check(near(hubContentTop(1180.0f, 780.0f, logoAspect, true), 18.0f + 660.8f / logoAspect + 10.0f + 42.0f), "content top at design size");
+        // Tamaño mínimo de la ventana (800x600): todo cabe sin scroll.
+        // Botones de Games con anchos parecidos a Fredoka 21.
+        const std::vector<float> tools = { 104.0f, 118.0f, 112.0f, 98.0f };
+        for (float w : { 800.0f, 960.0f })
+            for (float h : { 600.0f, 700.0f }) {
+                const float top = hubContentTop(w, h, logoAspect, true);
+                const float avail = hubPageBottom(h) - top;
+                GamesLayout g1 = fitGames(w, avail, 1.0f, true);
+                widenGamesColumns(g1, toolColumnNeed(tools), w);
+                const ToolColumn col = layoutToolColumn(tools, g1.columnW);
+                check(col.rows == 2, "games tools pair up at small sizes");
+                const GamesLayout g2 = fitGames(w, avail, float(col.rows), true);
+                check(!g2.scroll, "games fits without scrolling");
+                check(!fitPage(380.0f, avail, 30.0f, 12.0f).scroll, "move fits without scrolling");
+                const SettingsPanelFit s = fitSettingsPanel((h - 64.0f) - (top + 24.0f));
+                check(s.helpH > 0.0f && s.rowsH >= kSettingsRowsMin, "settings keeps its help box");
+            }
     }
 
     std::cout << "launcher_page_layout_test: ok\n";
