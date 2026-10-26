@@ -21,6 +21,7 @@
 #include "launcher_coop.h"
 #endif
 #include "launcher_platform.h"
+#include "launcher_page_layout.h"
 #include "launcher_sidebar_layout.h"
 #include "settings_model.h"
 #include "release_update.h"
@@ -916,21 +917,65 @@ struct Hub {
         return (!state.mapEditor.empty() && !state.modelMaker.empty()) ? 2.0f : 1.0f;
     }
 
+    // Borde inferior de las páginas Games y Move Install.
+    static float pageBottom(ImVec2 size) { return size.y - 16.0f; }
+
+    // Filas de botones de la columna más alta (la de Pikmin 1 si está instalado).
+    float gamesRows() const
+    {
+        if (!state.games[int(HubGame::Pikmin1)].installed) return 1.0f;
+        float rows = editorRows();
+#if PIKMIN_LAUNCHER_NETPLAY
+        if (state.netplay) rows += 2.0f;
+#endif
+        return rows;
+    }
+
+    // Una página que no cabe se dibuja dentro de una región con scroll que
+    // ocupa de `top` al borde inferior; devuelve dónde empieza su contenido.
+    float beginPageScroll(const char* id, float top, ImVec2 size)
+    {
+        ImGui::SetCursorScreenPos(ImVec2(0.0f, top));
+        ImGui::BeginChild(id, ImVec2(size.x, std::max(1.0f, pageBottom(size) - top)), ImGuiChildFlags_None,
+                          ImGuiWindowFlags_NoBackground);
+        return ImGui::GetWindowPos().y - ImGui::GetScrollY();
+    }
+
+    void endPageScroll(float top, float content)
+    {
+        // Reserva el alto completo para que la región sepa cuánto puede desplazarse.
+        ImGui::SetCursorScreenPos(ImVec2(0.0f, top + content + 12.0f));
+        ImGui::Dummy(ImVec2(1.0f, 0.0f));
+        ImGui::EndChild();
+    }
+
     void drawGames(float top, ImVec2 size, float dt, float t)
     {
-        const float cardW = std::clamp(size.x * 0.19f, 190.0f, 280.0f);
-        const float cardH = cardW * 1.40f;
-        const float gap = cardW * 0.42f;
+        const float rows = gamesRows();
+        const bool hasUpdate = state.games[int(HubGame::Pikmin1)].installed;
+        const GamesLayout layout = fitGames(size.x, pageBottom(size) - top, rows, hasUpdate);
+        if (layout.scroll) top = beginPageScroll("##games", top, size);
+        drawGamesBody(top, size, dt, t, layout);
+        if (layout.scroll) endPageScroll(top, layout.content);
+    }
+
+    void drawGamesBody(float top, ImVec2 size, float dt, float t, const GamesLayout& layout)
+    {
+        // Las portadas encogen con la ventana; los botones conservan el ancho
+        // de su columna.
+        const float cardW = layout.columnW;
+        const float gap = layout.gap;
         const float startX = (size.x - (2.0f * cardW + gap)) * 0.5f;
-        const float cardY = top + 24.0f;
+        const float cardY = top + layout.space.top;
+        const float buttonsGap = layout.space.buttons;
         const char* names[] = { "Pikmin", "Pikmin 2" };
 
         for (int i = 0; i < 2; ++i) {
             const float x = startX + float(i) * (cardW + gap);
-            drawCard(i, ImVec2(x, cardY), ImVec2(cardW, cardH), dt, t);
+            drawCard(i, ImVec2(x + (cardW - layout.coverW) * 0.5f, cardY), ImVec2(layout.coverW, layout.coverH), dt, t);
 
             // Nombre del juego y los dos botones debajo de la portada.
-            const float below = cardY + cardH + 22.0f;
+            const float below = cardY + layout.coverH + layout.space.name;
             centredText(ImGui::GetWindowDrawList(), fonts.title, 28.0f, ImVec2(x + cardW * 0.5f, below + 14.0f),
                         col(kOrange), names[i]);
             const bool isPikmin2 = i == int(HubGame::Pikmin2);
@@ -938,7 +983,7 @@ struct Hub {
             // Debajo de cada portada: Install o, ya instalado, HD textures
             // (y en Pikmin 1, Map editor a su lado).
             ImGui::PushID(i);
-            ImGui::SetCursorScreenPos(ImVec2(x, below + 38.0f));
+            ImGui::SetCursorScreenPos(ImVec2(x, below + buttonsGap));
             if (!installed) {
                 if (glassButton("Install", ImVec2(cardW, 44.0f))) choose(HubAction::Install, HubGame(i));
             } else {
@@ -949,18 +994,18 @@ struct Hub {
                     // Los dos editores arriba; HD textures y Characters (instalar
                     // un personaje del creador) en la segunda fila.
                     if (glassButton("Map editor", ImVec2(halfW, 44.0f))) choose(HubAction::MapEditor, HubGame(i));
-                    ImGui::SetCursorScreenPos(ImVec2(x + halfW + 12.0f, below + 38.0f));
+                    ImGui::SetCursorScreenPos(ImVec2(x + halfW + 12.0f, below + buttonsGap));
                     if (glassButton("Model maker", ImVec2(halfW, 44.0f))) choose(HubAction::ModelMaker, HubGame(i));
-                    ImGui::SetCursorScreenPos(ImVec2(x, below + 38.0f + 44.0f + 10.0f));
+                    ImGui::SetCursorScreenPos(ImVec2(x, below + buttonsGap + 44.0f + 10.0f));
                     if (glassButton("HD textures", ImVec2(halfW, 44.0f))) choose(HubAction::TexturePack, HubGame(i));
-                    ImGui::SetCursorScreenPos(ImVec2(x + halfW + 12.0f, below + 38.0f + 44.0f + 10.0f));
+                    ImGui::SetCursorScreenPos(ImVec2(x + halfW + 12.0f, below + buttonsGap + 44.0f + 10.0f));
                     if (glassButton("Characters", ImVec2(halfW, 44.0f))) choose(HubAction::InstallCharacter, HubGame(i));
                 } else {
                     const bool one = editor || models;
                     const float buttonW = one ? halfW : cardW;
                     if (editor && glassButton("Map editor", ImVec2(buttonW, 44.0f))) choose(HubAction::MapEditor, HubGame(i));
                     if (models && glassButton("Model maker", ImVec2(buttonW, 44.0f))) choose(HubAction::ModelMaker, HubGame(i));
-                    if (one) ImGui::SetCursorScreenPos(ImVec2(x + buttonW + 12.0f, below + 38.0f));
+                    if (one) ImGui::SetCursorScreenPos(ImVec2(x + buttonW + 12.0f, below + buttonsGap));
                     if (glassButton("HD textures", ImVec2(buttonW, 44.0f))) choose(HubAction::TexturePack, HubGame(i));
                 }
             }
@@ -968,7 +1013,7 @@ struct Hub {
             // Online co-op: two captains on two PCs (netplay builds).
             if (installed && !isPikmin2 && state.netplay) {
                 const float coopW = (cardW - 12.0f) * 0.5f;
-                const float rows  = below + 38.0f + editorRows() * (44.0f + 10.0f);
+                const float rows  = below + buttonsGap + editorRows() * (44.0f + 10.0f);
                 ImGui::SetCursorScreenPos(ImVec2(x, rows));
                 if (glassButton("Host Co-op", ImVec2(coopW, 44.0f))) openCoop(true);
                 ImGui::SetCursorScreenPos(ImVec2(x + coopW + 12.0f, rows));
@@ -985,10 +1030,8 @@ struct Hub {
 
         // Un solo Update, centrado entre los dos juegos y debajo de sus botones.
         if (state.games[int(HubGame::Pikmin1)].installed) {
-            float y = cardY + cardH + 22.0f + 38.0f + 44.0f + 32.0f + (editorRows() - 1) * (44.0f + 10.0f);
-#if PIKMIN_LAUNCHER_NETPLAY
-            if (state.netplay) y += 2.0f * (44.0f + 10.0f);
-#endif
+            const float y = cardY + layout.coverH + layout.space.name + buttonsGap + 44.0f + layout.space.update
+                          + (gamesRows() - 1.0f) * (44.0f + 10.0f);
             // Con versión nueva en GitHub el botón lo dice ("Update to 1.0").
             std::string updateLabel = "Update";
             if (releaseCheck && releaseCheck->done) {
@@ -1362,11 +1405,21 @@ struct Hub {
 
     void drawMove(float top, ImVec2 size)
     {
+        // El panel mide 380 px: en ventanas bajas primero se acerca a las
+        // pestañas y, si ni así cabe, la página pasa a tener scroll.
+        const float panelH = 380.0f;
+        const PageFit fit = fitPage(panelH, pageBottom(size) - top, 30.0f, 12.0f);
+        if (fit.scroll) top = beginPageScroll("##move", top, size);
+        drawMovePanel(top + fit.top, size, panelH);
+        if (fit.scroll) endPageScroll(top, fit.content);
+    }
+
+    void drawMovePanel(float y, ImVec2 size, float panelH)
+    {
         const float width = std::min(size.x - 80.0f, 760.0f);
         const float x = (size.x - width) * 0.5f;
-        float y = top + 30.0f;
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        const ImVec2 panelA(x, y), panelB(x + width, y + 380.0f);
+        const ImVec2 panelA(x, y), panelB(x + width, y + panelH);
         dl->AddRectFilled(panelA, panelB, IM_COL32(8, 32, 12, 215), 20.0f);
         dl->AddRect(panelA, panelB, col(kOrange), 20.0f, 0, 2.5f);
         const float inner = x + 30.0f, innerW = width - 60.0f;
@@ -1746,8 +1799,9 @@ struct Hub {
                          | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoBackground);
         ImGui::BeginDisabled(!interactive || whatsNewOpen || coopOpen);
 
-        const float logoW = std::min(size.x * 0.56f, 700.0f);
-        const float logoH = logoW / logo.aspect();
+        // En ventanas bajas el logo encoge también con la altura.
+        const float logoH = std::min(std::min(size.x * 0.56f, 700.0f) / logo.aspect(), logoHeightCap(size.y));
+        const float logoW = logoH * logo.aspect();
         const ImVec2 logoAt((size.x - logoW) * 0.5f, 18.0f);
         ImGui::GetWindowDrawList()->AddImage(logo.imgui(), logoAt, ImVec2(logoAt.x + logoW, logoAt.y + logoH));
 
