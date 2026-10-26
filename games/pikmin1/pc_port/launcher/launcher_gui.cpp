@@ -23,6 +23,7 @@
 #include "launcher_cursor.h"
 #include "launcher_platform.h"
 #include "launcher_sidebar_layout.h"
+#include "launcher_scroll.h"
 #include "settings_model.h"
 #include "release_update.h"
 
@@ -627,6 +628,8 @@ struct Hub {
     // reordenarse cada vez que se cambia algo.
     std::map<std::pair<int, int>, std::vector<std::string>> optionOrder;
     float resetArmed = 0.0f; // segundos que queda activa la confirmación de Reset
+    // Rueda suavizada de las listas con scroll (Ajustes, novedades, co-op).
+    SmoothScroll rowsScroll, notesScroll, coopScroll;
     // Petición al juego apuntada mientras se dibuja con el candado de los
     // ajustes cogido; se lanza al soltarlo (start también lo coge).
     std::vector<std::string> pendingRequest;
@@ -748,6 +751,19 @@ struct Hub {
             if (slide.valid()) slideshow.add(slide);
             request.reset();
         }
+    }
+
+    // Rueda dentro de la ventana hija actual: una fila por paso, suavizado.
+    // La ventana tiene que llevar ImGuiWindowFlags_NoScrollWithMouse para que
+    // ImGui no aplique además su propio paso. Llamar antes de EndChild().
+    static void wheelScroll(SmoothScroll& state)
+    {
+        const ImGuiIO& io = ImGui::GetIO();
+        const float wheel = ImGui::IsWindowHovered() && !io.KeyCtrl ? io.MouseWheel : 0.0f;
+        const float current = ImGui::GetScrollY();
+        const float next = smoothScrollStep(state, current, ImGui::GetScrollMaxY(), wheel,
+                                            ImGui::GetFrameHeightWithSpacing(), io.DeltaTime);
+        if (next != current) ImGui::SetScrollY(next);
     }
 
     // Marco de cristal común a todo lo que el launcher dibuja a mano (botones,
@@ -1243,7 +1259,8 @@ struct Hub {
 
         // Filas del grupo, con scroll.
         ImGui::SetCursorScreenPos(ImVec2(panelX, top + 24.0f));
-        ImGui::BeginChild("rows", ImVec2(panelW, bottom - helpH - 12.0f - (top + 24.0f)), ImGuiChildFlags_Borders);
+        ImGui::BeginChild("rows", ImVec2(panelW, bottom - helpH - 12.0f - (top + 24.0f)), ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_NoScrollWithMouse);
         int pick[2] = { -1, -1 }; // fila y opción elegidas este fotograma
         std::string help;
         const SettingsGroup* shownGroup = settingsGroup < packsPage ? &groups[size_t(settingsGroup)] : nullptr;
@@ -1294,6 +1311,7 @@ struct Hub {
             ImGui::PopID();
         }
         }
+        wheelScroll(rowsScroll);
         ImGui::EndChild();
 
         // Barra de ayuda debajo.
@@ -1580,10 +1598,11 @@ struct Hub {
         const float buttonsH = 50.0f;
         ImGui::SetCursorScreenPos(ImVec2(a.x + 34.0f, a.y + 80.0f));
         ImGui::BeginChild("##notes", ImVec2(panel.x - 68.0f, panel.y - 80.0f - buttonsH - 44.0f), ImGuiChildFlags_None,
-                          ImGuiWindowFlags_NoBackground);
+                          ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::PushTextWrapPos(0.0f);
         drawNotes(whatsNewNotes);
         ImGui::PopTextWrapPos();
+        wheelScroll(notesScroll);
         ImGui::EndChild();
 
         const std::string updateLabel = "Update to " + whatsNewVersion;
@@ -1641,7 +1660,7 @@ struct Hub {
         const float innerW = panel.x - 68.0f;
         ImGui::SetCursorScreenPos(ImVec2(a.x + 34.0f, a.y + 80.0f));
         ImGui::BeginChild("##coopbody", ImVec2(innerW, panel.y - 80.0f - 90.0f), ImGuiChildFlags_None,
-                          ImGuiWindowFlags_NoBackground);
+                          ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::PushTextWrapPos(0.0f);
         ImGui::PushStyleColor(ImGuiCol_Text, col(ImVec4(1.0f, 0.93f, 0.80f, 1.0f)));
         ImGui::TextWrapped("%s", flow.status().c_str());
@@ -1687,6 +1706,7 @@ struct Hub {
                            "Tailscale.");
         ImGui::PopStyleColor();
         ImGui::PopTextWrapPos();
+        wheelScroll(coopScroll);
         ImGui::EndChild();
 
         const float buttonsH = 50.0f, closeW = 130.0f, y = b.y - buttonsH - 26.0f;
