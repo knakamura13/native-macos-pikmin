@@ -395,6 +395,7 @@ set(PC_PORT_SOURCES
     pc_port/audio/pc_dsp_host.cpp
     pc_port/settings/pc_settings.cpp
     pc_port/settings/pc_settings_p2d.cpp
+    pc_port/settings/pc_prompt_pointer.cpp
     src/jaudio/pikiseq.c
     pc_port/dolphin_stubs/os_stubs.cpp
     pc_port/dolphin_stubs/pc_host_readable.cpp
@@ -1283,6 +1284,13 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_definitions(pc_host_readable_test PRIVATE PC_HOST_READABLE_TEST_P1)
     target_compile_options(pc_host_readable_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_host_readable_test COMMAND pc_host_readable_test)
+
+    # New Game and Captain prompt mouse targets and their mapping (no window, no disc)
+    add_executable(pc_prompt_pointer_test pc_port/pc_prompt_pointer_test.cpp
+                   pc_port/settings/pc_prompt_pointer.cpp pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_prompt_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_prompt_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_prompt_pointer_test COMMAND pc_prompt_pointer_test)
 
     # Host software DSP test (not linked into main game)
     add_executable(pc_dsp_host_test
