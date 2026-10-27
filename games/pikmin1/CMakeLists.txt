@@ -1285,6 +1285,11 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_host_readable_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_host_readable_test COMMAND pc_host_readable_test)
 
+    add_executable(pc_file_select_pointer_test pc_port/pc_file_select_pointer_test.cpp pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_file_select_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_file_select_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_file_select_pointer_test COMMAND pc_file_select_pointer_test)
+
     # New Game and Captain prompt mouse targets and their mapping (no window, no disc)
     add_executable(pc_prompt_pointer_test pc_port/pc_prompt_pointer_test.cpp
                    pc_port/settings/pc_prompt_pointer.cpp pc_port/pc_menu_click.cpp)
