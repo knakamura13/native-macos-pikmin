@@ -1,0 +1,2 @@
+# Head branches of open upstream PRs to skip when rebuilding kyle-develop.
+# One branch name per line. Blank lines and lines starting with # are ignored.
