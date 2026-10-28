@@ -24,6 +24,7 @@ build-*/
 /packaging/linux/out/
 /packaging/windows/out/
 /packaging/android/out/
+/packaging/macos/out/
 /packaging.zip
 /save/
 .ninja_*
