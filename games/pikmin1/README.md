@@ -2,7 +2,7 @@
 
 <img width="2172" height="476" alt="opennectarlogo (1)" src="https://github.com/user-attachments/assets/71283101-1be5-4ca4-9b16-488320343cc8" />
 
-Native, experimental, and open-source port of *Pikmin* (GameCube, 2001) for **Linux, Windows and Android**. Runs the game code directly on the host system and translates GX to OpenGL; does not use Dolphin or any emulator.
+Native, experimental, and open-source port of *Pikmin* (GameCube, 2001) for **Linux, Windows, macOS and Android**. Runs the game code directly on the host system and translates GX to OpenGL; does not use Dolphin or any emulator.
 
 This project builds upon the decompilation by [projectPiki/pikmin](https://github.com/projectPiki/pikmin) and adds a native PC port layer.
 
@@ -194,6 +194,11 @@ move and resize them); Bluetooth and USB controllers work too. The
 To update, install the new APK over the old one — assets and saves stay.
 Uninstalling deletes them.
 
+### macOS
+
+There is no macOS release package yet. Build the app from source instead; see
+[macOS (app bundle)](#macos-app-bundle) under Build from source.
+
 ### Both platforms
 
 The launcher asks for your disc image, extracts the assets it needs and starts the
@@ -259,6 +264,51 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
+
+### macOS
+
+```sh
+brew install cmake sdl2-compat
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target pikmin_pc pikmin_launcher -j"$(sysctl -n hw.ncpu)"
+```
+
+The compiler comes from the Xcode command-line tools (`xcode-select --install`). The port requests an OpenGL 4.1 core context, the newest core profile macOS provides.
+
+### macOS (app bundle)
+
+This builds `Pikmin 1.app` and installs it in `/Applications`. It has been tested on
+Apple silicon with macOS 27. The app plays the USA Rev. 1 disc only. The European
+build is not in the macOS package yet.
+
+Install the requirements:
+
+```sh
+xcode-select --install   # compiler and tools, if not already installed
+brew install cmake sdl2-compat
+brew install ccache      # optional: faster rebuilds
+```
+
+Then, from the game folder (the one with `CMakeLists.txt`):
+
+```sh
+packaging/macos/build-app.sh --install
+```
+
+To install somewhere else, pass a folder, for example `~/Applications`. The folder
+is created if it does not exist.
+
+Open **Pikmin 1** from Launchpad or Applications. The launcher asks for your disc
+image on first run, as described under [Both platforms](#both-platforms).
+
+**Keeping it in sync.** Run the same command again after each build. It replaces the
+installed app. It refuses to run while the game is open, so quit the game first.
+
+Saves and settings live in `~/.local/share/pikmin-native`, not in the app, so
+reinstalling keeps them. To remove everything, delete `Pikmin 1.app` and that folder.
+
+The app uses Homebrew's `sdl2-compat` at `/opt/homebrew`, so run it on the Mac where
+you built it.
 
 ### Choosing which release to build
 
