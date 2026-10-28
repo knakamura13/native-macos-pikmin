@@ -340,6 +340,9 @@ def build_and_ctest(worktree, source, build_name):
         result = subprocess.run(command, cwd=worktree, text=True, capture_output=True)
         text = (result.stdout or "") + (result.stderr or "")
         logs.append(text)
+        for line in text.splitlines():
+            if "tests passed" in line or "tests failed" in line:
+                eprint(line)
         if result.returncode != 0:
             tail = "\n".join(text.splitlines()[-40:])
             eprint(tail)

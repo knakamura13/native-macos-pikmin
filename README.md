@@ -225,6 +225,11 @@ move and resize them); Bluetooth and USB controllers work too. The
 To update, install the new APK over the old one — assets and saves stay.
 Uninstalling deletes them.
 
+### macOS
+
+There is no macOS release package yet. Build the app from source instead; see
+[macOS (app bundle)](#macos-app-bundle) under Build from source.
+
 ### Both platforms
 
 The launcher asks for your disc image, extracts the assets it needs and starts the
