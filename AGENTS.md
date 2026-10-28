@@ -36,12 +36,13 @@ The last commit on `kyle-develop` is empty. Its message is the rebuild marker. A
 
 ### Marker format
 
-The first line is exactly `kyle-develop-rebuild-v1`. The second line is blank. Every later line is one record, in this order:
+The first line is exactly `kyle-develop-rebuild-v1`. The second line is blank. Later lines are records, in this order. A blank line, or any line that does not start with one of these keys, is ignored. A local hook may append a `Co-authored-by` trailer; that line is not an input.
 
 ```
 upstream_main <40-hex>
 kyle_patches <40-hex>
 merged_pr <number> <40-hex>
+resolved_pr <number> <40-hex> both-sides: <path> <path>...
 merged_include <branch> <40-hex>
 skipped_pr <number> <40-hex> <reason>
 skipped_include <branch> <40-hex-or-none> <reason>
