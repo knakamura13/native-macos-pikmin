@@ -30,7 +30,7 @@ tools/kyle-develop/rebuild.sh
 
 `--dry-run` does the same work, including the test suites, and does not push.
 
-The script reads the public GitHub API with no token. It needs `origin` (this fork, with push access) and `upstream` (added if missing). It builds and runs the Pikmin 1 and Pikmin 2 test suites from each game's README (`cmake --build`, then `ctest`). A conflict aborts that one step, records the files, and continues. If the tests fail, the script rebuilds without the step that introduced the failure and leaves that step out. It does not push a result whose tests fail.
+The script reads the public GitHub API with no token. It needs `origin` (this fork, with push access) and `upstream` (added if missing). It builds and runs the Pikmin 1 and Pikmin 2 test suites from each game's README (`cmake --build`, then `ctest`). When a merge conflicts and every hunk has text on both sides, the script keeps both sides (the tree so far, then the incoming change) and records a `resolved_pr` line. A delete-against-edit conflict, a binary file, or markers it cannot parse aborts that one step, records the files, and continues. If the tests fail, the script rebuilds without the step that introduced the failure and leaves that step out. It does not push a result whose tests fail.
 
 The last commit on `kyle-develop` is empty. Its message is the rebuild marker. A scheduled job reads it with `git log -1 --format=%B origin/kyle-develop` and rebuilds only when an input SHA below no longer matches the public API.
 
@@ -51,6 +51,7 @@ skipped_patch <40-hex> <reason>
 - `upstream_main` is `upstream/main` at build time.
 - `kyle_patches` is the tip of `origin/kyle-patches` that was cherry-picked.
 - `merged_pr` is an open upstream PR whose head repository is this fork, in ascending PR number, with the head SHA that was merged. Drafts are included. A PR whose commits were already contained is still listed.
+- `resolved_pr` repeats a `merged_pr` whose merge conflicted. Both sides of every hunk were kept, in the files named after `both-sides:`. The scheduler ignores this line. The PR's number and SHA are already in `merged_pr`.
 - `merged_include` is a branch from `include.txt`. The rebuild merges these in file order, after the PRs. The marker sorts the records by branch name.
 - `skipped_pr` is an open fork PR that was not merged. The SHA is the head that was considered. The reason is the rest of the line (`excluded`, `conflict: path path`, `tests failed when this step was included`, or a fetch error).
 - `skipped_include` and `skipped_patch` are the same idea for include-file branches and for individual `kyle-patches` commits.
