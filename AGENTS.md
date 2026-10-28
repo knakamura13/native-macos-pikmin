@@ -109,6 +109,7 @@ Commit them on `kyle-patches`, on top of current `main`. Prefer new files, or co
 
 ## Checks
 
-- macOS app: `games/pikmin1/packaging/macos/build-app.sh`. Add `--install` to replace `/Applications/Pikmin 1.app`. Quit the game first.
+- macOS app: `games/pikmin1/packaging/macos/build-app.sh`. Add `--install` to replace `/Applications/Pikmin 1.app`. Quit the game first. The built bundle is written to `out.noindex/` so Spotlight does not index the copy that is not installed.
+- On Kyle's Mac there is one stable app and one test shortcut. `/Applications/Pikmin 1.app` (bundle id `org.opennectar.pikmin1`) tracks `origin/kyle-develop`. `tools/mac/install-launchd.sh` installs an hourly LaunchAgent that runs `tools/mac/auto-install-kyle-develop.sh`; `--uninstall` removes it. If the game is open, that run does nothing and the next hour tries again. `tools/mac/test-build.sh`, from any checkout, builds that checkout into `~/OpenNectar-test-builds.noindex/` and points `~/Desktop/Open Nectar` at it. Test saves use `~/OpenNectar-test-builds.noindex/data`, not `~/.local/share/pikmin-native`. Folders whose names end in `.noindex` are skipped by Spotlight.
 - The rebuild runs the Pikmin 1 and Pikmin 2 `ctest` suites before it pushes.
 - Windows and Linux builds of an upstream PR are not run on this Mac unless the rebuild host is Linux. Before opening an upstream PR, confirm that the change compiles there, or say in the PR that it was not built.
