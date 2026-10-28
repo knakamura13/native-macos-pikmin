@@ -361,9 +361,33 @@ image on first run, as described under [Both platforms](#both-platforms).
 
 **Keeping it in sync.** Run the same command again after each build. It replaces the
 installed app. It refuses to run while the game is open, so quit the game first.
+The bundle is written to `packaging/macos/out.noindex/` first, so Spotlight does
+not list that extra copy. On this fork, `tools/mac/install-launchd.sh` can install
+that update hourly from `origin/kyle-develop` instead (see below).
 
 Saves and settings live in `~/.local/share/pikmin-native`, not in the app, so
 reinstalling keeps them. To remove everything, delete `Pikmin 1.app` and that folder.
+
+**Stable app and test builds.** This fork keeps two entry points on the Mac:
+
+- `/Applications/Pikmin 1.app` is the stable game, always a build of `origin/kyle-develop`.
+- `~/Desktop/Open Nectar` is a shortcut to the last checkout you built with `tools/mac/test-build.sh`.
+
+Install the hourly update once, from a checkout:
+
+```sh
+tools/mac/install-launchd.sh
+```
+
+It records that checkout in a LaunchAgent (`RunAtLoad`, then every hour). Remove it with `tools/mac/install-launchd.sh --uninstall`. The job does nothing while the game is running.
+
+Build the checkout you have open, without replacing the stable app or your real saves:
+
+```sh
+tools/mac/test-build.sh
+```
+
+Test saves and settings go in `~/OpenNectar-test-builds.noindex/data`. If a disc is already extracted at `~/.local/share/pikmin-native/assets`, the test build links to that folder instead of copying it. The link is shared, so a test that writes into `assets` changes the same files. Build folders are named `*.noindex`, which Spotlight does not index. The script keeps the five newest test builds and does not delete `data/`.
 
 The app uses Homebrew's `sdl2-compat` at `/opt/homebrew`, so run it on the Mac where
 you built it.
