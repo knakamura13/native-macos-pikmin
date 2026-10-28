@@ -186,6 +186,86 @@ def cherry_pick(cwd, sha):
     return "conflict", reason
 
 
+def keep_both_text(text):
+    """Join each conflict hunk as ours followed by theirs.
+
+    Returns None when a side is empty (a real delete) or the markers are not
+    the plain two-way form. Both sides of an adjacent insertion, such as two
+    new test blocks in CMakeLists.txt, are kept. A later test failure still
+    drops the step.
+    """
+    lines = text.splitlines(keepends=True)
+    out = []
+    i = 0
+    hunks = 0
+    while i < len(lines):
+        if not lines[i].startswith("<<<<<<<"):
+            out.append(lines[i])
+            i += 1
+            continue
+        i += 1
+        ours = []
+        while i < len(lines) and not lines[i].startswith("======="):
+            if lines[i].startswith("<<<<<<<") or lines[i].startswith(">>>>>>>"):
+                return None
+            ours.append(lines[i])
+            i += 1
+        if i >= len(lines) or not lines[i].startswith("======="):
+            return None
+        i += 1
+        if i < len(lines) and lines[i].startswith("|||||||"):
+            return None
+        theirs = []
+        while i < len(lines) and not lines[i].startswith(">>>>>>>"):
+            if lines[i].startswith("<<<<<<<") or lines[i].startswith("======="):
+                return None
+            theirs.append(lines[i])
+            i += 1
+        if i >= len(lines) or not lines[i].startswith(">>>>>>>"):
+            return None
+        i += 1
+        if not "".join(ours).strip() or not "".join(theirs).strip():
+            return None
+        out.extend(ours)
+        out.extend(theirs)
+        hunks += 1
+    if hunks == 0:
+        return None
+    result = "".join(out)
+    if "<<<<<<<" in result or ">>>>>>>" in result:
+        return None
+    return result
+
+
+def resolve_keep_both(cwd):
+    files = conflict_files(cwd)
+    if not files:
+        return None
+    rewritten = {}
+    root = Path(cwd)
+    for name in files:
+        path = root / name
+        data = path.read_bytes()
+        if b"\0" in data:
+            return None
+        try:
+            text = data.decode()
+        except UnicodeDecodeError:
+            return None
+        updated = keep_both_text(text)
+        if updated is None:
+            return None
+        rewritten[name] = updated
+    for name, updated in rewritten.items():
+        (root / name).write_text(updated)
+        git(["add", "--", name], cwd)
+    committed = git(["commit", "--no-edit"], cwd, check=False)
+    if committed.returncode != 0:
+        abort_op(cwd, "merge")
+        return None
+    return files
+
+
 def merge_sha(cwd, sha, message):
     result = git(["merge", "--no-ff", "--no-edit", "-m", message, sha], cwd, check=False)
     combined = (result.stdout or "") + (result.stderr or "")
@@ -193,6 +273,9 @@ def merge_sha(cwd, sha, message):
         if "Already up to date" in combined:
             return "already", ""
         return "applied", ""
+    resolved = resolve_keep_both(cwd)
+    if resolved is not None:
+        return "resolved", resolved
     files = conflict_files(cwd)
     reason = reason_conflict(files, combined)
     abort_op(cwd, "merge")
@@ -303,6 +386,7 @@ class Assembly:
         self.applied_patches = []
         self.merged_prs = []
         self.merged_includes = []
+        self.resolved = []
         self.skipped = []
 
 
@@ -333,12 +417,18 @@ def assemble(worktree, upstream_sha, steps):
         else:
             message = f"Merge fork branch {step['ref']}\n\nHead {step['sha']}"
         status, reason = merge_sha(worktree, step["sha"], message)
-        if status in ("applied", "already"):
+        if status in ("applied", "already", "resolved"):
             if kind == "pr":
                 asm.merged_prs.append({"number": step["number"], "sha": step["sha"], "ref": step["ref"]})
+                if status == "resolved":
+                    asm.resolved.append({
+                        "number": step["number"],
+                        "sha": step["sha"],
+                        "files": list(reason),
+                    })
             else:
                 asm.merged_includes.append({"branch": step["ref"], "sha": step["sha"]})
-            if status == "applied":
+            if status in ("applied", "resolved"):
                 asm.checkpoints.append((step, git(["rev-parse", "HEAD"], worktree).stdout.strip()))
         else:
             ident = str(step["number"]) if kind == "pr" else step["ref"]
@@ -356,6 +446,9 @@ def marker_message(upstream_sha, patches_sha, asm):
     lines = [MARKER_MAGIC, "", f"upstream_main {upstream_sha}", f"kyle_patches {patches_sha}"]
     for pr in sorted(asm.merged_prs, key=lambda item: item["number"]):
         lines.append(f"merged_pr {pr['number']} {pr['sha']}")
+    for item in sorted(asm.resolved, key=lambda item: item["number"]):
+        files = " ".join(item["files"])
+        lines.append(f"resolved_pr {item['number']} {item['sha']} both-sides: {files}")
     for item in sorted(asm.merged_includes, key=lambda item: item["branch"]):
         lines.append(f"merged_include {item['branch']} {item['sha']}")
     skipped_prs = [s for s in asm.skipped if s["kind"] == "pr"]
@@ -379,6 +472,10 @@ def summary_object(upstream_sha, patches_sha, asm, final_sha, pushed, dry_run, t
         "merged_prs": [
             {"number": pr["number"], "sha": pr["sha"], "ref": pr["ref"]}
             for pr in sorted(asm.merged_prs, key=lambda item: item["number"])
+        ],
+        "resolved_prs": [
+            {"number": item["number"], "sha": item["sha"], "files": item["files"]}
+            for item in sorted(asm.resolved, key=lambda item: item["number"])
         ],
         "merged_includes": sorted(asm.merged_includes, key=lambda item: item["branch"]),
         "applied_patches": list(asm.applied_patches),
