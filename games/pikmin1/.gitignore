@@ -25,6 +25,7 @@ build-*/
 /packaging/windows/out/
 /packaging/android/out/
 /packaging/macos/out/
+/packaging/macos/out.noindex/
 /packaging.zip
 /save/
 .ninja_*

@@ -3,7 +3,10 @@
 #
 # Builds "Pikmin 1.app" for macOS (arm64, USA build) and leaves it in:
 #
-#   packaging/macos/out/Pikmin 1.app
+#   packaging/macos/out.noindex/Pikmin 1.app
+#
+# The ".noindex" suffix keeps Spotlight from listing that intermediate copy.
+# The installed app in /Applications is the one that should show up in search.
 #
 # --install replaces DIR/Pikmin 1.app (default DIR: /Applications) with the new
 # build. It refuses to run while the app is open, so an open game is not cut off.
@@ -23,7 +26,7 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 game_dir="$(cd -- "${script_dir}/../.." && pwd)"
 build_dir="${game_dir}/build-macos"
-output_dir="${script_dir}/out"
+output_dir="${script_dir}/out.noindex"
 app_name="Pikmin 1.app"
 icon_src="${game_dir}/packaging/icon/open_nectar.png"
 
@@ -49,6 +52,14 @@ done
 
 if [[ "${clean}" -eq 1 ]]; then
     rm -rf "${build_dir}" "${output_dir}"
+fi
+
+# Older builds wrote packaging/macos/out/Pikmin 1.app. Spotlight indexes that
+# folder, so drop the leftover bundle. Leave anything else in out/ alone.
+legacy_app="${script_dir}/out/${app_name}"
+if [[ -e "${legacy_app}" ]]; then
+    rm -rf "${legacy_app}"
+    rmdir "${script_dir}/out" 2>/dev/null || true
 fi
 
 # ccache makes a --clean rebuild fast. Its cache lives outside build-macos, so it
@@ -126,6 +137,35 @@ cat > "${contents}/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# auto-install compares this sha with origin/kyle-develop. "unknown" means the
+# next auto-install run will build again.
+write_build_info() {
+    local sha branch sha_json branch_json text
+    sha="$(git -C "${game_dir}" rev-parse HEAD 2>/dev/null || true)"
+    branch="$(git -C "${game_dir}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [[ -z "${sha}" ]]; then
+        sha="unknown"
+    fi
+    if [[ -z "${branch}" || "${branch}" == "HEAD" ]]; then
+        branch=""
+    fi
+    sha_json="$(json_escape "${sha}")"
+    branch_json="$(json_escape "${branch}")"
+    text="$(printf '{\n  "sha": "%s",\n  "branch": "%s"\n}\n' "${sha_json}" "${branch_json}")"
+    printf '%s' "${text}" > "${contents}/Resources/build-info.json"
+}
+
+json_escape() {
+    local text=$1
+    text=${text//\\/\\\\}
+    text=${text//\"/\\\"}
+    text=${text//$'\n'/}
+    text=${text//$'\r'/}
+    printf '%s' "${text}"
+}
+
+write_build_info
 
 echo "Built: ${app}"
 
