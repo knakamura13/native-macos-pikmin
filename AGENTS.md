@@ -18,6 +18,14 @@ This fork (`knakamura13/native-macos-pikmin-1`) tracks the upstream project `SSu
 
 `tools/kyle-develop/exclude.txt` lists PR head branches to skip. `tools/kyle-develop/include.txt` lists extra fork branches to merge after those PRs. Both files live on `kyle-patches`. A `#` line is a comment.
 
+## Build roles and reporting
+
+Keep two identifiable baselines: an upstream build from exact `main`, and a personal integration build from generated `kyle-develop`. Use individual feature branches for isolated tests. Apply macOS packaging outside the upstream source baseline; disclose any gameplay patch as a diagnostic variant, not an exact upstream build.
+
+Rebuild `kyle-develop` from current upstream rather than manually rebasing or committing to the generated branch. Keep durable fork customizations and integration include/exclude configuration on `kyle-patches`; keep upstream-bound work on its own PR branch.
+
+Before describing a develop build as containing a feature, read its rebuild marker. Report `skipped_pr`, `skipped_include`, and `skipped_patch` entries: passing integration tests does not mean every pending change was included. Identify each delivered app by source revision, build role, applied diagnostic patches, and included/skipped features; make this identity available in the app or its bundled build metadata. Do not claim an app UI exists until implemented and verified.
+
 ## Rebuild
 
 From a checkout of the latest `kyle-patches` (the script on `kyle-develop` is the previous rebuild's copy):
