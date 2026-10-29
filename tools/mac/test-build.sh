@@ -91,6 +91,10 @@ sanitize_build_name() {
     printf '%s\n' "${name}"
 }
 
+build_identity_label() {
+    if [[ -z "$1" || "$1" == "HEAD" ]]; then printf 'commit-%s\n' "$2"; else printf '%s\n' "$1"; fi
+}
+
 # Newest first. Never removes data/, and never removes current even if it is old.
 prune_test_builds() {
     local root="$1"
@@ -148,7 +152,8 @@ write_wrapper() {
     local data_root="$5"
     local game_bin="$6"
     local launcher_bin="$7"
-    local q_data_home q_config_home q_cache_home q_data_root q_game_bin q_launcher_bin q_save
+    local title="$8"
+    local q_data_home q_config_home q_cache_home q_data_root q_game_bin q_launcher_bin q_save q_title
     q_data_home="$(printf '%q' "${data_home}")"
     q_config_home="$(printf '%q' "${config_home}")"
     q_cache_home="$(printf '%q' "${cache_home}")"
@@ -156,6 +161,7 @@ write_wrapper() {
     q_game_bin="$(printf '%q' "${game_bin}")"
     q_launcher_bin="$(printf '%q' "${launcher_bin}")"
     q_save="$(printf '%q' "${data_root}/save")"
+    q_title="$(printf '%q' "${title}")"
     cat > "${file}" <<EOF
 #!/bin/bash
 set -euo pipefail
@@ -165,6 +171,9 @@ export XDG_CACHE_HOME=${q_cache_home}
 export NECTAR_PIKMIN1_DIR=${q_data_root}
 export NECTAR_PIKMIN1_EXECUTABLE=${q_game_bin}
 export NECTAR_SAVE_DIR=${q_save}
+export PIKMIN_BUILD_INFO="\$(dirname -- "\$0")/../Resources/build-info.json"
+export PIKMIN_BUNDLE_MANAGED=1
+export PIKMIN_LAUNCHER_TITLE=${q_title}
 unset NECTAR_EXECUTABLE_PATH PIKMIN_EXECUTABLE_PATH
 data_root=\$NECTAR_PIKMIN1_DIR
 mkdir -p "\$data_root/save" "\$XDG_CONFIG_HOME/open-nectar" "\$XDG_CACHE_HOME"
@@ -191,12 +200,17 @@ write_test_app() {
     local launcher_bin="$7"
     local sha="$8"
     local branch="$9"
+    local snapshot="${10:-${sha:0:12}}"
     local macos="${app}/Contents/MacOS"
     local resources="${app}/Contents/Resources"
+    local title="Pikmin 1 — ${branch} [${snapshot}]"
+    local title_xml bundle_suffix
+    title_xml="$(xml_escape "${title}")"
+    bundle_suffix="$(printf '%s\n%s' "${branch}" "${snapshot}" | shasum -a 256 | cut -c1-16)"
     mkdir -p "${macos}" "${resources}"
     write_wrapper "${macos}/open-nectar" \
         "${data_home}" "${config_home}" "${cache_home}" \
-        "${data_root}" "${game_bin}" "${launcher_bin}"
+        "${data_root}" "${game_bin}" "${launcher_bin}" "${title}"
     local data_home_xml config_home_xml cache_home_xml data_root_xml game_bin_xml save_xml
     local sha_json branch_json
     sha_json="$(json_escape "${sha}")"
@@ -213,11 +227,11 @@ write_test_app() {
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Open Nectar</string>
+    <string>${title_xml}</string>
     <key>CFBundleDisplayName</key>
-    <string>Open Nectar</string>
+    <string>${title_xml}</string>
     <key>CFBundleIdentifier</key>
-    <string>org.opennectar.pikmin1.testbuild</string>
+    <string>org.opennectar.pikmin1.testbuild.${bundle_suffix}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -271,6 +285,9 @@ self_test() {
     [[ "${branch_name}" == "abc123def456" ]]
     branch_name="$(sanitize_build_name 'data' 'abc123def456')"
     [[ "${branch_name}" == "abc123def456" ]]
+    [[ "$(build_identity_label HEAD abc123)" == "commit-abc123" ]]
+    [[ "$(build_identity_label HEAD def456)" == "commit-def456" ]]
+    [[ "$(build_identity_label 'feature/foo' abc123)" == "feature/foo" ]]
 
     local i dir
     for i in 1 2 3 4 5 6; do
@@ -316,6 +333,7 @@ printf 'XDG_CONFIG_HOME=%s\n' "${XDG_CONFIG_HOME}"
 printf 'NECTAR_PIKMIN1_DIR=%s\n' "${NECTAR_PIKMIN1_DIR}"
 printf 'NECTAR_PIKMIN1_EXECUTABLE=%s\n' "${NECTAR_PIKMIN1_EXECUTABLE}"
 printf 'NECTAR_SAVE_DIR=%s\n' "${NECTAR_SAVE_DIR}"
+printf 'PIKMIN_LAUNCHER_TITLE=%s\n' "${PIKMIN_LAUNCHER_TITLE}"
 if [[ -n "${NECTAR_EXECUTABLE_PATH+x}" ]]; then
     printf 'NECTAR_EXECUTABLE_PATH=set\n'
 else
@@ -333,11 +351,19 @@ FAKE
     [[ "${output}" == *"NECTAR_SAVE_DIR=${data_root}/save"* ]]
     [[ "${output}" == *"NECTAR_PIKMIN1_EXECUTABLE=${tmp}/bin/nectar"* ]]
     [[ "${output}" == *"NECTAR_EXECUTABLE_PATH=unset"* ]]
+    [[ "${output}" == *"PIKMIN_LAUNCHER_TITLE=Pikmin 1 — fixture [0123456789ab]"* ]]
     [[ -L "${data_root}/assets" ]]
     [[ "$(readlink "${data_root}/assets")" == "${home}/.local/share/pikmin-native/assets" ]]
     [[ "$(head -n 1 "${config_home}/open-nectar/install_dir")" == "${data_root}" ]]
     [[ -d "${data_root}/save" ]]
-    grep -q 'org.opennectar.pikmin1.testbuild' "${app}/Contents/Info.plist"
+    grep -q 'org.opennectar.pikmin1.testbuild\.' "${app}/Contents/Info.plist"
+    grep -q 'Pikmin 1 — fixture \[0123456789ab\]' "${app}/Contents/Info.plist"
+    local other_app="${root}/other/Open Nectar.app" fixture_id other_id
+    write_test_app "${other_app}" "${data_home}" "${config_home}" "${cache_home}" \
+        "${data_root}" "${tmp}/bin/nectar" "${fake}" "0123456789abcdef" "fixture" "another-snapshot"
+    fixture_id="$(sed -n '/<key>CFBundleIdentifier<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "${app}/Contents/Info.plist")"
+    other_id="$(sed -n '/<key>CFBundleIdentifier<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "${other_app}/Contents/Info.plist")"
+    [[ -n "${fixture_id}" && -n "${other_id}" && "${fixture_id}" != "${other_id}" ]]
     printf 'test-build self-test ok\n'
 }
 
@@ -368,9 +394,13 @@ branch="$(git -C "${repo}" rev-parse --abbrev-ref HEAD)"
 sha="$(git -C "${repo}" rev-parse HEAD)"
 short="$(git -C "${repo}" rev-parse --short=12 HEAD)"
 name="$(sanitize_build_name "${branch}" "${short}")"
+identity="$(build_identity_label "${branch}" "${short}")"
+identity_hash="$(printf '%s' "${identity}" | shasum -a 256 | cut -c1-16)"
 
 root="${HOME}/OpenNectar-test-builds.noindex"
-dest="${root}/${name}"
+mkdir -p "${root}"
+dest="$(mktemp -d "${root}/${name}-${identity_hash}.XXXXXXXX")"
+snapshot="${short}-${dest##*.}"
 build_dir="${dest}/build"
 data_home="${root}/data"
 config_home="${data_home}/config"
@@ -389,18 +419,25 @@ cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release \
     ${cache_flags[@]+"${cache_flags[@]}"}
 cmake --build "${build_dir}" --target pikmin_pc pikmin_launcher -j "${jobs}"
 
-game_bin="${build_dir}/bin/nectar"
-launcher_bin="${build_dir}/bin/nectar-launcher"
-if [[ ! -x "${game_bin}" || ! -x "${launcher_bin}" ]]; then
+game_source="${build_dir}/bin/nectar"
+launcher_source="${build_dir}/bin/nectar-launcher"
+if [[ ! -x "${game_source}" || ! -x "${launcher_source}" ]]; then
     printf 'Build did not produce nectar and nectar-launcher in %s\n' "${build_dir}/bin" >&2
     exit 1
 fi
+mkdir -p "${app}/Contents/MacOS"
+game_bin="${app}/Contents/MacOS/nectar"
+launcher_bin="${app}/Contents/MacOS/nectar-launcher"
+cp "${game_source}" "${game_bin}"
+cp "${launcher_source}" "${launcher_bin}"
 
 write_test_app "${app}" "${data_home}" "${config_home}" "${cache_home}" \
-    "${data_root}" "${game_bin}" "${launcher_bin}" "${sha}" "${branch}"
+    "${data_root}" "${game_bin}" "${launcher_bin}" "${sha}" "${identity}" "${snapshot}"
+python3 "${script_dir}/build_identity.py" --repo "${repo}" \
+    --output "${app}/Contents/Resources/build-info.json" --game "${game_bin}" \
+    --launcher "${launcher_bin}" --cache "${build_dir}/CMakeCache.txt" --data "${data_root}" --role feature
 touch "${dest}"
 atomic_symlink "${app}" "${HOME}/Desktop/Open Nectar"
-prune_test_builds "${root}" 5 "${dest}"
 
 printf 'branch: %s\n' "${branch}"
 printf 'sha: %s\n' "${sha}"

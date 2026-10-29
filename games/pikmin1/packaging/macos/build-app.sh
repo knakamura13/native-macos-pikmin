@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-app.sh [--clean] [--build-dir DIR] [--install [DIR]]
+# build-app.sh [--clean] [--build-dir DIR] [--output-dir DIR] [--install [DIR]]
 #
 # Builds "Pikmin 1.app" for macOS (arm64, USA build) and leaves it in:
 #
@@ -29,14 +29,34 @@ build_dir="${game_dir}/build-macos"
 output_dir="${script_dir}/out.noindex"
 app_name="Pikmin 1.app"
 icon_src="${game_dir}/packaging/icon/open_nectar.png"
+bundle_id="org.opennectar.pikmin1"
+launcher_title="Open Nectar"
+configured_data_root="${PIKMIN_DATA_ROOT:-${HOME}/.local/share/pikmin-native}"
+build_role="${PIKMIN_BUILD_ROLE:-unknown}"
+marker_subject="$(git -C "${game_dir}" log -1 --format=%s 2>/dev/null || true)"
+if [[ "${build_role}" == "develop" && "${marker_subject}" != "kyle-develop-rebuild-v1" ]]; then
+    printf 'Refusing to label a build Develop without a develop rebuild marker.\n' >&2
+    exit 1
+fi
+if [[ "${build_role}" == "unknown" && "${marker_subject}" == "kyle-develop-rebuild-v1" ]]; then
+    build_role="develop"
+fi
+if [[ "${build_role}" == "upstream" ]]; then
+    bundle_id="org.opennectar.pikmin1.upstream"
+    launcher_title="Pikmin 1 — Upstream"
+elif [[ "${build_role}" == "develop" ]]; then
+    launcher_title="Pikmin 1 — Develop"
+fi
 
 clean=0
 install=0
+custom_output=0
 install_dir="/Applications"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --clean) clean=1; shift ;;
         --build-dir) build_dir="$2"; shift 2 ;;
+        --output-dir) output_dir="$2"; custom_output=1; shift 2 ;;
         --install)
             install=1
             # Optional directory argument: take it only if it is not another flag.
@@ -50,16 +70,21 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "${clean}" -eq 1 ]]; then
-    rm -rf "${build_dir}" "${output_dir}"
+app="${output_dir}/${app_name}"
+if [[ "${install}" -eq 1 ]] && python3 -c 'import os,sys; sys.exit(0 if os.path.realpath(sys.argv[1]) == os.path.realpath(sys.argv[2]) else 1)' "${app}" "${install_dir}/${app_name}"; then
+    printf '%s\n' 'Output and installation apps must be different paths.' >&2
+    exit 2
 fi
-
-# Older builds wrote packaging/macos/out/Pikmin 1.app. Spotlight indexes that
-# folder, so drop the leftover bundle. Leave anything else in out/ alone.
-legacy_app="${script_dir}/out/${app_name}"
-if [[ -e "${legacy_app}" ]]; then
-    rm -rf "${legacy_app}"
-    rmdir "${script_dir}/out" 2>/dev/null || true
+if [[ "${custom_output}" -eq 1 && ( -e "${app}" || -L "${app}" ) ]]; then
+    printf 'Refusing to replace an existing output app: %s\n' "${app}" >&2
+    exit 1
+fi
+if [[ "${clean}" -eq 1 ]]; then
+    if [[ "${build_dir}" != "${game_dir}/build-macos" ]]; then
+        printf '%s\n' '--clean is limited to the default build directory.' >&2
+        exit 2
+    fi
+    rm -rf "${build_dir}"
 fi
 
 # ccache makes a --clean rebuild fast. Its cache lives outside build-macos, so it
@@ -73,10 +98,19 @@ cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release ${cache_flag
 cmake --build "${build_dir}" --target pikmin_pc pikmin_launcher -j "$(sysctl -n hw.ncpu)"
 
 bin_dir="${build_dir}/bin"
-app="${output_dir}/${app_name}"
 contents="${app}/Contents"
 
-rm -rf "${app}"
+if [[ -e "${app}" || -L "${app}" ]]; then
+    if [[ "${custom_output}" -eq 1 ]]; then
+        printf 'Refusing to replace an existing output app: %s\n' "${app}" >&2
+        exit 1
+    fi
+    if pgrep -x "nectar" >/dev/null || pgrep -x "nectar-launcher" >/dev/null; then
+        printf 'Pikmin is running; refusing to replace the existing output app.\n' >&2
+        exit 1
+    fi
+    rm -rf "${app}"
+fi
 mkdir -p "${contents}/MacOS" "${contents}/Resources"
 
 # The binaries keep the upstream names (nectar, nectar-launcher). Only the app
@@ -102,6 +136,23 @@ if [[ "${install}" -eq 1 ]]; then
     game_app="${install_dir}/${app_name}"
 fi
 
+xml_escape() {
+    local value=$1
+    value=${value//&/&amp;}
+    value=${value//</&lt;}
+    value=${value//>/&gt;}
+    printf '%s' "${value}"
+}
+data_xml="$(xml_escape "${configured_data_root}")"
+game_app_xml="$(xml_escape "${game_app}")"
+upstream_env=""
+if [[ "${build_role}" == "upstream" ]]; then
+    upstream_env="<key>XDG_DATA_HOME</key><string>${data_xml}/xdg-data</string>
+        <key>XDG_CONFIG_HOME</key><string>${data_xml}/config</string>
+        <key>XDG_CACHE_HOME</key><string>${data_xml}/cache</string>
+        <key>NECTAR_SAVE_DIR</key><string>${data_xml}/save</string>"
+fi
+
 cat > "${contents}/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -112,7 +163,7 @@ cat > "${contents}/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key>
     <string>Pikmin 1</string>
     <key>CFBundleIdentifier</key>
-    <string>org.opennectar.pikmin1</string>
+    <string>${bundle_id}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -129,43 +180,32 @@ cat > "${contents}/Info.plist" <<PLIST
     <true/>
     <key>LSEnvironment</key>
     <dict>
+        <key>PIKMIN_BUNDLE_MANAGED</key>
+        <string>1</string>
+        <key>PIKMIN_LAUNCHER_TITLE</key>
+        <string>${launcher_title}</string>
         <key>NECTAR_PIKMIN1_DIR</key>
-        <string>${HOME}/.local/share/pikmin-native</string>
+        <string>${data_xml}</string>
         <key>NECTAR_PIKMIN1_EXECUTABLE</key>
-        <string>${game_app}/Contents/MacOS/nectar</string>
+        <string>${game_app_xml}/Contents/MacOS/nectar</string>
+        ${upstream_env}
     </dict>
 </dict>
 </plist>
 PLIST
 
-# auto-install compares this sha with origin/kyle-develop. "unknown" means the
-# next auto-install run will build again.
-write_build_info() {
-    local sha branch sha_json branch_json text
-    sha="$(git -C "${game_dir}" rev-parse HEAD 2>/dev/null || true)"
-    branch="$(git -C "${game_dir}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    if [[ -z "${sha}" ]]; then
-        sha="unknown"
-    fi
-    if [[ -z "${branch}" || "${branch}" == "HEAD" ]]; then
-        branch=""
-    fi
-    sha_json="$(json_escape "${sha}")"
-    branch_json="$(json_escape "${branch}")"
-    text="$(printf '{\n  "sha": "%s",\n  "branch": "%s"\n}\n' "${sha_json}" "${branch_json}")"
-    printf '%s' "${text}" > "${contents}/Resources/build-info.json"
-}
-
-json_escape() {
-    local text=$1
-    text=${text//\\/\\\\}
-    text=${text//\"/\\\"}
-    text=${text//$'\n'/}
-    text=${text//$'\r'/}
-    printf '%s' "${text}"
-}
-
-write_build_info
+overlay_args=()
+if [[ -n "${PIKMIN_LAUNCHER_OVERLAY:-}" ]]; then
+    overlay_args+=(--launcher-overlay "${PIKMIN_LAUNCHER_OVERLAY}")
+fi
+if [[ -n "${PIKMIN_WINDOW_OVERLAY:-}" ]]; then
+    overlay_args+=(--window-overlay "${PIKMIN_WINDOW_OVERLAY}" --window-title-header "${game_dir}/pc_port/pc_build_window_title.h")
+fi
+python3 "${game_dir}/../../tools/mac/build_identity.py" \
+    --repo "${game_dir}/../.." --output "${contents}/Resources/build-info.json" \
+    --game "${contents}/MacOS/nectar" --launcher "${contents}/MacOS/nectar-launcher" \
+    --cache "${build_dir}/CMakeCache.txt" --data "${configured_data_root}" --role "${build_role}" \
+    ${overlay_args[@]+"${overlay_args[@]}"}
 
 echo "Built: ${app}"
 
@@ -174,7 +214,7 @@ echo "Built: ${app}"
 # Only the keys in controls.conf change. Other settings are kept.
 merge_controls() {
     local controls="${script_dir}/controls.conf"
-    local data_root="${XDG_DATA_HOME:-${HOME}/.local/share}/pikmin-native"
+    local data_root="${configured_data_root}"
     local settings="${data_root}/pikmin_settings.conf"
     mkdir -p "${data_root}"
     if [[ ! -f "${settings}" ]]; then
@@ -208,6 +248,10 @@ if [[ "${install}" -eq 1 ]]; then
     # Refuse rather than kill: quitting a running game would lose unsaved progress.
     if pgrep -x "nectar" >/dev/null || pgrep -x "nectar-launcher" >/dev/null; then
         echo "Pikmin 1 is running. Quit it, then rerun with --install." >&2
+        exit 1
+    fi
+    if [[ "${PIKMIN_INSTALL_NEW_ONLY:-0}" == "1" && ( -e "${installed}" || -L "${installed}" ) ]]; then
+        echo "Refusing to replace an existing app: ${installed}" >&2
         exit 1
     fi
     # cp -R onto an existing bundle nests the copy inside it, so remove the old one first.

@@ -1,0 +1,193 @@
+diff --git a/games/pikmin1/pc_port/launcher/launcher_gui.cpp b/games/pikmin1/pc_port/launcher/launcher_gui.cpp
+index 7f96ecec..477878e0 100644
+--- a/games/pikmin1/pc_port/launcher/launcher_gui.cpp
++++ b/games/pikmin1/pc_port/launcher/launcher_gui.cpp
+@@ -15,6 +15,7 @@
+ //    botones de cristal) se lee de los datos que el usuario extrajo de su
+ //    propio disco. Sin instalación se dibuja una pradera con flores.
+ #include "launcher_gui.h"
++#include "json_mini.h"
+ 
+ #include "bti_decode.h"
+ #include "button_layout.h"
+@@ -2520,17 +2521,17 @@ struct Hub {
+ 
+     // El pie va en la ventana del hub (debajo de modales y de "What's new"),
+     // en su franja reservada; si la ruta no cabe se recorta por delante.
+-    void drawFooter(ImVec2 size)
++    void drawFooter(ImVec2 size, float reservedWidth)
+     {
+         ImDrawList* dl = ImGui::GetWindowDrawList();
+         const std::string where = !state.dataFolder.empty()
+             ? "Data folder: " + fitTail(fonts.caption, 16.0f, state.dataFolder,
+-                                        std::max(40.0f, size.x - 44.0f
++                                        std::max(40.0f, size.x - 44.0f - reservedWidth
+                                             - fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, "Data folder: ").x))
+             : state.games[0].directory.empty()
+             ? std::string("Not installed yet")
+             : "Installed in: " + fitTail(fonts.caption, 16.0f, state.games[0].directory,
+-                                         std::max(40.0f, size.x - 44.0f
++                                         std::max(40.0f, size.x - 44.0f - reservedWidth
+                                              - fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, "Installed in: ").x));
+         // Placa semitransparente para que el texto se lea sobre la hierba.
+         const ImVec2 extent = fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, where.c_str());
+@@ -2596,17 +2597,71 @@ struct Hub {
+         }
+ 
+         drawReleaseNotice(size, t);
++#ifdef __APPLE__
++        const float footerButtonH = 40.0f;
++        const float infoWidth = buttons::fitWidth("Build information", footerButtonH, buttons::kLabelSize, measureLabel());
++        const float folderWidth = state.dataFolder.empty() ? 0.0f
++            : buttons::fitWidth("Change folder", footerButtonH, buttons::kLabelSize, measureLabel()) + 10.0f;
++#endif
+         if (!state.dataFolder.empty()) {
+             // Abajo a la derecha, a la altura del rótulo de la carpeta.
+             const char* label = "Change folder";
+             const float h     = 40.0f;
+             const float w     = buttons::fitWidth(label, h, buttons::kLabelSize, measureLabel());
++#ifdef __APPLE__
++            ImGui::SetCursorScreenPos(ImVec2(size.x - 18.0f - infoWidth - 10.0f - w, size.y - 10.0f - h));
++#else
+             ImGui::SetCursorScreenPos(ImVec2(size.x - 18.0f - w, size.y - 10.0f - h));
++#endif
+             if (glassButton(label, ImVec2(w, h))) choose(HubAction::DataFolder, HubGame::Pikmin1);
+         }
+         ImGui::EndDisabled();
+         // Fuera de las páginas con scroll: el cursor vuelve a la ventana del hub.
+-        drawFooter(size);
++#ifdef __APPLE__
++        drawFooter(size, infoWidth + folderWidth + 18.0f);
++        ImGui::SetCursorScreenPos(ImVec2(size.x - 18.0f - infoWidth, size.y - 10.0f - footerButtonH));
++        if (glassButton("Build information", ImVec2(infoWidth, footerButtonH))) ImGui::OpenPopup("Build information");
++        ImGui::SetNextWindowSize(ImVec2(std::min(720.0f, size.x - 40.0f), std::min(520.0f, size.y - 40.0f)), ImGuiCond_Always);
++        if (ImGui::BeginPopupModal("Build information", nullptr, ImGuiWindowFlags_NoResize)) {
++            const ImVec2 popupPos = ImGui::GetWindowPos();
++            const ImVec2 popupSize = ImGui::GetWindowSize();
++            const bool clickedOutside = !ImGui::IsWindowAppearing() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
++                && !ImGui::IsMouseHoveringRect(popupPos, ImVec2(popupPos.x + popupSize.x, popupPos.y + popupSize.y), false);
++            const char* overridePath = std::getenv("PIKMIN_BUILD_INFO");
++            const auto manifest = overridePath && *overridePath ? std::filesystem::path(overridePath)
++                : platform::executablePath().parent_path().parent_path() / "Resources" / "build-info.json";
++            std::ifstream input(manifest);
++            std::string info((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
++            Json build;
++            const bool valid = parseJson(info, build) && build.type == Json::Type::Object;
++            const float actionHeight = 44.0f;
++            ImGui::BeginChild("##build-info", ImVec2(0, -actionHeight - ImGui::GetStyle().ItemSpacing.y), true);
++            if (!valid) {
++                ImGui::TextWrapped("Build information is unavailable or invalid.");
++            } else {
++                ImGui::TextWrapped("%s", info.c_str());
++            }
++            ImGui::EndChild();
++            const float copyWidth = buttons::fitWidth("Copy build information", actionHeight, buttons::kLabelSize, measureLabel());
++            const float closeWidth = buttons::fitWidth("Close", actionHeight, buttons::kLabelSize, measureLabel());
++            const float actionWidth = copyWidth + closeWidth + ImGui::GetStyle().ItemSpacing.x;
++            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - actionWidth));
++            ImGui::BeginDisabled(!valid);
++            const bool copyBuildInfo = glassButton("Copy build information", ImVec2(copyWidth, actionHeight), false, !valid);
++            if (copyBuildInfo) {
++                ImGui::SetClipboardText(info.c_str());
++                toast = "Build information copied";
++                toastTime = 3.0f;
++            }
++            ImGui::EndDisabled();
++            ImGui::SameLine();
++            const bool closeBuildInfo = glassButton("Close", ImVec2(closeWidth, actionHeight));
++            if (closeBuildInfo || clickedOutside || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
++            ImGui::EndPopup();
++        }
++#else
++        drawFooter(size, 0.0f);
++#endif
+         ImGui::End();
+         toastTime = std::max(0.0f, toastTime - dt);
+         drawToast(size);
+@@ -3075,7 +3130,9 @@ bool HubWindow::open(const HubState& state, std::string& error)
+     SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
+                                           SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_ALLOW_HIGHDPI);
+ #else
+-    SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1180, 780,
++    const char* requestedTitle = std::getenv("PIKMIN_LAUNCHER_TITLE");
++    const char* windowTitle = requestedTitle && *requestedTitle ? requestedTitle : "Open Nectar";
++    SDL_Window* window = SDL_CreateWindow(windowTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1180, 780,
+                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+ #endif
+     if (!window) {
+diff --git a/games/pikmin1/pc_port/launcher/launcher_main.cpp b/games/pikmin1/pc_port/launcher/launcher_main.cpp
+index 4d311908..a3e9c813 100644
+--- a/games/pikmin1/pc_port/launcher/launcher_main.cpp
++++ b/games/pikmin1/pc_port/launcher/launcher_main.cpp
+@@ -1024,6 +1024,12 @@ fs::path installDirFile() { return nectar::paths::userFolderConfigFile("install_
+ 
+ fs::path rememberedInstallDirectory() { return nectar::paths::readStoredPath(installDirFile()); }
+ 
++bool isManagedBundle()
++{
++    const char* value = std::getenv("PIKMIN_BUNDLE_MANAGED");
++    return value && std::strcmp(value, "1") == 0;
++}
++
+ // Guarda la carpeta y, si es nueva, pone en el escritorio el acceso directo a
+ // su launcher. Solo la primera vez: si el usuario lo borra, no vuelve.
+ // Con portable.txt (o NECTAR_PORTABLE=1) no se escribe nada fuera de la
+@@ -1039,7 +1045,7 @@ void rememberInstallDirectory(const fs::path& directory)
+     const fs::path previous = rememberedInstallDirectory();
+     if (!previous.empty() && fs::equivalent(previous, install, ec)) return;
+     if (!nectar::paths::writeStoredPath(file, install)) return;
+-    platform::createDesktopShortcut(install / kLauncherExecutable);
++    if (!isManagedBundle()) platform::createDesktopShortcut(install / kLauncherExecutable);
+ }
+ 
+ // La ruta de dolphin-tool elegida también se recuerda (junto a pikmin2_dir):
+@@ -1294,7 +1300,11 @@ int main(int argc, char** argv)
+     // Fusion mantiene cada juego en su propio directorio de trabajo. Las
+     // variables también hacen que el launcher siga siendo reubicable y que los
+     // paquetes normales, que no las definen, conserven el comportamiento previo.
+-    const fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
++    fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
++    if (isManagedBundle()) {
++        const fs::path remembered = rememberedInstallDirectory();
++        if (!remembered.empty() && assetsReady(remembered)) pikmin1Directory = remembered;
++    }
+     const fs::path pikmin1Executable = environmentPath(
+         "NECTAR_PIKMIN1_EXECUTABLE", gameBinaryFor(pikmin1Directory));
+     // Pikmin 2 instalado por el launcher está en pikmin2/; el de una build de
+@@ -1352,7 +1362,9 @@ int main(int argc, char** argv)
+     // abre el de la instalación, que es el que juega y actualiza. Antes se
+     // copia a la instalación lo que trae este paquete: si es una versión
+     // nueva, la instalación queda al día (partidas y ajustes no se tocan).
+-    if (argc == 1 && !isInstallFolder) {
++    // A managed macOS app owns its bundled binaries and build manifest. Do
++    // not copy it over an unrelated remembered install or relaunch from there.
++    if (argc == 1 && !isInstallFolder && !isManagedBundle()) {
+         const fs::path installed = rememberedInstallDirectory();
+         std::error_code ec;
+         if (!installed.empty() && !fs::equivalent(installed, sourceDirectory, ec)
+@@ -1694,7 +1706,7 @@ int main(int argc, char** argv)
+ 
+         std::string failure;
+         if (installerWindow) installerWindow->updateProgress(100, "Installing the launcher and game", "Finishing");
+-        if (!installPackage(sourceDirectory, dataRoot, failure)) {
++        if (!isManagedBundle() && !installPackage(sourceDirectory, dataRoot, failure)) {
+             if (reportError(failure)) continue;
+             return 1;
+         }
+@@ -1704,14 +1716,14 @@ int main(int argc, char** argv)
+             // portada de Pikmin ya juegue con lo recién instalado.
+             hubState.games[0].installed = true;
+             hubState.games[0].directory = dataRoot.string();
+-            hubState.games[0].executable = gameBinaryFor(dataRoot).string();
++            hubState.games[0].executable = (isManagedBundle() ? pikmin1Executable : gameBinaryFor(dataRoot)).string();
+             if (installerWindow && !installerWindow->showComplete(dataRoot.string(), !extractOnly)) return 0;
+             else std::cout << "Installed in: " << dataRoot << '\n'
+                            << (extractOnly ? "" : "The game will start now.\n");
+         }
+         if (extractOnly) return 0;
+ 
+-        const fs::path gameBinary = gameBinaryFor(dataRoot);
++        const fs::path gameBinary = isManagedBundle() ? pikmin1Executable : gameBinaryFor(dataRoot);
+         if (!fs::is_regular_file(gameBinary)) {
+             std::cerr << "The game executable is not next to the launcher: " << gameBinary << '\n';
+             return 1;
