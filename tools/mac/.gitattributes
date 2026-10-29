@@ -1,0 +1,2 @@
+# Unified-diff context markers on otherwise empty lines are required syntax.
+*.patch whitespace=-blank-at-eol
