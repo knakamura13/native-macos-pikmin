@@ -28,11 +28,27 @@ log() {
     fi
 }
 
+# Print the build's own sha: the top-level "sha" in build-info.json, and only
+# when it is a hex commit id. The manifest also lists a sha for every merged
+# PR and include, so matching any "sha" line returned many lines, the result
+# never equalled kyle-develop, and every hourly run rebuilt and reinstalled.
 read_json_sha() {
-    local file="$1"
+    local file="$1" sha=""
     [[ -f "${file}" ]] || return 0
-    # No pipe to head: with pipefail, head's early close can fail the read.
-    sed -n 's/^[[:space:]]*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]\{7,\}\)".*/\1/p' "${file}"
+    if command -v plutil >/dev/null 2>&1; then
+        sha="$(plutil -extract sha raw -o - "${file}" 2>/dev/null || true)"
+    else
+        sha="$(read_json_sha_sed "${file}")"
+    fi
+    if [[ "${sha}" =~ ^[0-9a-fA-F]{7,}$ ]]; then
+        printf '%s\n' "${sha}"
+    fi
+}
+
+# Fallback without plutil: build_identity.py writes top-level keys at a
+# two-space indent, nested ones deeper. Stop at the first match.
+read_json_sha_sed() {
+    sed -n '/^  "sha"[[:space:]]*:/{s/^  "sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p;q;}' "$1"
 }
 
 read_state_sha() {
@@ -123,6 +139,17 @@ self_test() {
     [[ "${sha}" == "0123456789abcdef0123456789abcdef01234567" ]]
     printf '{\n  "sha": "unknown",\n  "branch": ""\n}\n' > "${tmp}/unknown.json"
     [[ -z "$(read_json_sha "${tmp}/unknown.json")" ]]
+    # A develop manifest lists per-PR and include shas after the build's own.
+    printf '{\n  "sha": "%s",\n  "branch": "",\n  "merged_prs": [\n    {\n      "number": 1,\n      "sha": "%s"\n    }\n  ],\n  "merged_includes": [\n    {\n      "sha": "%s"\n    }\n  ]\n}\n' \
+        0123456789abcdef0123456789abcdef01234567 \
+        1111111111111111111111111111111111111111 \
+        2222222222222222222222222222222222222222 > "${tmp}/develop.json"
+    [[ "$(read_json_sha "${tmp}/develop.json")" == "0123456789abcdef0123456789abcdef01234567" ]]
+    [[ "$(read_json_sha_sed "${tmp}/develop.json")" == "0123456789abcdef0123456789abcdef01234567" ]]
+    printf '{\n  "branch": "",\n  "merged_prs": [\n    {\n      "sha": "%s"\n    }\n  ]\n}\n' \
+        1111111111111111111111111111111111111111 > "${tmp}/nosha.json"
+    [[ -z "$(read_json_sha "${tmp}/nosha.json")" ]]
+    [[ -z "$(read_json_sha_sed "${tmp}/nosha.json")" ]]
     printf 'not-a-sha\n' > "${tmp}/state"
     [[ -z "$(read_state_sha "${tmp}/state")" ]]
     printf 'abcdef0123456789\n' > "${tmp}/state"
