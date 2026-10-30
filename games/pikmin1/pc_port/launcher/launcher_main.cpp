@@ -1315,7 +1315,11 @@ int main(int argc, char** argv)
     // variables también hacen que el launcher siga siendo reubicable y que los
     // paquetes normales, que no las definen, conserven el comportamiento previo.
     fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
-    if (isManagedBundle()) {
+    // A managed app falls back to the remembered install only when its own
+    // folder (NECTAR_PIKMIN1_DIR, from Info.plist) has no game files. A folder
+    // that is ready always wins: a stale remembered folder (say, a test install
+    // under /tmp) must not take over the app's saves and settings.
+    if (isManagedBundle() && !assetsReady(pikmin1Directory)) {
         const fs::path remembered = rememberedInstallDirectory();
         if (!remembered.empty() && assetsReady(remembered)) pikmin1Directory = remembered;
     }
