@@ -6,5 +6,5 @@ int main()
 {
     assert(std::strcmp(pc_build_window_title("default", nullptr), "default") == 0);
     assert(std::strcmp(pc_build_window_title("default", ""), "default") == 0);
-    assert(std::strcmp(pc_build_window_title("default", "Pikmin 1 — Develop"), "Pikmin 1 — Develop") == 0);
+    assert(std::strcmp(pc_build_window_title("default", "Open Nectar — Develop"), "Open Nectar — Develop") == 0);
 }
