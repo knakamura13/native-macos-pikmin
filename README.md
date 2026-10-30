@@ -335,7 +335,7 @@ The compiler comes from the Xcode command-line tools (`xcode-select --install`).
 
 ### macOS (app bundle)
 
-This builds `Pikmin 1.app` and installs it in `/Applications`. It has been tested on
+This builds an Open Nectar app (the launcher plays Pikmin 1 and Pikmin 2) and installs it in `/Applications`. It has been tested on
 Apple silicon with macOS 27. The app plays the USA Rev. 1 disc only. The European
 build is not in the macOS package yet.
 
@@ -366,20 +366,23 @@ not list that extra copy. On this fork, `tools/mac/install-launchd.sh` can insta
 that update hourly from `origin/kyle-develop` instead (see below).
 
 Saves and settings live in `~/.local/share/pikmin-native`, not in the app, so
-reinstalling keeps them. To remove everything, delete `Pikmin 1.app` and that folder.
+reinstalling keeps them. To remove everything, delete the app and that folder.
 
-**Stable app and test builds.** This fork keeps two entry points on the Mac:
+**Apps on this fork.** Spotlight shows exactly two apps; everything else lives in `*.noindex` folders:
 
-- `/Applications/Pikmin 1.app` is the stable game, always a build of `origin/kyle-develop`.
+- `/Applications/Open Nectar.app` ("Open Nectar", `org.opennectar.upstream`) is upstream `main` with this fork's packaging. Its saves and settings are in `~/.local/share/pikmin-native-upstream`, starting empty. One command fetches upstream and builds it: `tools/mac/build-upstream.sh --install`.
+- `/Applications/Open Nectar Develop.app` ("Open Nectar Develop", `org.opennectar.develop`) is always a build of `origin/kyle-develop`, with your real saves in `~/.local/share/pikmin-native`.
 - `~/Desktop/Open Nectar` is a shortcut to the last checkout you built with `tools/mac/test-build.sh`.
 
-Install the hourly update once, from a checkout:
+When Develop is first installed and checked, an old `/Applications/Pikmin 1.app` (bundle id `org.opennectar.pikmin1`) is moved to `~/OpenNectar-archive.noindex/legacy/`. It is kept there; delete it yourself once Develop works.
+
+Install the hourly updates once, from a checkout:
 
 ```sh
 tools/mac/install-launchd.sh
 ```
 
-It records that checkout in a LaunchAgent (`RunAtLoad`, then every hour). Remove it with `tools/mac/install-launchd.sh --uninstall`. The job does nothing while the game is running.
+It installs two LaunchAgents (`RunAtLoad`, then every hour), one per app, and records that checkout in both. `--only develop` or `--only upstream` picks one; `--uninstall` removes them. A run does nothing while the game is running. To try your real saves in the upstream app, copy them (never moved) with `tools/mac/copy-saves-to-upstream.sh`.
 
 Build the checkout you have open, without replacing the stable app or your real saves:
 

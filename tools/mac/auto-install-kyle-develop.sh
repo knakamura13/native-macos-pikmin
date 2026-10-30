@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # auto-install-kyle-develop.sh [REPO]
 #
-# Keep /Applications/Pikmin 1.app on origin/kyle-develop.
+# Keep /Applications/Open Nectar Develop.app on origin/kyle-develop.
 # A LaunchAgent runs this hourly. If the game is open, it exits 0 and the next
 # run tries again. Logs go to ~/Library/Logs/OpenNectar/auto-install.log.
 #
@@ -13,7 +13,8 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 log_file="${HOME:-/tmp}/Library/Logs/OpenNectar/auto-install.log"
-app_info="/Applications/Pikmin 1.app/Contents/Resources/build-info.json"
+app_path="/Applications/Open Nectar Develop.app"
+app_info="${app_path}/Contents/Resources/build-info.json"
 builds_root="${HOME:-}/OpenNectar-builds.noindex"
 lock_dir=""
 
@@ -47,7 +48,7 @@ read_state_sha() {
 }
 
 game_running() {
-    pgrep -x nectar >/dev/null 2>&1 || pgrep -x nectar-launcher >/dev/null 2>&1
+    pgrep -x nectar >/dev/null 2>&1 || pgrep -x nectar-launcher >/dev/null 2>&1 || pgrep -x pikmin2 >/dev/null 2>&1
 }
 
 # Directory mkdir is the lock. A dead pid is stale and is taken over.
@@ -92,6 +93,10 @@ ensure_worktree() {
     else
         git -C "${worktree}" checkout --detach --force "${sha}"
     fi
+}
+
+supports_develop_app() {
+    grep -q 'Open Nectar Develop.app' "$1" 2>/dev/null
 }
 
 write_state() {
@@ -148,6 +153,14 @@ self_test() {
     [[ "$(cat "${lock}/pid")" == "$$" ]]
     lock_dir="${lock}"
     release_lock
+
+    printf 'app_name="Pikmin 1.app"\n' > "${tmp}/old-build-app.sh"
+    if supports_develop_app "${tmp}/old-build-app.sh"; then
+        printf 'treated an old build-app.sh as Open Nectar Develop\n' >&2
+        return 1
+    fi
+    supports_develop_app "${script_dir}/../../games/pikmin1/packaging/macos/build-app.sh"
+    rm -rf "${tmp}"
     printf 'auto-install self-test ok\n'
 }
 
@@ -198,7 +211,9 @@ if ! git -C "${repo}" fetch origin kyle-develop >> "${log_file}" 2>&1; then
 fi
 sha="$(git -C "${repo}" rev-parse refs/remotes/origin/kyle-develop)"
 installed="$(read_json_sha "${app_info}")"
-if [[ -z "${installed}" ]]; then
+# The state file only stands in for a manifest without a sha. With no Develop
+# app installed (for example only the legacy Pikmin 1.app), install it.
+if [[ -z "${installed}" && -d "${app_path}" ]]; then
     installed="$(read_state_sha "${state_file}")"
 fi
 installed="$(printf '%s' "${installed}" | tr 'A-F' 'a-f')"
@@ -223,12 +238,20 @@ if [[ ! -f "${build_app}" ]]; then
     log "missing ${build_app}"
     exit 1
 fi
-if "${build_app}" --build-dir "${build_dir}" --install >> "${log_file}" 2>&1; then
+if ! supports_develop_app "${build_app}"; then
+    # An older kyle-develop would install the legacy Pikmin 1.app; leave
+    # /Applications alone until kyle-develop has the Open Nectar names.
+    log "kyle-develop ${sha} predates Open Nectar Develop.app; not installing"
+    exit 0
+fi
+rc=0
+PIKMIN_BUILD_ROLE=develop "${build_app}" --build-dir "${build_dir}" --install >> "${log_file}" 2>&1 || rc=$?
+if [[ "${rc}" -eq 0 ]]; then
     write_state "${state_file}" "${sha}"
     log "installed ${sha}"
     exit 0
 fi
-if game_running; then
+if [[ "${rc}" -eq 75 ]] || game_running; then
     log "install deferred because the game is running"
     exit 0
 fi
