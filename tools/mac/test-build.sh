@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # test-build.sh [--self-test]
 #
-# Build the Pikmin 1 checkout that contains this script (any branch or
-# worktree) and point ~/Desktop/Open Nectar at that build.
+# Build the checkout that contains this script (any branch or worktree) as
+# "Open Nectar Test.app" and point ~/Desktop/Open Nectar at that build.
 #
-# The stable app in /Applications is left alone. Saves, settings, and launcher
+# Test builds stay in ~/OpenNectar-test-builds.noindex (Spotlight skips it), each
+# with its own bundle id (org.opennectar.testbuild.<hash>). The newest 5 builds
+# are kept; data/ is never removed. The apps in /Applications are left alone. Saves, settings, and launcher
 # config for every test build go under ~/OpenNectar-test-builds.noindex/data,
 # not ~/.local/share/pikmin-native. Extracted disc files are linked, not copied.
 #
@@ -124,6 +126,15 @@ prune_test_builds() {
     done < <(ls -1dt "${entries[@]}")
 }
 
+# Last step of a test build: mark DEST newest, point the Desktop shortcut at
+# APP, then keep the newest 5 builds (DEST always stays, data/ is never removed).
+finish_test_build() {
+    local root="$1" dest="$2" app="$3" link="$4"
+    touch "${dest}"
+    atomic_symlink "${app}" "${link}"
+    prune_test_builds "${root}" 5 "${dest}"
+}
+
 xml_escape() {
     local text=$1
     text=${text//&/&amp;}
@@ -203,7 +214,7 @@ write_test_app() {
     local snapshot="${10:-${sha:0:12}}"
     local macos="${app}/Contents/MacOS"
     local resources="${app}/Contents/Resources"
-    local title="Pikmin 1 — ${branch} [${snapshot}]"
+    local title="Open Nectar Test — ${branch} [${snapshot}]"
     local title_xml bundle_suffix
     title_xml="$(xml_escape "${title}")"
     bundle_suffix="$(printf '%s\n%s' "${branch}" "${snapshot}" | shasum -a 256 | cut -c1-16)"
@@ -231,7 +242,7 @@ write_test_app() {
     <key>CFBundleDisplayName</key>
     <string>${title_xml}</string>
     <key>CFBundleIdentifier</key>
-    <string>org.opennectar.pikmin1.testbuild.${bundle_suffix}</string>
+    <string>org.opennectar.testbuild.${bundle_suffix}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -324,7 +335,7 @@ self_test() {
     config_home="${data_home}/config"
     cache_home="${data_home}/cache"
     data_root="${data_home}/pikmin-native"
-    app="${root}/sample/Open Nectar.app"
+    app="${root}/sample/Open Nectar Test.app"
     fake="${tmp}/fake-launcher"
     cat > "${fake}" <<'FAKE'
 #!/bin/bash
@@ -351,19 +362,41 @@ FAKE
     [[ "${output}" == *"NECTAR_SAVE_DIR=${data_root}/save"* ]]
     [[ "${output}" == *"NECTAR_PIKMIN1_EXECUTABLE=${tmp}/bin/nectar"* ]]
     [[ "${output}" == *"NECTAR_EXECUTABLE_PATH=unset"* ]]
-    [[ "${output}" == *"PIKMIN_LAUNCHER_TITLE=Pikmin 1 — fixture [0123456789ab]"* ]]
+    [[ "${output}" == *"PIKMIN_LAUNCHER_TITLE=Open Nectar Test — fixture [0123456789ab]"* ]]
     [[ -L "${data_root}/assets" ]]
     [[ "$(readlink "${data_root}/assets")" == "${home}/.local/share/pikmin-native/assets" ]]
     [[ "$(head -n 1 "${config_home}/open-nectar/install_dir")" == "${data_root}" ]]
     [[ -d "${data_root}/save" ]]
-    grep -q 'org.opennectar.pikmin1.testbuild\.' "${app}/Contents/Info.plist"
-    grep -q 'Pikmin 1 — fixture \[0123456789ab\]' "${app}/Contents/Info.plist"
-    local other_app="${root}/other/Open Nectar.app" fixture_id other_id
+    grep -q '<string>org.opennectar.testbuild\.[0-9a-f]\{16\}</string>' "${app}/Contents/Info.plist"
+    grep -q 'Open Nectar Test — fixture \[0123456789ab\]' "${app}/Contents/Info.plist"
+    if grep -q 'Pikmin 1' "${app}/Contents/Info.plist"; then
+        printf 'test app still says Pikmin 1\n' >&2
+        return 1
+    fi
+    local other_app="${root}/other/Open Nectar Test.app" fixture_id other_id
     write_test_app "${other_app}" "${data_home}" "${config_home}" "${cache_home}" \
         "${data_root}" "${tmp}/bin/nectar" "${fake}" "0123456789abcdef" "fixture" "another-snapshot"
     fixture_id="$(sed -n '/<key>CFBundleIdentifier<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "${app}/Contents/Info.plist")"
     other_id="$(sed -n '/<key>CFBundleIdentifier<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "${other_app}/Contents/Info.plist")"
     [[ -n "${fixture_id}" && -n "${other_id}" && "${fixture_id}" != "${other_id}" ]]
+
+    # The real flow's last step: link and prune to the newest 5, keeping data/
+    # and the build just made.
+    local finish_root="${tmp}/finish" newest
+    mkdir -p "${finish_root}/data"
+    printf 'keep\n' > "${finish_root}/data/marker"
+    for i in 1 2 3 4 5 6 7; do
+        mkdir -p "${finish_root}/old-${i}/Open Nectar Test.app"
+        touch -t "20200101010${i}" "${finish_root}/old-${i}"
+    done
+    touch -t 201901010101 "${finish_root}/data"
+    newest="${finish_root}/new-build"
+    mkdir -p "${newest}/Open Nectar Test.app"
+    finish_test_build "${finish_root}" "${newest}" "${newest}/Open Nectar Test.app" "${desktop}/Open Nectar"
+    [[ "$(readlink "${desktop}/Open Nectar")" == "${newest}/Open Nectar Test.app" ]]
+    [[ -f "${finish_root}/data/marker" && -d "${newest}" ]]
+    [[ "$(find "${finish_root}" -mindepth 1 -maxdepth 1 -type d ! -name data | wc -l | tr -d ' ')" -eq 5 ]]
+    [[ -d "${finish_root}/old-7" && -d "${finish_root}/old-4" && ! -d "${finish_root}/old-3" ]]
     printf 'test-build self-test ok\n'
 }
 
@@ -406,7 +439,7 @@ data_home="${root}/data"
 config_home="${data_home}/config"
 cache_home="${data_home}/cache"
 data_root="${data_home}/pikmin-native"
-app="${dest}/Open Nectar.app"
+app="${dest}/Open Nectar Test.app"
 mkdir -p "${build_dir}" "${data_home}"
 
 cache_flags=()
@@ -436,8 +469,7 @@ write_test_app "${app}" "${data_home}" "${config_home}" "${cache_home}" \
 python3 "${script_dir}/build_identity.py" --repo "${repo}" \
     --output "${app}/Contents/Resources/build-info.json" --game "${game_bin}" \
     --launcher "${launcher_bin}" --cache "${build_dir}/CMakeCache.txt" --data "${data_root}" --role feature
-touch "${dest}"
-atomic_symlink "${app}" "${HOME}/Desktop/Open Nectar"
+finish_test_build "${root}" "${dest}" "${app}" "${HOME}/Desktop/Open Nectar"
 
 printf 'branch: %s\n' "${branch}"
 printf 'sha: %s\n' "${sha}"

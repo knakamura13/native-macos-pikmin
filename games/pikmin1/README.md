@@ -277,7 +277,7 @@ The compiler comes from the Xcode command-line tools (`xcode-select --install`).
 
 ### macOS (app bundle)
 
-This builds `Pikmin 1.app` and installs it in `/Applications`. It has been tested on
+This builds an Open Nectar app (the launcher plays Pikmin 1 and Pikmin 2) and installs it in `/Applications`. It has been tested on
 Apple silicon with macOS 27. The app plays the USA Rev. 1 disc only. The European
 build is not in the macOS package yet.
 
@@ -292,20 +292,26 @@ brew install ccache      # optional: faster rebuilds
 Then, from the game folder (the one with `CMakeLists.txt`):
 
 ```sh
-packaging/macos/build-app.sh --install
+PIKMIN_BUILD_ROLE=develop packaging/macos/build-app.sh --install    # on a kyle-develop rebuild
+../../tools/mac/build-upstream.sh --install                         # upstream main, from any checkout
 ```
 
-To install somewhere else, pass a folder, for example `~/Applications`. The folder
-is created if it does not exist.
+`--install` is only for those two roles: Develop installs `Open Nectar Develop.app`,
+upstream installs `Open Nectar.app`. Without `--install`, any checkout builds
+`Open Nectar Local.app` in `packaging/macos/out.noindex/`. To install somewhere else,
+pass a folder, for example `~/Applications`. The folder is created if it does not exist.
 
-Open **Pikmin 1** from Launchpad or Applications. The launcher asks for your disc
+Open **Open Nectar** from Launchpad or Applications. The launcher asks for your disc
 image on first run, as described under [Both platforms](#both-platforms).
 
-**Keeping it in sync.** Run the same command again after each build. It replaces the
-installed app. It refuses to run while the game is open, so quit the game first.
+**Keeping it in sync.** Run the same command again after each build. It moves the
+installed app to `~/OpenNectar-archive.noindex/app-backups/` (the last five are kept),
+installs the new one and checks it. It refuses to replace an app with another bundle id
+or role, and does nothing while the game is open.
 
 Saves and settings live in `~/.local/share/pikmin-native`, not in the app, so
-reinstalling keeps them. To remove everything, delete `Pikmin 1.app` and that folder.
+reinstalling keeps them (the upstream app uses `~/.local/share/pikmin-native-upstream`).
+To remove everything, delete the app and that folder.
 
 The app uses Homebrew's `sdl2-compat` at `/opt/homebrew`, so run it on the Mac where
 you built it.
