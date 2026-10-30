@@ -5,7 +5,7 @@ This fork (`knakamura13/native-macos-pikmin-1`) tracks the upstream project `SSu
 ## Branches
 
 - `main` mirrors `upstream/main`. Change it only by fast-forward. Never commit to it.
-- `kyle-patches` is a small linear stack of fork-only commits on top of `main`: the macOS app bundle, fork notes, and anything else that is not upstream and not in an open upstream PR. Commit fork-only work here.
+- `kyle-patches` is a small linear stack of fork-only commits on top of `main`: the macOS app bundle, fork notes, and anything else that is not upstream and not in an open upstream PR. Commit fork-only work here. The rebuild replays only its plain (non-merge) commits. Merges of upstream `main`, and PR merges whose branch holds only plain commits and merges of upstream `main`, are fine; any other merge commit makes the rebuild stop without pushing.
 - `kyle-develop` is generated. A rebuild starts from `upstream/main`, cherry-picks `kyle-patches`, then merges every open upstream PR whose head repository is this fork. The result is force-pushed. Never commit to `kyle-develop` directly. A local checkout updates with:
 
   ```sh
