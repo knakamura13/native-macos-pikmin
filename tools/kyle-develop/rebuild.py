@@ -502,10 +502,63 @@ def refuse_in_progress(repo):
             raise RebuildError(f"this checkout is busy ({name}); finish or abort it first")
 
 
+def is_ancestor(repo, older, newer):
+    return git(["merge-base", "--is-ancestor", older, newer], repo, check=False).returncode == 0
+
+
+def is_upstream_sync(repo, parents, upstream_sha):
+    """A merge whose every non-first parent is already in upstream main."""
+    return all(is_ancestor(repo, parent, upstream_sha) for parent in parents[1:])
+
+
+def check_patch_merges(repo, base, patches_sha, upstream_sha):
+    """Refuse kyle-patches history that a non-merge replay would get wrong.
+
+    Allowed merge commits:
+      - a merge of upstream main (every non-first parent is in upstream main);
+      - a PR merge whose merged-in side holds only plain commits and merges of
+        upstream main.
+    Anything else, such as a branch that merged older kyle-patches or other fork
+    branches into itself, raises before anything is built or pushed.
+    """
+    listed = git(
+        ["rev-list", "--merges", "--parents", f"{base}..{patches_sha}"], repo
+    ).stdout.splitlines()
+    bad = []
+    for line in listed:
+        merge, *parents = line.split()
+        if is_upstream_sync(repo, parents, upstream_sha):
+            continue
+        side_ok = True
+        for parent in parents[1:]:
+            side = git(
+                ["rev-list", "--merges", "--parents", f"{parents[0]}..{parent}"], repo
+            ).stdout.splitlines()
+            for inner in side:
+                _, *inner_parents = inner.split()
+                if not is_upstream_sync(repo, inner_parents, upstream_sha):
+                    side_ok = False
+                    break
+            if not side_ok:
+                break
+        if not side_ok:
+            bad.append(merge)
+    if bad:
+        raise RebuildError(
+            "kyle-patches contains merge commits that are not merges of upstream main "
+            "or of a linear PR branch: "
+            + " ".join(sha[:12] for sha in bad)
+            + ". Replace them with plain commits; not pushing"
+        )
+
+
 def build_steps(repo, patches_sha, upstream_sha, exclude, include_names):
     base = git(["merge-base", patches_sha, upstream_sha], repo).stdout.strip()
+    check_patch_merges(repo, base, patches_sha, upstream_sha)
+    # Merge commits carry no changes of their own here: the plain commits they
+    # bring in are replayed one by one, and upstream main is the base.
     patch_commits = git(
-        ["rev-list", "--reverse", f"{base}..{patches_sha}"], repo
+        ["rev-list", "--reverse", "--no-merges", f"{base}..{patches_sha}"], repo
     ).stdout.split()
     steps = []
     for sha in patch_commits:
