@@ -121,7 +121,8 @@ verify_installed() {
     local installed="$1" source_app="$2" want_id="$3" id file
     id="$(plist_value "${installed}/Contents/Info.plist" CFBundleIdentifier)"
     [[ "${id}" == "${want_id}" ]] || { printf 'Installed app has bundle id "%s".\n' "${id}" >&2; return 1; }
-    for file in Contents/MacOS/nectar Contents/MacOS/nectar-launcher Contents/Resources/build-info.json; do
+    for file in Contents/MacOS/nectar Contents/MacOS/nectar-launcher Contents/MacOS/pikmin2_pc \
+        Contents/MacOS/pikmin2_pc-usa Contents/Resources/build-info.json; do
         cmp -s "${source_app}/${file}" "${installed}/${file}" \
             || { printf 'Installed app differs from the build at %s.\n' "${file}" >&2; return 1; }
     done
@@ -335,6 +336,8 @@ self_test() {
         mkdir -p "$1/$2/Contents/MacOS" "$1/$2/Contents/Resources"
         printf '%s' "$5" > "$1/$2/Contents/MacOS/nectar"
         printf '%s' "$5" > "$1/$2/Contents/MacOS/nectar-launcher"
+        printf '%s' "$5" > "$1/$2/Contents/MacOS/pikmin2_pc"
+        printf '%s' "$5" > "$1/$2/Contents/MacOS/pikmin2_pc-usa"
         printf '{"role": "%s", "sha": "%s"}\n' "$4" "$5" > "$1/$2/Contents/Resources/build-info.json"
         write_info_plist "$1/$2/Contents/Info.plist" "${2%.app}" "$3" "t" "/d" "/a" "$4"
     }
@@ -525,6 +528,18 @@ fi
 cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release ${cache_flags[@]+"${cache_flags[@]}"}
 cmake --build "${build_dir}" --target pikmin_pc pikmin_launcher -j "$(sysctl -n hw.ncpu)"
 
+# Pikmin 2 in both regions, as upstream scripts/release-macos.sh ships it. The
+# launcher installs Pikmin 2 by copying pikmin2_pc (Europe disc) or
+# pikmin2_pc-usa (USA disc) from beside nectar-launcher; without them the
+# install fails with "The package is incomplete" (fork issue #40).
+p2_dir="${game_dir}/../pikmin2"
+cmake -S "${p2_dir}" -B "${build_dir}/p2" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    ${cache_flags[@]+"${cache_flags[@]}"}
+cmake --build "${build_dir}/p2" --target pikmin2_pc -j "$(sysctl -n hw.ncpu)"
+cmake -S "${p2_dir}" -B "${build_dir}/p2-usa" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    -DPIKMIN_GAME_VERSION=VERSION_GPVE01 ${cache_flags[@]+"${cache_flags[@]}"}
+cmake --build "${build_dir}/p2-usa" --target pikmin2_pc -j "$(sysctl -n hw.ncpu)"
+
 bin_dir="${build_dir}/bin"
 contents="${app}/Contents"
 
@@ -542,6 +557,8 @@ mkdir -p "${contents}/MacOS" "${contents}/Resources"
 # bundle is named, so the code and the install format stay unchanged.
 cp "${bin_dir}/nectar" "${contents}/MacOS/nectar"
 cp "${bin_dir}/nectar-launcher" "${contents}/MacOS/nectar-launcher"
+cp "${build_dir}/p2/pikmin2_pc" "${contents}/MacOS/pikmin2_pc"
+cp "${build_dir}/p2-usa/pikmin2_pc" "${contents}/MacOS/pikmin2_pc-usa"
 
 # App icon: build an .icns from the 256px PNG. iconutil needs the full size set.
 iconset="$(mktemp -d)/AppIcon.iconset"
