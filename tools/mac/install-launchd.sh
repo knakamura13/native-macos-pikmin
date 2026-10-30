@@ -1,16 +1,43 @@
 #!/usr/bin/env bash
-# install-launchd.sh [--uninstall|--self-test]
+# install-launchd.sh [--only develop|upstream] [--uninstall] | --self-test
 #
-# Install the hourly LaunchAgent that keeps /Applications/Pikmin 1.app on
-# origin/kyle-develop. Run it from the checkout that should supply `git fetch`
-# (a kyle-patches checkout is the usual one). --uninstall removes the agent.
+# Installs the two hourly LaunchAgents (RunAtLoad, then every hour):
+#
+#   org.opennectar.kyle-develop-autoinstall
+#       auto-install-kyle-develop.sh: keeps /Applications/Open Nectar Develop.app
+#       on origin/kyle-develop. Log: ~/Library/Logs/OpenNectar/auto-install.log
+#   org.opennectar.upstream-autoinstall
+#       auto-install-upstream.sh: runs `build-upstream.sh --install --if-changed`
+#       to keep /Applications/Open Nectar.app on upstream main.
+#       Log: ~/Library/Logs/OpenNectar/auto-install-upstream.log
+#
+# Run it from the checkout that should supply `git fetch` and the packaging
+# scripts (a kyle-patches checkout is the usual one). --only limits it to one
+# agent. --uninstall removes the agents instead.
 
 set -euo pipefail
 
-label="org.opennectar.kyle-develop-autoinstall"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-template="${script_dir}/org.opennectar.kyle-develop-autoinstall.plist"
-autoinstall="${script_dir}/auto-install-kyle-develop.sh"
+roles=(develop upstream)
+
+agent_label() {
+    case "$1" in
+        develop) printf '%s\n' "org.opennectar.kyle-develop-autoinstall" ;;
+        upstream) printf '%s\n' "org.opennectar.upstream-autoinstall" ;;
+    esac
+}
+agent_script() {
+    case "$1" in
+        develop) printf '%s\n' "${script_dir}/auto-install-kyle-develop.sh" ;;
+        upstream) printf '%s\n' "${script_dir}/auto-install-upstream.sh" ;;
+    esac
+}
+agent_log() {
+    case "$1" in
+        develop) printf '%s\n' "$2/Library/Logs/OpenNectar/auto-install.log" ;;
+        upstream) printf '%s\n' "$2/Library/Logs/OpenNectar/auto-install-upstream.log" ;;
+    esac
+}
 
 xml_escape() {
     local text=$1
@@ -21,12 +48,7 @@ xml_escape() {
 }
 
 render_plist() {
-    local dest="$1"
-    local autoinstall_path="$2"
-    local repo="$3"
-    local home="$4"
-    local path_value="$5"
-    local log_path="$6"
+    local template="$1" dest="$2" autoinstall_path="$3" repo="$4" home="$5" path_value="$6" log_path="$7"
     local text
     text="$(cat "${template}")"
     text="${text//__AUTOINSTALL__/$(xml_escape "${autoinstall_path}")}"
@@ -47,7 +69,7 @@ agent_path() {
 }
 
 uninstall_agent() {
-    local dest="$1"
+    local label="$1" dest="$2"
     local domain="gui/${UID}"
     launchctl bootout "${domain}" "${dest}" 2>/dev/null || true
     launchctl bootout "${domain}/${label}" 2>/dev/null || true
@@ -56,27 +78,34 @@ uninstall_agent() {
 }
 
 self_test() {
-    local tmp dest repo home path_value log_path
+    local tmp dest role label script log_path
     tmp="$(mktemp -d)"
-    dest="${tmp}/agent.plist"
-    repo="/tmp/checkout"
-    home="/tmp/home"
-    path_value="/opt/homebrew/bin:/usr/bin"
-    log_path="${home}/Library/Logs/OpenNectar/auto-install.log"
-    render_plist "${dest}" "/tmp/checkout/tools/mac/auto-install-kyle-develop.sh" \
-        "${repo}" "${home}" "${path_value}" "${log_path}"
-    if grep -q '__' "${dest}"; then
-        printf 'plist still has placeholders\n' >&2
+    for role in "${roles[@]}"; do
+        label="$(agent_label "${role}")"
+        dest="${tmp}/${label}.plist"
+        script="/tmp/checkout/tools/mac/$(basename -- "$(agent_script "${role}")")"
+        log_path="$(agent_log "${role}" /tmp/home)"
+        render_plist "${script_dir}/${label}.plist" "${dest}" "${script}" /tmp/checkout /tmp/home \
+            "/opt/homebrew/bin:/usr/bin" "${log_path}"
+        if grep -q '__' "${dest}"; then
+            printf 'plist still has placeholders\n' >&2
+            return 1
+        fi
+        grep -q "<string>${label}</string>" "${dest}"
+        grep -q '<integer>3600</integer>' "${dest}"
+        grep -q '<key>RunAtLoad</key>' "${dest}"
+        grep -q '<true/>' "${dest}"
+        grep -q "<string>${script}</string>" "${dest}"
+        grep -q '<string>/tmp/checkout</string>' "${dest}"
+        grep -q '<string>/tmp/home</string>' "${dest}"
+        grep -q "<string>${log_path}</string>" "${dest}"
+        [[ -x "$(agent_script "${role}")" ]]
+    done
+    grep -q 'auto-install-upstream.log' "${tmp}/org.opennectar.upstream-autoinstall.plist"
+    if grep -q 'auto-install-upstream' "${tmp}/org.opennectar.kyle-develop-autoinstall.plist"; then
+        printf 'develop agent points at the upstream job\n' >&2
         return 1
     fi
-    grep -q '<string>org.opennectar.kyle-develop-autoinstall</string>' "${dest}"
-    grep -q '<integer>3600</integer>' "${dest}"
-    grep -q '<key>RunAtLoad</key>' "${dest}"
-    grep -q '<true/>' "${dest}"
-    grep -q '<string>/tmp/checkout/tools/mac/auto-install-kyle-develop.sh</string>' "${dest}"
-    grep -q '<string>/tmp/checkout</string>' "${dest}"
-    grep -q '<string>/tmp/home</string>' "${dest}"
-    grep -q 'auto-install.log</string>' "${dest}"
     rm -rf "${tmp}"
     printf 'install-launchd self-test ok\n'
 }
@@ -85,6 +114,22 @@ if [[ "${1:-}" == "--self-test" ]]; then
     self_test
     exit 0
 fi
+
+uninstall=0
+selected=("${roles[@]}")
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --uninstall) uninstall=1; shift ;;
+        --only)
+            case "${2:-}" in
+                develop|upstream) selected=("$2") ;;
+                *) printf '%s\n' '--only takes develop or upstream' >&2; exit 2 ;;
+            esac
+            shift 2
+            ;;
+        *) printf 'usage: %s [--only develop|upstream] [--uninstall]\n' "${BASH_SOURCE[0]}" >&2; exit 2 ;;
+    esac
+done
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
     printf 'install-launchd.sh changes a macOS LaunchAgent. Run it on the Mac.\n' >&2
@@ -99,24 +144,22 @@ if [[ -z "${HOME:-}" ]]; then
     exit 1
 fi
 
-dest="${HOME}/Library/LaunchAgents/${label}.plist"
-if [[ "${1:-}" == "--uninstall" ]]; then
-    uninstall_agent "${dest}"
-    exit 0
-fi
-if [[ $# -gt 0 ]]; then
-    printf 'usage: %s [--uninstall]\n' "${BASH_SOURCE[0]}" >&2
-    exit 2
-fi
-
 repo="$(git -C "${script_dir}" rev-parse --show-toplevel)"
-log_path="${HOME}/Library/Logs/OpenNectar/auto-install.log"
-mkdir -p "${HOME}/Library/LaunchAgents" "$(dirname -- "${log_path}")"
-render_plist "${dest}" "${autoinstall}" "${repo}" "${HOME}" "$(agent_path)" "${log_path}"
-chmod 644 "${dest}"
-
 domain="gui/${UID}"
-launchctl bootout "${domain}" "${dest}" 2>/dev/null || true
-launchctl bootstrap "${domain}" "${dest}"
-printf 'Installed %s\n' "${dest}"
-printf 'It runs now, then every hour. Log: %s\n' "${log_path}"
+for role in "${selected[@]}"; do
+    label="$(agent_label "${role}")"
+    dest="${HOME}/Library/LaunchAgents/${label}.plist"
+    if [[ "${uninstall}" -eq 1 ]]; then
+        uninstall_agent "${label}" "${dest}"
+        continue
+    fi
+    log_path="$(agent_log "${role}" "${HOME}")"
+    mkdir -p "${HOME}/Library/LaunchAgents" "$(dirname -- "${log_path}")"
+    render_plist "${script_dir}/${label}.plist" "${dest}" "$(agent_script "${role}")" "${repo}" "${HOME}" \
+        "$(agent_path)" "${log_path}"
+    chmod 644 "${dest}"
+    launchctl bootout "${domain}" "${dest}" 2>/dev/null || true
+    launchctl bootstrap "${domain}" "${dest}"
+    printf 'Installed %s\n' "${dest}"
+    printf 'It runs now, then every hour. Log: %s\n' "${log_path}"
+done
