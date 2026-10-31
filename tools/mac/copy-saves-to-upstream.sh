@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # copy-saves-to-upstream.sh [--data-dir DIR] [--replace] [--dry-run] | --self-test
 #
-# Opt-in: COPIES your real saves into the upstream app's data folder, so
-# Open Nectar.app (upstream) can continue them. The upstream app starts with
-# empty saves and never reads the real ones on its own.
+# Opt-in legacy helper: copies real saves into a chosen folder (for example the
+# old upstream-only path). New builds share the central save automatically via
+# tools/mac/save_mode.py migrate. This script is kept for manual one-off copies.
 #
 # Copied (never moved, never changed):
 #   Pikmin 1  ~/.local/share/pikmin-native/save/

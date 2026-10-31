@@ -1288,6 +1288,12 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     endif()
     target_compile_options(install_dialog_snapshot PRIVATE ${NATIVE_COMPILE_OPTIONS})
 
+    add_executable(pc_card_save_root_test pc_port/dolphin_stubs/pc_card_save_root_test.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp)
+    target_include_directories(pc_card_save_root_test PRIVATE ${PC_PORT_DIR})
+    target_compile_options(pc_card_save_root_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_card_save_root_test COMMAND pc_card_save_root_test)
+
     add_executable(installer_ui_test
         pc_port/launcher/installer_ui_test.cpp
         pc_port/launcher/installer_ui.cpp
