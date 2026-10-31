@@ -9,6 +9,7 @@
 #include "asset_finalize.h"
 #include "prepared_image.h"
 #include "installer_ui.h"
+#include "install_directory.h"
 #include "launcher_gui.h"
 #include "crash_report.h"
 #include "launcher_platform.h"
@@ -96,7 +97,10 @@ std::string promptLine(const std::string& prompt)
 
 bool respawnInTerminal() { return platform::respawnInTerminal(); }
 
-fs::path askForInstallDirectory() { return platform::askForInstallDirectory(); }
+fs::path askForInstallDirectory(const fs::path& initialDirectory = {})
+{
+    return platform::askForInstallDirectory("Choose the install folder", initialDirectory);
+}
 fs::path askForImage() { return platform::askForImage(); }
 
 fs::path askForImageConsole()
@@ -1031,6 +1035,27 @@ bool isManagedBundle()
     return value && std::strcmp(value, "1") == 0;
 }
 
+pikmin::launcher::DefaultInstallDirectoryRequest makeDefaultInstallDirectoryRequest(
+    const fs::path& sourceDirectory, bool launcherInInstallFolder, const fs::path& pikmin1Directory, bool forPikmin2)
+{
+    pikmin::launcher::DefaultInstallDirectoryRequest request;
+    request.launcherDirectory             = sourceDirectory;
+    request.launcherInInstallFolder       = launcherInInstallFolder;
+    request.strictPortable                = nectar::paths::isStrictPortable();
+    request.rememberedInstallDirectory    = rememberedInstallDirectory();
+    request.defaultDataRoot               = defaultDataRoot();
+    request.pikmin1InstallDirectory       = pikmin1Directory;
+    request.forPikmin2                    = forPikmin2;
+    return request;
+}
+
+fs::path defaultInstallDirectory(const fs::path& sourceDirectory, bool launcherInInstallFolder,
+                                 const fs::path& pikmin1Directory, bool forPikmin2)
+{
+    return pikmin::launcher::resolveDefaultInstallDirectory(
+        makeDefaultInstallDirectoryRequest(sourceDirectory, launcherInInstallFolder, pikmin1Directory, forPikmin2));
+}
+
 // Guarda la carpeta y, si es nueva, pone en el escritorio el acceso directo a
 // su launcher. Solo la primera vez: si el usuario lo borra, no vuelve.
 // Con portable.txt (o NECTAR_PORTABLE=1) no se escribe nada fuera de la
@@ -1094,7 +1119,11 @@ UpdateOutcome runPikmin2Install(pikmin::launcher::HubWindow& hub, const fs::path
     for (;;) {
         std::string rom, directory;
         if (!hub.choosePaths([] { return askForImage().string(); },
-                             [] { return askForInstallDirectory().string(); }, rom, directory)) {
+                             [](const std::string& current) {
+                                 return askForInstallDirectory(current.empty() ? fs::path {} : fs::u8path(current))
+                                     .u8string();
+                             },
+                             rom, directory)) {
             return UpdateOutcome::BackHome;
         }
         fs::path image = rom;
@@ -1159,6 +1188,30 @@ void usage(const char* argv0)
               << "--dolphin-tool PATH enables RVZ/WIA/GCZ conversion (also found beside the launcher or on PATH).\n"
               << "In game, F1 opens graphics, controls and gameplay settings.\n";
 }
+
+#if defined(__APPLE__)
+// Finder and AppKit sometimes inject these; they are not Open Nectar options.
+bool consumeAppleLaunchArgument(const std::string& arg, int& i, int argc, char** argv)
+{
+    if (arg != "-ApplePersistenceIgnoreState" || i + 1 >= argc) return false;
+    const std::string value = argv[i + 1];
+    if (value != "YES" && value != "NO") return false;
+    ++i;
+    return true;
+}
+
+int userArgumentCount(int argc, char** argv)
+{
+    int count = 0;
+    for (int i = 1; i < argc; ++i) {
+        if (consumeAppleLaunchArgument(argv[i], i, argc, argv)) continue;
+        ++count;
+    }
+    return count;
+}
+#else
+int userArgumentCount(int argc, char**) { return std::max(0, argc - 1); }
+#endif
 
 #if PIKMIN_LAUNCHER_NETPLAY
 // Scripted Host Co-op / Join Co-op without the window, for tests: the same
@@ -1273,6 +1326,9 @@ int main(int argc, char** argv)
         else if (arg == "--extract-only") extractOnly = true;
         else if (arg == "--skip-verify") skipVerify = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
+#if defined(__APPLE__)
+        else if (consumeAppleLaunchArgument(arg, i, argc, argv)) continue;
+#endif
         else { usage(argv[0]); return 2; }
     }
 
@@ -1362,8 +1418,9 @@ int main(int argc, char** argv)
             if (ec) std::this_thread::sleep_for(std::chrono::milliseconds(300));
         }
     }
-    const bool openWindow = argc == 1 || (crashReport && argc == (crashFile.empty() ? 2 : 3))
-                         || (argc == 3 && !movedFrom.empty());
+    const int userArgs = userArgumentCount(argc, argv);
+    const bool openWindow = userArgs == 0 || (crashReport && userArgs == (crashFile.empty() ? 1 : 2))
+                         || (userArgs == 2 && !movedFrom.empty());
     // El juego lo hereda: si falla, vuelve a abrir este launcher con
     // --crash-report para mostrar el informe al momento.
     if (const fs::path self = platform::executablePath(); !self.empty()) {
@@ -1379,7 +1436,7 @@ int main(int argc, char** argv)
     // nueva, la instalación queda al día (partidas y ajustes no se tocan).
     // A managed macOS app owns its bundled binaries and build manifest. Do
     // not copy it over an unrelated remembered install or relaunch from there.
-    if (argc == 1 && !isInstallFolder && !isManagedBundle()) {
+    if (userArgs == 0 && !isInstallFolder && !isManagedBundle()) {
         const fs::path installed = rememberedInstallDirectory();
         std::error_code ec;
         if (!installed.empty() && !fs::equivalent(installed, sourceDirectory, ec)
@@ -1555,7 +1612,8 @@ int main(int argc, char** argv)
                         && choice.game == pikmin::launcher::HubGame::Pikmin2) {
                         fs::path gameDirectory;
                         const UpdateOutcome outcome = runPikmin2Install(
-                            *home, sourceDirectory, installedBesideLauncher ? sourceDirectory : fs::path(),
+                            *home, sourceDirectory,
+                            defaultInstallDirectory(sourceDirectory, isInstallFolder, pikmin1Directory, true).u8string(),
                             converter, gameDirectory);
                         if (outcome != UpdateOutcome::BackHome) {
                             hubState.games[1].installed = true;
@@ -1566,7 +1624,9 @@ int main(int argc, char** argv)
                         continue;
                     }
                     if (choice.action == pikmin::launcher::HubAction::Install) {
-                        home->setInstallGame(pikmin::launcher::HubGame::Pikmin1);
+                        home->setInstallGame(
+                            pikmin::launcher::HubGame::Pikmin1,
+                            defaultInstallDirectory(sourceDirectory, isInstallFolder, pikmin1Directory, false).u8string());
                         return choice;
                     }
                     fs::path playDirectory;
@@ -1606,11 +1666,17 @@ int main(int argc, char** argv)
                     }
                     installerWindow = std::move(fallback);
                 }
+                const fs::path suggestedInstall
+                    = defaultInstallDirectory(sourceDirectory, isInstallFolder, pikmin1Directory, false);
+                if (auto* fallback = dynamic_cast<pikmin::launcher::InstallerWindow*>(installerWindow.get()))
+                    fallback->presetInstallDirectory(suggestedInstall.u8string());
                 std::string selectedRom;
                 std::string selectedInstallDirectory;
                 if (!installerWindow->choosePaths(
                         [] { return askForImage().string(); },
-                        [] { return askForInstallDirectory().string(); },
+                        [](const std::string& current) {
+                            return askForInstallDirectory(current.empty() ? fs::path {} : fs::u8path(current)).u8string();
+                        },
                         selectedRom, selectedInstallDirectory)) {
                     // Canceló y pulsó la portada de un juego ya instalado.
                     if (hub && hub->playRequested() && installedBesideLauncher) {
