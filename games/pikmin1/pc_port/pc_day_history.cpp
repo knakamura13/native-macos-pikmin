@@ -1,5 +1,6 @@
 #include "pc_day_history.h"
 
+#include "dolphin_stubs/pc_card_save_root.h"
 #include "pc_speedrun.h"
 #include <algorithm>
 #include <cstdio>
@@ -42,6 +43,7 @@ bool pc_days_enabled(void) { return !pc_speedrun_active(); }
 
 void pc_days_store(int slot, int day, const void* data, int size)
 {
+    if (pc_card_save_writes_blocked()) return;
     if (!validSlot(slot) || day < 1 || !data || size <= 0) return;
     std::error_code error;
     fs::create_directories(slotDir(slot), error);
@@ -76,6 +78,7 @@ bool pc_days_read(int slot, int day, void* data, int size)
 
 void pc_days_delete_slot(int slot)
 {
+    if (pc_card_save_writes_blocked()) return;
     if (!validSlot(slot)) return;
     std::error_code error;
     fs::remove_all(slotDir(slot), error);
@@ -84,6 +87,7 @@ void pc_days_delete_slot(int slot)
 
 void pc_days_copy_slot(int from, int to)
 {
+    if (pc_card_save_writes_blocked()) return;
     if (!validSlot(from) || !validSlot(to) || from == to) return;
     std::error_code error;
     fs::remove_all(slotDir(to), error);
