@@ -1,6 +1,7 @@
 #include "gci_save_import.h"
 
 #include "dolphin_stubs/pc_card_save_root.h"
+#include "json_mini.h"
 
 #include <algorithm>
 #include <cctype>
@@ -653,6 +654,138 @@ bool restoreLatestCardBackup(const fs::path& card0Dir, std::string& error, CardB
     if (!commitCardPair(card0Dir, name, data, hasMeta ? &meta : nullptr, error, nullptr)) return false;
     if (restoredFrom) *restoredFrom = source;
     if (restoredName) *restoredName = name;
+    return true;
+}
+
+namespace {
+
+fs::path backupStatePathForBuild()
+{
+    if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg != nullptr && *xdg != '\0')
+        return fs::path(xdg) / "open-nectar" / "central-save-backup-by-build.json";
+    if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0')
+        return fs::path(home) / ".config" / "open-nectar" / "central-save-backup-by-build.json";
+    return {};
+}
+
+bool snapshotEntireCard0(const fs::path& card0Dir, std::string& error, CardBackup* made)
+{
+    std::error_code ec;
+    if (!fs::is_directory(card0Dir, ec)) return true;
+    bool hasAny = false;
+    for (const auto& entry : fs::recursive_directory_iterator(card0Dir, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file()) continue;
+        const std::string name = entry.path().filename().string();
+        if (name.rfind(".meta_", 0) == 0) continue;
+        hasAny = true;
+        break;
+    }
+    if (!hasAny) return true;
+    const std::string stamp = [] {
+        const std::time_t now = std::time(nullptr);
+        std::tm local {};
+        localtime_r(&now, &local);
+        char text[32];
+        std::strftime(text, sizeof(text), "%Y%m%d-%H%M%S", &local);
+        return std::string(text);
+    }();
+    int next = 0;
+    for (const CardBackup& existing : listCardBackups(card0Dir)) {
+        if (existing.name.compare(0, stamp.size(), stamp) != 0) continue;
+        const int n = existing.name.size() > stamp.size() ? std::stoi(existing.name.substr(stamp.size() + 1)) : 0;
+        next = std::max(next, n + 1);
+    }
+    fs::path dir = cardBackupRoot(card0Dir) / stamp;
+    if (next > 0) {
+        char suffix[8];
+        std::snprintf(suffix, sizeof(suffix), "-%02d", next);
+        dir = cardBackupRoot(card0Dir) / (stamp + suffix);
+    }
+    if (next > 99 || fs::exists(dir, ec)) {
+        error = "Could not back up the current save (too many backups this second).";
+        return false;
+    }
+    fs::create_directories(dir, ec);
+    if (ec) {
+        error = ec.message();
+        return false;
+    }
+    for (const auto& entry : fs::recursive_directory_iterator(card0Dir, ec)) {
+        if (ec) {
+            error = ec.message();
+            return false;
+        }
+        if (!entry.is_regular_file()) continue;
+        const fs::path src = entry.path();
+        const std::string name = src.filename().string();
+        if (name.rfind(".meta_", 0) == 0) continue;
+        const fs::path rel = fs::relative(src, card0Dir, ec);
+        if (ec) {
+            error = ec.message();
+            return false;
+        }
+        const fs::path destFile = dir / rel;
+        fs::create_directories(destFile.parent_path(), ec);
+        if (ec) {
+            error = ec.message();
+            return false;
+        }
+        if (!fs::copy_file(src, destFile, ec)) {
+            error = ec ? ec.message() : "copy failed";
+            return false;
+        }
+        if (src.parent_path() == card0Dir) {
+            const fs::path meta = card0Dir / (".meta_" + name);
+            if (fs::is_regular_file(meta, ec) && !fs::copy_file(meta, dir / meta.filename(), ec)) {
+                error = ec ? ec.message() : "copy failed";
+                return false;
+            }
+        }
+    }
+    const std::vector<CardBackup> all = listCardBackups(card0Dir);
+    for (std::size_t i = kCardBackupKeep; i < all.size(); ++i) fs::remove_all(all[i].dir, ec);
+    if (made) {
+        parseBackupName(dir.filename().string(), *made);
+        made->dir = dir;
+    }
+    return true;
+}
+
+} // namespace
+
+bool maybeBackupCentralSaveForBuild(const fs::path& buildInfoPath, std::string& error)
+{
+    std::ifstream input(buildInfoPath);
+    if (!input) return true;
+    const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    Json build;
+    if (!parseJson(text, build) || build.type != Json::Type::Object) return true;
+    const std::string mode = build.str("save_mode");
+    if (mode != "central") return true;
+    const std::string sha = build.str("sha");
+    const std::string saveDir = build.str("configured_save_directory");
+    if (sha.empty() || saveDir.empty()) return true;
+    const fs::path statePath = backupStatePathForBuild();
+    if (statePath.empty()) return true;
+    std::string stateText;
+    {
+        std::ifstream stateInput(statePath);
+        stateText.assign(std::istreambuf_iterator<char>(stateInput), std::istreambuf_iterator<char>());
+    }
+    Json state;
+    parseJson(stateText, state);
+    const std::string key = saveDir + "|" + sha;
+    if (state.type == Json::Type::Object && state.str("last") == key) return true;
+    if (!snapshotEntireCard0(fs::path(saveDir) / "card0", error, nullptr)) return false;
+    std::error_code ec;
+    fs::create_directories(statePath.parent_path(), ec);
+    std::ofstream out(statePath);
+    if (!out) {
+        error = "Could not record the central-save backup marker.";
+        return false;
+    }
+    out << "{\n  \"last\": \"" << key << "\"\n}\n";
     return true;
 }
 

@@ -1,0 +1,46 @@
+name: Save tools
+
+on:
+  push:
+    paths:
+      - 'tools/mac/**'
+      - 'games/pikmin1/pc_port/**'
+      - 'games/pikmin1/packaging/macos/**'
+      - '.github/workflows/save-tools.yml'
+  pull_request:
+    paths:
+      - 'tools/mac/**'
+      - 'games/pikmin1/pc_port/**'
+      - 'games/pikmin1/packaging/macos/**'
+      - '.github/workflows/save-tools.yml'
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch upstream main for patch check
+        run: git fetch --depth=1 https://github.com/SSunnKing/Open-Nectar---Pikmin-Native-PC-Mobile-Port.git main:refs/remotes/upstream/main
+      - name: Python save-mode tests
+        run: python3 -m unittest discover -s tools/mac/tests -p 'test_*.py'
+      - name: Bash empty save-flag arrays (macOS bash 3.2 semantics)
+        run: bash tools/mac/tests/test_bash_empty_save_arrays.sh
+      - name: Upstream central-save patch applies
+        run: bash tools/mac/tests/test_upstream_central_save_patch.sh
+      - name: build-app save-self-test
+        run: bash games/pikmin1/packaging/macos/build-app.sh --save-self-test
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch upstream main for patch check
+        run: git fetch --depth=1 https://github.com/SSunnKing/Open-Nectar---Pikmin-Native-PC-Mobile-Port.git main:refs/remotes/upstream/main
+      - name: Bash empty save-flag arrays on /bin/bash
+        run: bash tools/mac/tests/test_bash_empty_save_arrays.sh
+      - name: Upstream central-save patch applies
+        run: bash tools/mac/tests/test_upstream_central_save_patch.sh

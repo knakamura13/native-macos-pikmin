@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # build-app.sh [--clean] [--build-dir DIR] [--output-dir DIR] [--install [DIR]]
+#              [--fresh-save | --sandbox-save | --read-only-save | --save-name NAME | --save-dir PATH | --choose-save]
 # build-app.sh --self-test
+# build-app.sh --save-self-test
 #
 # Builds the Open Nectar app for macOS (arm64, USA build). The launcher inside
 # plays both Pikmin 1 and Pikmin 2, so every app is named after Open Nectar.
@@ -31,9 +33,9 @@
 #     never pruned. Saves are never touched.
 #   - merges controls.conf (the Mac key layout) into the role's data folder.
 #
-# The upstream role never uses the real data folder: it refuses a data folder
-# that is, contains or sits inside ~/.local/share/pikmin-native, after
-# resolving symlinks.
+# The upstream role never uses the real *data* folder for settings (see
+# refuse_real_data_root). Every role can share the central save folder under
+# ~/Library/Application Support/Open Nectar/save via NECTAR_SAVE_DIR.
 #
 # The game links SDL2 from Homebrew (sdl2-compat). The app runs only on Macs
 # that have that library at the same path.
@@ -42,6 +44,9 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 game_dir="$(cd -- "${script_dir}/../.." && pwd)"
+repo_root="$(cd -- "${game_dir}/../.." && pwd)"
+save_mode_py="${repo_root}/tools/mac/save_mode.py"
+resolve_save_sh="${repo_root}/tools/mac/resolve_save_for_build.sh"
 legacy_app_name="Pikmin 1.app"
 legacy_bundle_id="org.opennectar.pikmin1"
 keep_backups=5
@@ -74,6 +79,25 @@ refuse_real_data_root() {
     if [[ -n "${XDG_DATA_HOME:-}" ]] && paths_overlap "${candidate}" "${XDG_DATA_HOME}/pikmin-native"; then
         printf 'Refusing to use %s for an upstream build: it overlaps %s.\n' \
             "${candidate}" "${XDG_DATA_HOME}/pikmin-native" >&2
+        return 1
+    fi
+}
+
+hash_save_tree() {
+    python3 "${save_mode_py}" hash-tree "$1"
+}
+
+assert_central_save_unchanged() {
+    local central="$1" label="$2" before after
+    shift 2
+    [[ -d "${central}" ]] || { "$@"; return $?; }
+    before="$(hash_save_tree "${central}")"
+    if ! "$@"; then
+        return 1
+    fi
+    after="$(hash_save_tree "${central}")"
+    if [[ "${before}" != "${after}" ]]; then
+        printf 'Refusing %s: the central save folder changed under %s.\n' "${label}" "${central}" >&2
         return 1
     fi
 }
@@ -267,19 +291,39 @@ xml_escape() {
     printf '%s' "${value}"
 }
 
-# write_info_plist FILE DISPLAY_NAME BUNDLE_ID TITLE DATA_ROOT GAME_APP ROLE
+write_fresh_wrapper() {
+    local file="$1" launcher_bin="$2" title="$3"
+    local q_launcher q_title
+    q_launcher="$(printf '%q' "${launcher_bin}")"
+    q_title="$(printf '%q' "${title}")"
+    cat > "${file}" <<EOF
+#!/bin/bash
+set -euo pipefail
+fresh="\$(mktemp -d "\${TMPDIR:-/tmp}/open-nectar-fresh.XXXXXX")"
+mkdir -p "\$fresh/card0"
+export NECTAR_SAVE_DIR="\$fresh"
+export PIKMIN_LAUNCHER_TITLE=${q_title}
+exec ${q_launcher} "\$@"
+EOF
+    chmod +x "${file}"
+}
+
+# write_info_plist FILE DISPLAY_NAME BUNDLE_ID TITLE DATA_ROOT GAME_APP ROLE SAVE_DIR SAVE_READ_ONLY EXECUTABLE
 write_info_plist() {
-    local file="$1" display="$2" id="$3" title="$4" data="$5" game_app="$6" role="$7"
-    local data_xml game_app_xml upstream_env=""
+    local file="$1" display="$2" id="$3" title="$4" data="$5" game_app="$6" role="$7" save="$8" save_ro="$9" executable="${10}"
+    local data_xml game_app_xml save_xml upstream_env="" save_ro_xml=""
     data_xml="$(xml_escape "${data}")"
     game_app_xml="$(xml_escape "${game_app}")"
+    save_xml="$(xml_escape "${save}")"
+    if [[ "${save_ro}" == "1" ]]; then
+        save_ro_xml="<key>NECTAR_SAVE_READ_ONLY</key><string>1</string>"
+    fi
     if [[ "${role}" == "upstream" ]]; then
         # Point every per-user folder at the upstream data folder, so neither game
         # nor the launcher reads or writes the real saves, settings or Pikmin 2 path.
         upstream_env="<key>XDG_DATA_HOME</key><string>${data_xml}/xdg-data</string>
         <key>XDG_CONFIG_HOME</key><string>${data_xml}/config</string>
-        <key>XDG_CACHE_HOME</key><string>${data_xml}/cache</string>
-        <key>NECTAR_SAVE_DIR</key><string>${data_xml}/save</string>"
+        <key>XDG_CACHE_HOME</key><string>${data_xml}/cache</string>"
     fi
     cat > "${file}" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -299,7 +343,7 @@ write_info_plist() {
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>nectar-launcher</string>
+    <string>$(xml_escape "${executable}")</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
@@ -316,6 +360,8 @@ write_info_plist() {
         <string>${data_xml}</string>
         <key>NECTAR_PIKMIN1_EXECUTABLE</key>
         <string>${game_app_xml}/Contents/MacOS/nectar</string>
+        <key>NECTAR_SAVE_DIR</key><string>${save_xml}</string>
+        ${save_ro_xml}
         ${upstream_env}
     </dict>
 </dict>
@@ -339,7 +385,7 @@ self_test() {
         printf '%s' "$5" > "$1/$2/Contents/MacOS/pikmin2_pc"
         printf '%s' "$5" > "$1/$2/Contents/MacOS/pikmin2_pc-usa"
         printf '{"role": "%s", "sha": "%s"}\n' "$4" "$5" > "$1/$2/Contents/Resources/build-info.json"
-        write_info_plist "$1/$2/Contents/Info.plist" "${2%.app}" "$3" "t" "/d" "/a" "$4"
+        write_info_plist "$1/$2/Contents/Info.plist" "${2%.app}" "$3" "t" "/d" "/a" "$4" "/d/save" "0" "nectar-launcher"
     }
     local home="${tmp}/home" apps="${tmp}/Applications" out="${tmp}/out" archive backups
     mkdir -p "${home}" "${apps}" "${out}"
@@ -424,9 +470,44 @@ self_test() {
     check "stale apps kept in out.noindex" '[[ -d "$(echo "${script_dir}"/out.noindex/stale-out/*/"Pikmin 1.app")" ]]'
     script_dir="${saved_script_dir}"
 
+    # Central save migration copies legacy folders and leaves sources in place.
+    local mig_home="${tmp}/mig-home"
+    mkdir -p "${mig_home}/.local/share/pikmin-native/save/card0" \
+        "${mig_home}/.local/share/pikmin-native-upstream/save/card0"
+    printf 'legacy1' > "${mig_home}/.local/share/pikmin-native/save/card0/a.gci"
+    printf 'legacy2' > "${mig_home}/.local/share/pikmin-native-upstream/save/card0/b.gci"
+    HOME="${mig_home}" python3 "${save_mode_py}" migrate >/dev/null
+    check "migration copied legacy saves" '[[ "$(cat "${mig_home}/Library/Application Support/Open Nectar/save/card0/a.gci")" == legacy1 ]]'
+    check "migration left legacy folder" '[[ "$(cat "${mig_home}/.local/share/pikmin-native/save/card0/a.gci")" == legacy1 ]]'
+
     if [[ "${fail}" -ne 0 ]]; then return 1; fi
     echo "build-app.sh self-test: ok"
 }
+
+save_self_test() {
+    local tmp fail=0
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "${tmp}"' RETURN
+    check() { if ! eval "$2"; then printf 'FAIL: %s\n' "$1" >&2; fail=1; fi; }
+    local home="${tmp}/home"
+    mkdir -p "${home}/Library/Application Support/Open Nectar/save/card0"
+    printf 'probe' > "${home}/Library/Application Support/Open Nectar/save/card0/probe.gci"
+    HOME="${home}"
+    local before after
+    before="$(hash_save_tree "${home}/Library/Application Support/Open Nectar/save")"
+    merge_controls() { mkdir -p "$1"; :; return 0; }
+    assert_central_save_unchanged "${home}/Library/Application Support/Open Nectar/save" "merge_controls" \
+        merge_controls "${home}/.local/share/pikmin-native-upstream" upstream
+    after="$(hash_save_tree "${home}/Library/Application Support/Open Nectar/save")"
+    check "hash guard blocked mutation" '[[ "${before}" == "${after}" ]]'
+    if [[ "${fail}" -ne 0 ]]; then return 1; fi
+    echo "build-app.sh save-self-test: ok"
+}
+
+if [[ "${1:-}" == "--save-self-test" ]]; then
+    save_self_test
+    exit $?
+fi
 
 if [[ "${1:-}" == "--self-test" ]]; then
     self_test
@@ -474,6 +555,7 @@ clean=0
 install=0
 custom_output=0
 install_dir="/Applications"
+save_flag_args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --clean) clean=1; shift ;;
@@ -488,11 +570,31 @@ while [[ $# -gt 0 ]]; do
             fi
             shift
             ;;
+        --fresh-save|--sandbox-save|--read-only-save|--choose-save)
+            save_flag_args+=("$1")
+            shift
+            ;;
+        --save-name|--save-dir)
+            save_flag_args+=("$1" "$2")
+            shift 2
+            ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 
 app="${output_dir}/${app_name}"
+cache_for_save="${build_dir}/CMakeCache.txt"
+resolve_args=(--home "${HOME}" --build-output "${output_dir}" --non-interactive)
+[[ -f "${cache_for_save}" ]] && resolve_args+=(--cmake-cache "${cache_for_save}")
+# shellcheck disable=SC1090
+eval "$(bash "${resolve_save_sh}" "${resolve_args[@]}" -- ${save_flag_args[@]+"${save_flag_args[@]}"})"
+configured_save_dir="${NECTAR_SAVE_DIR}"
+save_read_only="${NECTAR_SAVE_READ_ONLY:-0}"
+bundle_executable="nectar-launcher"
+if [[ "${PIKMIN_SAVE_NEEDS_FRESH_WRAPPER:-0}" == "1" ]]; then
+    bundle_executable="open-nectar"
+fi
+launcher_title="${launcher_title}, ${PIKMIN_SAVE_MODE_LABEL}"
 if [[ "${install}" -eq 1 && "${build_role}" == "unknown" ]]; then
     printf '%s\n' 'Refusing --install for a build with no role. /Applications holds only Open Nectar (tools/mac/build-upstream.sh --install) and Open Nectar Develop (a kyle-develop rebuild). Use tools/mac/test-build.sh for anything else.' >&2
     exit 2
@@ -553,6 +655,8 @@ if [[ -e "${app}" || -L "${app}" ]]; then
 fi
 mkdir -p "${contents}/MacOS" "${contents}/Resources"
 
+cp "${save_mode_py}" "${contents}/Resources/save_mode.py"
+
 # The binaries keep the upstream names (nectar, nectar-launcher). Only the app
 # bundle is named, so the code and the install format stay unchanged.
 cp "${bin_dir}/nectar" "${contents}/MacOS/nectar"
@@ -578,7 +682,10 @@ if [[ "${install}" -eq 1 ]]; then
     game_app="${install_dir}/${app_name}"
 fi
 write_info_plist "${contents}/Info.plist" "${display_name}" "${bundle_id}" "${launcher_title}" \
-    "${configured_data_root}" "${game_app}" "${build_role}"
+    "${configured_data_root}" "${game_app}" "${build_role}" "${configured_save_dir}" "${save_read_only}" "${bundle_executable}"
+if [[ "${bundle_executable}" == "open-nectar" ]]; then
+    write_fresh_wrapper "${contents}/MacOS/open-nectar" "${contents}/MacOS/nectar-launcher" "${launcher_title}"
+fi
 
 overlay_args=()
 if [[ -n "${PIKMIN_LAUNCHER_OVERLAY:-}" ]]; then
@@ -601,13 +708,17 @@ python3 "${game_dir}/../../tools/mac/build_identity.py" \
     --repo "${game_dir}/../.." --output "${contents}/Resources/build-info.json" \
     --game "${contents}/MacOS/nectar" --launcher "${contents}/MacOS/nectar-launcher" \
     --cache "${build_dir}/CMakeCache.txt" --data "${configured_data_root}" --role "${build_role}" \
+    --save-mode "${PIKMIN_SAVE_MODE}" --save-mode-label "${PIKMIN_SAVE_MODE_LABEL}" \
+    --save-directory "${configured_save_dir}" \
     ${overlay_args[@]+"${overlay_args[@]}"}
 
 echo "Built: ${app}"
 
 if [[ "${install}" -eq 1 ]]; then
     rc=0
-    install_app "${app}" "${install_dir}" "${app_name}" "${bundle_id}" "${build_role}" "${archive_root}" "${backup_root}" || rc=$?
+    assert_central_save_unchanged "${OPEN_NECTAR_CENTRAL_SAVE_DIR}" "install" \
+        install_app "${app}" "${install_dir}" "${app_name}" "${bundle_id}" "${build_role}" "${archive_root}" "${backup_root}" || rc=$?
     [[ "${rc}" -eq 0 ]] || exit "${rc}"
-    merge_controls "${configured_data_root}" "${build_role}"
+    assert_central_save_unchanged "${OPEN_NECTAR_CENTRAL_SAVE_DIR}" "merge_controls" \
+        merge_controls "${configured_data_root}" "${build_role}"
 fi

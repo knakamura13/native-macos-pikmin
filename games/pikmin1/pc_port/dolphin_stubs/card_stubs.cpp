@@ -410,6 +410,7 @@ s32 CARDClose(CARDFileInfo* info) { return finish(info ? info->chan : 0, CARD_RE
 s32 CARDCreate(s32 channel, const char* fileName, u32 size, CARDFileInfo* info)
 {
 	cardtrace("CARDCreate", fileName);
+	if (pc_card_save_writes_blocked()) return finish(channel, CARD_RESULT_IOERROR);
 	const std::string name = safeName(fileName);
 	if (name.empty() || name.size() >= CARD_FILENAME_MAX) return finish(channel, CARD_RESULT_NAMETOOLONG);
 	if (!ensureCard(channel)) return finish(channel, CARD_RESULT_NOCARD);
@@ -452,6 +453,7 @@ s32 CARDReadAsync(CARDFileInfo* info, void* address, s32 length, s32 offset, CAR
 s32 CARDWrite(CARDFileInfo* info, void* address, s32 length, s32 offset)
 {
 	cardtrace("CARDWrite", info ? info->fileNo : -1);
+	if (pc_card_save_writes_blocked()) return finish(info ? info->chan : 0, CARD_RESULT_IOERROR);
 	std::string name;
 	if (!address || length < 0 || offset < 0 || !resolve(info, name)) return finish(info ? info->chan : 0, CARD_RESULT_NOFILE);
 	// Copy, patch, swap: a crash or a window close in the middle of a save
@@ -486,6 +488,7 @@ s32 CARDGetXferredBytes(s32 channel) { return validChannel(channel) ? sTransferr
 s32 CARDFastDelete(s32 channel, s32 fileNo)
 {
 	cardtrace("CARDFastDelete", fileNo);
+	if (pc_card_save_writes_blocked()) return finish(channel, CARD_RESULT_IOERROR);
 	const auto files = entries(channel);
 	if (fileNo < 0 || static_cast<size_t>(fileNo) >= files.size()) return finish(channel, CARD_RESULT_NOFILE);
 	std::error_code error;
@@ -501,6 +504,7 @@ s32 CARDFastDeleteAsync(s32 channel, s32 fileNo, CARDCallback callback)
 s32 CARDRename(s32 channel, const char* oldName, const char* newName)
 {
 	cardtrace("CARDRename", (std::string(oldName ? oldName : "-") + " -> " + (newName ? newName : "-")).c_str());
+	if (pc_card_save_writes_blocked()) return finish(channel, CARD_RESULT_IOERROR);
 	const std::string oldSafe = safeName(oldName), newSafe = safeName(newName);
 	if (!fs::exists(dataPath(channel, oldSafe))) return finish(channel, CARD_RESULT_NOFILE);
 	if (fs::exists(dataPath(channel, newSafe))) return finish(channel, CARD_RESULT_EXIST);
@@ -527,6 +531,7 @@ s32 CARDGetStatus(s32 channel, s32 fileNo, CARDStat* stat)
 s32 CARDSetStatus(s32 channel, s32 fileNo, CARDStat* stat)
 {
 	cardtrace("CARDSetStatus", fileNo);
+	if (pc_card_save_writes_blocked()) return finish(channel, CARD_RESULT_IOERROR);
 	const auto files = entries(channel);
 	if (!stat || fileNo < 0 || static_cast<size_t>(fileNo) >= files.size()) return finish(channel, CARD_RESULT_NOFILE);
 	// The real CARDSetStatus only takes the banner, icon and comment layout
@@ -552,6 +557,7 @@ s32 CARDGetSerialNo(s32 channel, u64* serial) { if (serial) *serial = 0x50494b4d
 s32 CARDGetSectorSize(s32 channel, u32* size) { if (size) *size = kSectorSize; return finish(channel, CARD_RESULT_READY); }
 s32 CARDFormat(s32 channel)
 {
+	if (pc_card_save_writes_blocked()) return finish(channel, CARD_RESULT_IOERROR);
 	if (!validChannel(channel)) return finish(channel, CARD_RESULT_NOCARD);
 	std::error_code error; fs::remove_all(root(channel), error); ensureCard(channel);
 	return finish(channel, error ? CARD_RESULT_IOERROR : CARD_RESULT_READY);

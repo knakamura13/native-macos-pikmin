@@ -170,5 +170,7 @@ inline constexpr const char* kAlreadyCurrentMessage = "That's already this insta
 enum class CardWriteStep { None, WriteData, WriteMeta, Backup, RenameData, RenameMeta };
 void failNextCardWriteForTesting(CardWriteStep step);
 
+bool maybeBackupCentralSaveForBuild(const std::filesystem::path& buildInfoPath, std::string& error);
+
 } // namespace launcher
 } // namespace pikmin
