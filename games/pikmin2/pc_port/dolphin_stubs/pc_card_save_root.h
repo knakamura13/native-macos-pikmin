@@ -17,6 +17,8 @@ struct PcCardSaveRootOptions {
 
 std::filesystem::path pc_card_resolve_save_root(PcCardSaveRootOptions options = {});
 
+bool pc_card_save_writes_blocked();
+
 inline std::filesystem::path pc_card_card0_directory(PcCardSaveRootOptions options = {})
 {
     return pc_card_resolve_save_root(options) / "card0";

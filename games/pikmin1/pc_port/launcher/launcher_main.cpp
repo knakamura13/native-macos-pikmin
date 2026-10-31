@@ -14,6 +14,7 @@
 #include "launcher_gui.h"
 #include "crash_report.h"
 #include "launcher_platform.h"
+#include "gci_save_import.h"
 #include "nectar_paths/paths.h"
 #include "release_update.h"
 #include "texture_pack_download.h"
@@ -1292,6 +1293,16 @@ int main(int argc, char** argv)
     // Primera vez con los ajustes en la carpeta del juego: se copian (no se
     // mueven) los de la carpeta del usuario, antes de escribir ninguno.
     nectar::paths::migrateUserFolderSettings();
+
+#ifdef __APPLE__
+    if (isManagedBundle()) {
+        const char* overridePath = std::getenv("PIKMIN_BUILD_INFO");
+        const fs::path manifest = overridePath && *overridePath ? fs::path(overridePath)
+            : platform::executablePath().parent_path().parent_path() / "Resources" / "build-info.json";
+        std::string backupError;
+        pikmin::launcher::maybeBackupCentralSaveForBuild(manifest, backupError);
+    }
+#endif
 
     const fs::path sourceDirectory = executableDirectory();
     // Instalación (de Pikmin 1, de Pikmin 2 o de los dos) junto a este launcher.

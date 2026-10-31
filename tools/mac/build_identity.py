@@ -116,6 +116,9 @@ def main():
     p.add_argument('--allowed-change', action='append', default=[],
                    help='a path the packaging step is expected to patch or add; may repeat')
     p.add_argument('--packaging-fingerprint', help='sha256 over the packaging files an upstream build adds')
+    p.add_argument('--save-mode')
+    p.add_argument('--save-mode-label')
+    p.add_argument('--save-directory')
     a = p.parse_args()
     sha = git(a.repo, 'rev-parse', 'HEAD') or 'unknown'
     branch = git(a.repo, 'symbolic-ref', '--quiet', '--short', 'HEAD') or ''
@@ -136,6 +139,8 @@ def main():
            'window_overlay_sha256': hash_file(a.window_overlay) if a.window_overlay else None,
            'window_title_header_sha256': hash_file(a.window_title_header) if a.window_title_header else None,
            'integration': marker, 'build_options': options, 'configured_data_directory': a.data,
+           'save_mode': a.save_mode, 'save_mode_label': a.save_mode_label,
+           'configured_save_directory': a.save_directory,
            'built_at_utc': datetime.now(timezone.utc).isoformat(),
            'binaries': {'nectar': hash_file(a.game), 'nectar-launcher': hash_file(a.launcher)}}
     pathlib.Path(a.output).write_text(json.dumps(obj, indent=2) + '\n')
