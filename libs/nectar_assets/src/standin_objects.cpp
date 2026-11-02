@@ -304,7 +304,20 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 	const Size sizes[] = { { 1, "01", "pe01", 1, 1 }, { 5, "05", "pe05", 3, 1 }, { 10, "10", "pe10", 5, 2 }, { 20, "20", "pe20", 8, 3 } };
 
 	BeWriter cfg;
-	cfg.s32(int(std::size(kinds) * std::size(sizes)) + 2); // + the Main Engine and the Whimsical Radar, below
+	// Enemy corpses (below): the stand-in enemies that leave a corpse (TPI_CorpseType
+	// TEKICORPSE_LeaveCorpse), whose death (BTeki::dieSoon) halts the game without a
+	// config for their type id.
+	struct Corpse {
+		const char* id;
+		const char* name;
+		int carryMin;
+		int seeds;
+	};
+	const Corpse corpses[] = { { "tkch", "teki : chappy", 3, 5 },  { "tksw", "teki : swallow", 10, 10 }, { "tkbe", "teki : beatle", 20, 20 },
+		                       { "tkka", "teki : kabekuiA", 2, 2 }, { "tkkb", "teki : kabekuiB", 2, 2 },   { "tkot", "teki : otama", 1, 1 } };
+
+	cfg.s32(int(std::size(kinds) * std::size(sizes)) + 2
+	        + int(std::size(corpses))); // + the Main Engine, the Whimsical Radar and the corpses, below
 	for (const Kind& k : kinds) {
 		for (const Size& z : sizes) {
 			const std::string name = std::string(k.name) + " pellet " + std::to_string(z.number);
@@ -361,6 +374,23 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 	putReversedId(cfg, "uf01");
 	putReversedId(cfg, "none");
 	cfg.s32(-1);
+	// The corpses: type 0 (PELTYPE_Corpse), colour -1, carriers from the number to twice
+	// it, and the same seed count for every Onion colour. This file's own numbers, not the
+	// disc's. Model and shape ids are the enemy's type id ('tk**'); the game only ever makes
+	// these through BTeki::dieSoon's becomePellet, which draws the enemy itself.
+	for (const Corpse& c : corpses) {
+		if (!putParams(cfg,
+		               { parmString("x99", c.name), parmInt("p00", 0), parmInt("p09", -1), parmInt("p01", c.carryMin), parmInt("p02", c.carryMin * 2),
+		                 parmInt("p06", c.seeds), parmInt("p07", c.seeds) },
+		               error)) {
+			return false;
+		}
+		const char id[5] = { c.id[0], c.id[1], c.id[2], c.id[3], 0 };
+		putReversedId(cfg, id);
+		putReversedId(cfg, id);
+		putReversedId(cfg, "none");
+		cfg.s32(-1);
+	}
 	out.push_back({ "dataDir/parms/pelMgr.bin", cfg.b });
 
 	// objects/pelAnim.bin: int count, then per info (PelletAnimInfo::read) the

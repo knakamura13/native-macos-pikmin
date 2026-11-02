@@ -1,6 +1,6 @@
 // pellet_table: the pellet configuration table (coverage/edge-cases.md EC-46). Walks every
 // PelletConfig the game loaded from parms/pelMgr.bin and asserts what each one must hold:
-// a known type (0 blue, 1 red, 2 yellow, 3 ship part), a colour in -2..2 that fits the type,
+// a known type (0 blue or enemy corpse, 1 red, 2 yellow, 3 ship part), a colour in -2..2 that fits the type,
 // a carrier range of at least one with max >= min, Onion seed counts that are not below -1
 // (a negative count is the fireworks sentinel, GoalItem::suckMe), a model id and a shape id,
 // and a model id that is unique and found again by PelletMgr::getConfig. The config count is
@@ -8,11 +8,13 @@
 //
 // Stand-in tree (stages/sandbox*.ini, stages/practice.ini): the count and every number are the
 // generator's own (libs/nectar_assets standin_objects.cpp): blue, red and yellow pellets at 1,
-// 5, 10 and 20, the Main Engine and the Whimsical Radar, with the carry and seed numbers there.
+// 5, 10 and 20, the Main Engine, the Whimsical Radar and the six enemy corpses the stand-in
+// stages place (tkch, tksw, tkbe, tkka, tkkb, tkot: type 0, colour -1, W7 #98), with the carry and
+// seed numbers there.
 // Disc tree (any other stage, the ctest `_disc` entry): 62 configs, the disc's table; only the
 // range checks apply, since those values are the disc's.
 //
-// Negative control (manual): change kStandInConfigs to 15, or a pellet's seeds in the
+// Negative control (manual): change kStandInConfigs to 21, or a pellet's seeds in the
 // generator, and the run fails with the expected and observed numbers.
 #include "scenarios/pc_scenario_list.h"
 
@@ -28,7 +30,7 @@
 
 namespace {
 
-constexpr int kStandInConfigs = 14; // 12 coloured pellets, the Main Engine, the Whimsical Radar
+constexpr int kStandInConfigs = 20; // 12 coloured pellets, the Main Engine, the Whimsical Radar, 6 corpses
 constexpr int kDiscConfigs    = 62; // the VERSION_GPIE01_01 install's parms/pelMgr.bin
 
 struct StandInPellet {
@@ -55,7 +57,7 @@ public:
 		}
 		std::printf("[scenario] pellet_table: %s tree, %d configs (node count), PelletMgr says %d\n", standIn ? "stand-in" : "disc", count, pelletMgr->getNumConfigs());
 		if (count != want || pelletMgr->getNumConfigs() != want) {
-			scenarioFailf(0, standIn ? "14 configs in the stand-in table" : "62 configs in the disc's table", "%d nodes, getNumConfigs %d", count, pelletMgr->getNumConfigs());
+			scenarioFailf(0, standIn ? "20 configs in the stand-in table" : "62 configs in the disc's table", "%d nodes, getNumConfigs %d", count, pelletMgr->getNumConfigs());
 			mDone = true;
 			return;
 		}
@@ -92,7 +94,12 @@ private:
 			std::snprintf(what, sizeof what, "colour %d", colour);
 			return bad("a ship part has no colour (-2 or -1)", c, what);
 		}
-		if (standIn && type != PELTYPE_UfoPart && colour != type) {
+		if (standIn && c.mModelId.match('tk**')) {
+			if (type != PELTYPE_Corpse || colour != PELCOLOR_NULL) {
+				std::snprintf(what, sizeof what, "type %d colour %d", type, colour);
+				return bad("a stand-in enemy corpse is type 0 with no colour (-1)", c, what);
+			}
+		} else if (standIn && type != PELTYPE_UfoPart && colour != type) {
 			std::snprintf(what, sizeof what, "type %d colour %d", type, colour);
 			return bad("a stand-in coloured pellet's type and colour are the same", c, what);
 		}
@@ -120,6 +127,8 @@ private:
 			{ "pr01", 1, 1, 1, 2, 1, 1 },   { "pr05", 1, 1, 5, 10, 3, 1 },   { "pr10", 1, 1, 10, 20, 5, 2 },  { "pr20", 1, 1, 20, 40, 8, 3 },
 			{ "py01", 2, 2, 1, 2, 1, 1 },   { "py05", 2, 2, 5, 10, 3, 1 },   { "py10", 2, 2, 10, 20, 5, 2 },  { "py20", 2, 2, 20, 40, 8, 3 },
 			{ "ust5", 3, -1, 20, 40, 1, 1 }, { "uf01", 3, -1, 10, 20, 1, 1 },
+			{ "tkch", 0, -1, 3, 6, 5, 5 },  { "tksw", 0, -1, 10, 20, 10, 10 }, { "tkbe", 0, -1, 20, 40, 20, 20 },
+			{ "tkka", 0, -1, 2, 4, 2, 2 },  { "tkkb", 0, -1, 2, 4, 2, 2 },     { "tkot", 0, -1, 1, 2, 1, 1 },
 		};
 		for (const StandInPellet& e : table) {
 			PelletConfig* c = pelletMgr->getConfig(carry::id(e.model));

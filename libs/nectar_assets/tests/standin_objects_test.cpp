@@ -538,8 +538,8 @@ void testPelletTables()
 	check(files[0].path == "dataDir/parms/pelMgr.bin", "pelMgr.bin path");
 	RamStream cfg = streamOf(files[0].bytes);
 	const int configs = cfg.readInt(); // PelletMgr::readConfigs
-	check(configs == 14, "twelve coloured pellet configs, the Main Engine and the Whimsical Radar");
-	std::set<std::string> ids, configShapes;
+	check(configs == 20, "twelve coloured pellet configs, the Main Engine, the Whimsical Radar and six enemy corpses");
+	std::set<std::string> ids, configShapes, corpseShapes;
 	for (int i = 0; i < configs; i++) {
 		TestPelletConfig c;
 		c.read(cfg); // PelletConfig::read
@@ -553,16 +553,26 @@ void testPelletTables()
 		if (model == "ust5") {
 			// The disc's Main Engine config (standin_objects.cpp): a ship part (type 3), no colour, 20 to 40 carriers,
 			// scale 1.65, ship joint 3, its own shape.
-			check(i == configs - 2, "the Main Engine follows the coloured configs");
+			check(i == 12, "the Main Engine follows the coloured configs");
 			check(idString(c.shape) == "ust5" && idString(c.unused) == "none" && c.joint == 3, "Main Engine: shape ust5, no split, repair joint 3");
 			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == 20 && c.mCarryMax() == 40 && c.mScale() == 1.65f,
 			      "Main Engine: type 3, colour -1, 20 to 40 carriers, scale 1.65 (the disc's)");
 			continue;
 		}
 		if (model == "uf01") {
-			check(i == configs - 1, "the Whimsical Radar is the last config");
+			check(i == 13, "the Whimsical Radar follows the Main Engine");
 			check(idString(c.shape) == "uf01" && idString(c.unused) == "none" && c.joint == -1, "Whimsical Radar: shape uf01, no split, no repair joint");
 			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == 10 && c.mCarryMax() == 20, "Whimsical Radar: type 3, colour -1, 10 to 20 carriers");
+			continue;
+		}
+		if (model.rfind("tk", 0) == 0) {
+			// An enemy corpse (W7 #98): only BTeki::dieSoon's becomePellet makes one, with the
+			// enemy as its view, so PelletMgr::newPellet never looks up a shape info for it.
+			check(i >= 14, "the enemy corpses follow the Radar");
+			check(idString(c.shape) == model && idString(c.unused) == "none" && c.joint == -1, "corpse " + model + ": shape is its own id, no split, no repair joint");
+			check(c.mPelletType() == 0 && c.mPelletColor() == -1, "corpse " + model + ": type 0, colour -1");
+			check(c.mCarryMin() >= 1 && c.mCarryMax() == 2 * c.mCarryMin(), "corpse " + model + ": carry range");
+			corpseShapes.insert(model);
 			continue;
 		}
 		check(model.size() == 4 && (model[1] == 'b' || model[1] == 'r' || model[1] == 'y') && model[0] == 'p', "config id " + model + " is p<colour><number>");
@@ -573,6 +583,7 @@ void testPelletTables()
 	}
 	check(cfg.getPending() == 0, "PelletMgr::readConfigs consumes every byte");
 	for (const char* id : { "pb01", "pr01", "py01", "pb20", "pr20", "py20" }) check(ids.count(id), std::string("config ") + id + " exists");
+	for (const char* id : { "tkch", "tksw", "tkbe", "tkka", "tkkb", "tkot" }) check(corpseShapes.count(id), std::string("corpse config ") + id + " exists");
 
 	check(files[1].path == "dataDir/objects/pelAnim.bin", "pelAnim.bin path");
 	RamStream sh = streamOf(files[1].bytes);
@@ -609,7 +620,10 @@ void testPelletTables()
 	check(sh.getPending() == 0, "PelletMgr::readAnimInfos consumes every byte");
 	check(resident == 20, "20 resident shapes (the ones the disc boot loads), three loaded on use");
 	for (const char* id : { "pe01", "pe05", "pe10", "pe20", "ust1", "uf01", "un01", "un04", "un07" }) check(shapeIds.count(id), std::string("shape ") + id + " exists");
-	for (const std::string& shape : configShapes) check(shapeIds.count(shape) == 1, "config shape " + shape + " has a shape info");
+	for (const std::string& shape : configShapes) {
+		if (corpseShapes.count(shape)) continue; // drawn by the enemy itself (above)
+		check(shapeIds.count(shape) == 1, "config shape " + shape + " has a shape info");
+	}
 }
 
 // ------------------------------------------------------------------ tests: generators
