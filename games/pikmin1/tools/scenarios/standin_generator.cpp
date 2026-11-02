@@ -220,6 +220,11 @@ bool stagesIni(Tree& tree, std::string& error)
 	showcase.name    = "sandbox_showcase";
 	showcase.file    = standin::kShowcaseStageIni;
 	entries.push_back(showcase);
+	nectar::StagesEntry play; // the free_play stage (standin_objects_stage.h), last so no other index moves
+	play.visible = false;
+	play.name    = "sandbox_play";
+	play.file    = standin::kPlayStageIni;
+	entries.push_back(play);
 
 	std::string text;
 	if (!nectar::writeStagesIni(entries, text, error)) return fail(error, "stages.ini: " + error);
