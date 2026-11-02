@@ -100,6 +100,35 @@ std::vector<nectar::ObjectGenSpec> generators()
 	return g;
 }
 
+/// The play stage's default.gen (standin_objects_stage.h): the object stage's, plus
+/// a red Onion (default name, born while red is owned, as in a new game) and a
+/// yellow `next` Onion (born while yellow is not owned). Both stay for the run.
+std::vector<nectar::ObjectGenSpec> playGenerators()
+{
+	std::vector<nectar::ObjectGenSpec> g = generators();
+	struct Onion {
+		const char* memo;
+		const char* generator; // "" for the default name (four spaces)
+		int colour;
+		float x, z;
+	};
+	const Onion extra[] = {
+		{ "red onion", "", 1, kYellowOnionX, kYellowOnionZ },
+		{ "yellow onion", "next", 2, kBlueOnionX, kBlueOnionZ },
+	};
+	for (const Onion& o : extra) {
+		nectar::ObjectGenSpec s;
+		s.kind = nectar::ObjectGenSpec::Item;
+		if (*o.generator) s.generatorName = o.generator;
+		s.memo      = o.memo;
+		s.name      = "goal";
+		s.itemParam = o.colour;
+		s.pos       = { o.x, 0.0f, o.z };
+		g.push_back(s);
+	}
+	return g;
+}
+
 /// The Onion stage's default.gen (standin_objects_stage.h). GenObjectItem::birth
 /// (genItem.cpp) creates a `goal` from a generator not named `next` only while
 /// playerState->hasContainer(colour), and from a `next` generator only while not.
@@ -202,6 +231,9 @@ bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std
 	// The Onion stage: the same .ini (map, day_multiply), its own generator folder.
 	tree[std::string("dataDir/") + kOnionsStageIni]                       = compiled.ini;
 	tree[std::string("dataDir/stages/sandbox_onions/default.gen")] = nectar::writeObjectGenFile(onionGenerators());
+	// The play stage (#127): the same .ini, the object stage's generators plus two Onions.
+	tree[std::string("dataDir/") + kPlayStageIni]                  = compiled.ini;
+	tree[std::string("dataDir/stages/sandbox_play/default.gen")] = nectar::writeObjectGenFile(playGenerators());
 	// Story courses for the world map (#99): stage1 uses the Onion layout; the rest boot the same map empty.
 	const Bytes onionGen = nectar::writeObjectGenFile(onionGenerators());
 	const Bytes emptyGen = nectar::writeObjectGenFile({});

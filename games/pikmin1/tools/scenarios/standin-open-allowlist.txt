@@ -45,6 +45,11 @@ dataDir/stages/sandbox_onions/1.gen
 dataDir/stages/sandbox_onions/2.gen
 dataDir/stages/sandbox_onions/init.gen
 dataDir/stages/sandbox_onions/plants.gen
+# The play stage (free_play, standin_objects_stage.h) writes only default.gen; Day 2 opens 1.gen.
+dataDir/stages/sandbox_play/1.gen
+dataDir/stages/sandbox_play/2.gen
+dataDir/stages/sandbox_play/init.gen
+dataDir/stages/sandbox_play/plants.gen
 # Forest of Hope (stage1.ini) after the world map on Day 3 (onion_day3).
 dataDir/stages/stage1/2.gen
 dataDir/stages/stage1/init.gen
