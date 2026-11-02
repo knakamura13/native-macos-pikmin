@@ -778,7 +778,7 @@ PIKMIN_SCENARIO_DATA_DIR="$PWD/build/pikmin1-play/scenario-data" \
 PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini \
     build/pikmin1-play/bin/nectar --scenario first_yellow --scenario-handoff
 
-# Free play on the play stage (the object stage plus a red and a yellow Onion, so a carried pellet always has an Onion to go to; or stages/sandbox.ini, stages/sandbox_all_objects.ini):
+# Free play on the play stage (the object stage with a red, a yellow and a blue Onion, all open, so a carried pellet always has an Onion to go to; or stages/sandbox.ini, stages/sandbox_all_objects.ini):
 PIKMIN_SCENARIO_DATA_DIR="$PWD/build/pikmin1-play/scenario-data" \
 PIKMIN_SCENARIO_STAGE=stages/sandbox_play.ini \
     build/pikmin1-play/bin/nectar --scenario free_play --scenario-handoff

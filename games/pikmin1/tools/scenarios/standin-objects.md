@@ -166,21 +166,23 @@ which do not exist (allowlisted).
 
 ## The play stage (`stages/sandbox_play.ini`)
 
-Written by `addObjectsStage` too (`standin_objects_stage.cpp`, issue #127): the same
-compiled map and `.ini` text as `sandbox_objects`, its own generator folder
+Written by `addObjectsStage` too (`standin_objects_stage.cpp`, issues #127 and #129):
+the same compiled map and `.ini` text as `sandbox_objects`, its own generator folder
 `stages/sandbox_play/`, and a hidden `stages.ini` entry appended last so no other
-entry's index moves. `default.gen` is the object stage's (the blue `next` Onion,
-three sprouts, the `pr01` pellet and the Dwarf Bulborb) plus a red Onion at
-(-280, -250), born at once because a new game owns red, and a yellow `next` Onion
-at (-200, -400), born while yellow is unowned. They stay once the colour is plucked.
-A yellow `next` Onion at (-300, 0) sat in the carriers' way and stalled `pellet_carry`,
-so it is not there.
+entry's index moves. `default.gen` is the object stage's three sprouts, `pr01` pellet
+and Dwarf Bulborb, and one Onion of each colour from a generator not named `next`:
+blue at (-120, -250), red at (-280, -250), yellow at (-200, -400).
 
-Why: on the object stage a new game has only the blue `next` Onion, so a red
-squad carrying the `pr01` pellet finds no goal and `ActTransport` aborts with
-`zannnen`, as the original does when no Onion of that colour exists. `free_play`
-is played on this stage (`--scenario-handoff`). Existing scenarios stay on the
-object stage and keep their hash logs.
+Why: on the object stage a new game has only the blue `next` Onion, so a red squad
+carrying the `pr01` pellet finds no goal and `ActTransport` aborts with `zannnen`, as
+the original does when no Onion of that colour exists (#127). A `next` Onion added for
+yellow stayed unbooted (`GoalItem::startAI`: no boot bit means `GOAL_BootInit` and a
+closed route waypoint), so a carrier circled it and the game showed `TUT_Rute` (#129).
+`free_play` is played on this stage, and owns all three Onions' container and boot
+bits before the stage loads (`PcScenario::ownsAllOnions`), so each is born waiting
+with its route open; it prints one line per Onion. A yellow Onion at (-300, 0) sat in
+the carriers' way and stalled `pellet_carry`, so it is not there. Existing scenarios
+stay on the object stage and keep their hash logs.
 
 ## sprout_landing (upstream #208)
 

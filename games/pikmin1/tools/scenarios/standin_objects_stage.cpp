@@ -100,12 +100,15 @@ std::vector<nectar::ObjectGenSpec> generators()
 	return g;
 }
 
-/// The play stage's default.gen (standin_objects_stage.h): the object stage's, plus
-/// a red Onion (default name, born while red is owned, as in a new game) and a
-/// yellow `next` Onion (born while yellow is not owned). Both stay for the run.
+/// The play stage's default.gen (standin_objects_stage.h): the object stage's sprouts,
+/// pellet and Bulborb, and one Onion of each colour from a generator not named `next`
+/// (born while the player owns that colour; free_play owns all three, ownsAllOnions).
 std::vector<nectar::ObjectGenSpec> playGenerators()
 {
-	std::vector<nectar::ObjectGenSpec> g = generators();
+	std::vector<nectar::ObjectGenSpec> g;
+	for (const nectar::ObjectGenSpec& s : generators()) {
+		if (s.kind != nectar::ObjectGenSpec::Item) g.push_back(s);
+	}
 	struct Onion {
 		const char* memo;
 		const char* generator; // "" for the default name (four spaces)
@@ -113,8 +116,9 @@ std::vector<nectar::ObjectGenSpec> playGenerators()
 		float x, z;
 	};
 	const Onion extra[] = {
+		{ "blue onion", "", 0, kOnionX, kOnionZ },
 		{ "red onion", "", 1, kYellowOnionX, kYellowOnionZ },
-		{ "yellow onion", "next", 2, kBlueOnionX, kBlueOnionZ },
+		{ "yellow onion", "", 2, kBlueOnionX, kBlueOnionZ },
 	};
 	for (const Onion& o : extra) {
 		nectar::ObjectGenSpec s;
