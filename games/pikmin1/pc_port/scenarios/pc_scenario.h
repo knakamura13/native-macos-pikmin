@@ -44,6 +44,10 @@ public:
 	virtual bool hardMode() const { return false; }
 	// Speedrun mode: pc_speedrun_set_active(true) before the stage (coverage T23).
 	virtual bool speedrunMode() const { return false; }
+	// True to own the container and boot bits of all three Onions before the stage loads, so
+	// each Onion is born booted (GOAL_Wait, route open) instead of in BootInit with its route
+	// closed (GoalItem::startAI). Challenge mode sets every Onion too, with its other flags.
+	virtual bool ownsAllOnions() const { return false; }
 	// Runs once when the stage is ready, before tick 0.
 	virtual void onStageReady() { }
 	// Fills pad 0 for this tick; pads 1-3 arrive neutral. Called every tick, before the sim.
@@ -123,6 +127,7 @@ int pc_scenario_exit_code(void);
 void pc_scenario_on_no_gl(void);
 
 // Hooks in the boot path.
+void pc_scenario_on_course_init(void); // PlayerState::initCourse, after initGame has reset the flags, before the stage generators run
 void pc_scenario_pre_stage(void);      // OnePlayerSection, before NewPikiGameSection is built
 void pc_scenario_on_stage_ready(void); // after GameCoreSection::finalSetup
 void pc_scenario_on_tick_begin(void);  // System::run, before idle on each scenario sim tick

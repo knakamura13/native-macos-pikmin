@@ -922,6 +922,16 @@ void pc_scenario_pre_stage(void)
 	            sScenario->startDay());
 }
 
+void pc_scenario_on_course_init(void)
+{
+	if (!sActive || !sScenario || !sScenario->ownsAllOnions()) return;
+	for (int colour = 0; colour < 3; colour++) {
+		playerState->setContainer(colour);
+		playerState->setBootContainer(colour);
+		playerState->mDisplayPikiFlag |= 1 << colour;
+	}
+}
+
 void pc_scenario_on_stage_ready(void)
 {
 	if (!sActive || sStageReady) return;

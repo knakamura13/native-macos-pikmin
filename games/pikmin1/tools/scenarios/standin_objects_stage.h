@@ -37,14 +37,14 @@ constexpr float kOnionZ       = -250.0f;
 /// generator (born only while the player does not), at another spot. Nothing else.
 constexpr const char* kOnionsStageIni = "stages/sandbox_onions.ini";
 
-/// The play stage, `stages/sandbox_play.ini` (free_play, issue #127): the same map
-/// and .ini text as sandbox_objects, its own generator folder. default.gen is the
-/// object stage's (sprouts of all three colours, the pellet, a Dwarf Bulborb, the
-/// blue `next` Onion) plus an owned-colour red Onion and a yellow `next` Onion,
-/// so a Pikmin of any colour that carries the pellet finds an Onion to deliver to
-/// (ActTransport aborts, as the original does, when it finds none). A new game owns
-/// red only: the red Onion is born at once, and the blue and yellow `next` Onions
-/// stay once their colour is plucked. Appended last in stages.ini.
+/// The play stage, `stages/sandbox_play.ini` (free_play, issues #127 and #129): the same
+/// map and .ini text as sandbox_objects, its own generator folder. default.gen is the
+/// object stage's sprouts, pellet and Dwarf Bulborb, and one Onion of each colour from a
+/// generator not named `next`, so a Pikmin of any colour that carries the pellet finds
+/// an Onion to deliver to (ActTransport aborts, as the original does, when it finds
+/// none). Such an Onion is born only while the player owns its colour, and booted (route
+/// open) only with the boot bit, so free_play owns all three before the stage loads
+/// (PcScenario::ownsAllOnions). Appended last in stages.ini.
 constexpr const char* kPlayStageIni = "stages/sandbox_play.ini";
 constexpr float kRedOnionX        = -120.0f;
 constexpr float kRedOnionZ        = -250.0f;

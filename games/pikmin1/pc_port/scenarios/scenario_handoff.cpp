@@ -34,6 +34,8 @@
 #include <cstdio>
 
 #include "Demo.h"
+#include "GoalItem.h"
+#include "ItemAI.h"
 #include "ItemMgr.h"
 #include "Navi.h"
 #include "NaviMgr.h"
@@ -55,10 +57,18 @@ public:
 	const char* name() const override { return "free_play"; }
 	int startDay() const override { return 2; }
 	bool handsOff() const override { return true; }
+	bool ownsAllOnions() const override { return true; }
 	void onStageReady() override
 	{
 		scenarioApplyDiscKeyBindings();
 		pc_settings_scenario_set_infinite_day(1);
+		// Every Onion of the stage must wait with its route open: a carrier of the pellet
+		// that finds one in BootInit circles it (ActTransport, TUT_Rute). Print them.
+		for (int colour = 0; colour < 3; colour++) {
+			GoalItem* onion = itemMgr->getContainer(colour);
+			std::printf("[scenario] free_play: Onion %d %s\n", colour,
+			            !onion ? "absent" : (C_SAI(onion)->getCurrID(onion) == GoalAI::GOAL_Wait ? "waiting, route open" : "not waiting"));
+		}
 	}
 	void onTick(unsigned) override { scenarioHandOff(); }
 };
