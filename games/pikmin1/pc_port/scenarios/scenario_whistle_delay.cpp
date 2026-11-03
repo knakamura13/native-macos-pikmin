@@ -1,0 +1,172 @@
+// whistle_delay: how long a called Pikmin takes to join the squad (issue #133), measured the same
+// way on the stand-in tree and on a disc install (a stage the scenario is given, as throw_release).
+//
+// Six Free Pikmin stand 20 to 60 units from the captain, inside the whistle radius. B is held until
+// the circle is full and 0.3 s more. For each Pikmin the scenario records the first tick it is in
+// PikiLookAtState (the call; Navi::callPikis sends a Free Pikmin there) and the first tick it is
+// in Formation and out of LookAt (it joined). The delay is the difference; LookAt's own duration
+// (the random 0 to 0.3 s wait, then the Kizuku motion, then the return) is most of it.
+//
+// Asserted: every Pikmin is called and joins within 5 s of the call. The numbers are printed, and the
+// stand-in and disc runs are compared by hand (stand-in motions carry the disc's keys for only a few
+// Pikmin motions, standin_anims.h, and Kizuku is not one).
+#include "scenarios/pc_scenario_list.h"
+
+#if PIKI_SCENARIOS
+
+#include <algorithm>
+#include <cmath>
+#include <cstdarg>
+#include <cstdio>
+
+#include "Dolphin/pad.h"
+#include "Navi.h"
+#include "NaviMgr.h"
+#include "NaviState.h"
+#include "Piki.h"
+#include "PikiMgr.h"
+#include "PikiState.h"
+#include "scenarios/scenario_tutorial_common.h"
+
+namespace {
+
+constexpr int kCount     = 6;
+constexpr float kMaxJoin = 5.0f;
+
+class WhistleDelay : public PcScenario {
+public:
+	const char* name() const override { return "whistle_delay"; }
+
+	void onStageReady() override
+	{
+		tutorial::applyDiscKeys();
+		Navi* navi = naviMgr->getNavi();
+		if (!navi || pikiMgr->getSize() != 0) {
+			fail(0, "a captain and no Pikmin", "captain %d, Pikmin %d", (int)(navi != nullptr), pikiMgr->getSize());
+			return;
+		}
+		mExpand = C_NAVI_PARM(navi, mWhistleExpandTime);
+		std::printf("[scenario] whistle_delay: radius %.1f..%.1f, expand %.2f s\n", C_NAVI_PARM(navi, mWhistleMinRadius), NAVI_WHISTLE_MAX_RADIUS(navi), mExpand);
+	}
+
+	void providePads(unsigned t, PcInputPad& pad) override
+	{
+		if (mPhase == Done) return;
+		if (Navi* navi = naviMgr->getNavi()) {
+			navi->mCursorPosition.set(0.0f, 0.0f, 0.0f);
+			navi->mCursorTargetPosition = navi->mCursorPosition;
+			navi->mCursorWorldPos       = navi->mSRT.t;
+		}
+		if (mPhase == Hold && t < mReleaseTick) pad.button = PAD_BUTTON_B;
+	}
+
+	void onTick(unsigned t) override
+	{
+		if (mPhase == Done) return;
+		const unsigned rate = unsigned(pc_scenario_ticks_per_second());
+		Navi* navi          = naviMgr->getNavi();
+		const float s       = (t - mPhaseTick) / float(rate);
+		switch (mPhase) {
+		case Settle:
+			if (s >= 1.0f) {
+				for (int i = 0; i < kCount; i++) {
+					const float a = 0.5f + 0.9f * float(i), d = 20.0f + 8.0f * float(i);
+					if (!(mPiki[i] = tutorial::spawnPiki(navi, i % 2 ? Red : Blue, PikiMode::FreeMode, d * std::cos(a), d * std::sin(a)))) {
+						fail(t, "Pikmin born", "birth %d returned null", i);
+						return;
+					}
+				}
+				mPhase     = Stand;
+				mPhaseTick = t;
+			}
+			return;
+		case Stand:
+			if (s >= 1.0f) {
+				mPhase       = Hold;
+				mPhaseTick   = t;
+				mReleaseTick = ~0u;
+			}
+			return;
+		case Hold:
+			if (navi->mWhistleCircleMode == 2 && mReleaseTick == ~0u) mReleaseTick = t + unsigned(std::lround(0.3f * rate));
+			watch(t);
+			if (s > 10.0f) fail(t, "the whistle circle full within 10 s", "mode %d", (int)navi->mWhistleCircleMode);
+			if (mReleaseTick != ~0u && t >= mReleaseTick) {
+				mPhase     = After;
+				mPhaseTick = t;
+			}
+			return;
+		case After: watch(t); finish(t, rate, s); return;
+		default: return;
+		}
+	}
+
+private:
+	enum Phase { Settle, Stand, Hold, After, Done };
+
+	void fail(unsigned t, const char* expected, const char* fmt, ...) __attribute__((format(printf, 4, 5)))
+	{
+		char buf[320];
+		va_list ap;
+		va_start(ap, fmt);
+		std::vsnprintf(buf, sizeof(buf), fmt, ap);
+		va_end(ap);
+		mPhase = Done;
+		scenarioFailf(t, expected, "%s", buf);
+	}
+
+	void watch(unsigned t)
+	{
+		for (int i = 0; i < kCount; i++) {
+			if (!mPiki[i]) continue;
+			if (!mCalled[i] && mPiki[i]->getState() == PIKISTATE_LookAt) mCalled[i] = t;
+			if (mCalled[i] && !mJoined[i] && mPiki[i]->mMode == PikiMode::FormationMode && mPiki[i]->getState() != PIKISTATE_LookAt) mJoined[i] = t;
+		}
+	}
+
+	void finish(unsigned t, unsigned rate, float s)
+	{
+		bool allJoined = true;
+		for (int i = 0; i < kCount; i++) allJoined = allJoined && mJoined[i];
+		if (!allJoined && s < 12.0f) return;
+		unsigned first = ~0u, last = 0;
+		float minD = 1e9f, maxD = 0.0f, sum = 0.0f;
+		for (int i = 0; i < kCount; i++) {
+			if (!mCalled[i] || !mJoined[i]) {
+				fail(t, "every Pikmin called and joined within 12 s", "Pikmin %d called %u joined %u", i, mCalled[i], mJoined[i]);
+				return;
+			}
+			const float d = (mJoined[i] - mCalled[i]) / float(rate);
+			std::printf("[scenario] whistle_delay: Pikmin %d: called at tick %u, joined %.2f s later\n", i, mCalled[i], d);
+			minD = std::min(minD, d);
+			maxD = std::max(maxD, d);
+			sum += d;
+			first = std::min(first, mCalled[i]);
+			last  = std::max(last, mCalled[i]);
+		}
+		std::printf("[scenario] whistle_delay: call to joined %.2f s min, %.2f s mean, %.2f s max; calls spread over %.2f s\n", minD, sum / kCount, maxD,
+		            (last - first) / float(rate));
+		if (maxD > kMaxJoin) {
+			fail(t, "every called Pikmin joins within 5 s of its call", "slowest %.2f s", maxD);
+			return;
+		}
+		std::printf("[scenario] whistle_delay: PASS at tick %u\n", t);
+		mPhase = Done;
+		scenarioPass();
+	}
+
+	Piki* mPiki[kCount]     = {};
+	unsigned mCalled[kCount] = {}, mJoined[kCount] = {};
+	Phase mPhase            = Settle;
+	unsigned mPhaseTick = 0, mReleaseTick = ~0u;
+	float mExpand       = 0.0f;
+};
+
+} // namespace
+
+PcScenario* pc_scenario_make_whistle_delay(void)
+{
+	return new WhistleDelay();
+}
+
+#endif
