@@ -7,9 +7,9 @@
 // in Formation and out of LookAt (it joined). The delay is the difference; LookAt's own duration
 // (the random 0 to 0.3 s wait, then the Kizuku motion, then the return) is most of it.
 //
-// Asserted: every Pikmin is called and joins within 5 s of the call. The numbers are printed, and the
-// stand-in and disc runs are compared by hand (stand-in motions carry the disc's keys for only a few
-// Pikmin motions, standin_anims.h, and Kizuku is not one).
+// Asserted: every Pikmin is called and joins within 1 s of the call (the disc: 0.50 to 0.75 s at 30 and
+// 60 Hz; the stand-ins' Kizuku motion carries the disc's timing since #133, standin_anims.h). The delays
+// are printed; the disc run is made by hand, with PIKMIN_SCENARIO_DATA_DIR on a disc install.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -31,7 +31,7 @@
 namespace {
 
 constexpr int kCount     = 6;
-constexpr float kMaxJoin = 5.0f;
+constexpr float kMaxJoin = 1.0f;
 
 class WhistleDelay : public PcScenario {
 public:
@@ -147,7 +147,7 @@ private:
 		std::printf("[scenario] whistle_delay: call to joined %.2f s min, %.2f s mean, %.2f s max; calls spread over %.2f s\n", minD, sum / kCount, maxD,
 		            (last - first) / float(rate));
 		if (maxD > kMaxJoin) {
-			fail(t, "every called Pikmin joins within 5 s of its call", "slowest %.2f s", maxD);
+			fail(t, "every called Pikmin joins within 1 s of its call", "slowest %.2f s", maxD);
 			return;
 		}
 		std::printf("[scenario] whistle_delay: PASS at tick %u\n", t);
