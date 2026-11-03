@@ -453,8 +453,8 @@ s32 CARDClose(CARDFileInfo* info) { return finish(info ? info->chan : 0, CARD_RE
 s32 CARDCreate(s32 channel, const char* fileName, u32 size, CARDFileInfo* info)
 {
 	cardtrace("CARDCreate", fileName);
-	if (const s32 fault = CARD_FAULT(CREATE)) return finish(channel, fault);
 	const std::string name = safeName(fileName);
+	if (const s32 fault = CARD_FAULT(CREATE)) return finish(channel, fault);
 	if (name.empty() || name.size() >= CARD_FILENAME_MAX) return finish(channel, CARD_RESULT_NAMETOOLONG);
 	if (!ensureCard(channel)) return finish(channel, CARD_RESULT_NOCARD);
 	if (fs::exists(dataPath(channel, name))) return finish(channel, CARD_RESULT_EXIST);
