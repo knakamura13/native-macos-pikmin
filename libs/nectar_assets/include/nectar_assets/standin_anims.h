@@ -95,6 +95,15 @@ constexpr int kFueFrames      = 20;
 constexpr int kFueLoopStart   = 1; ///< frame of KEY_LoopStart (anim key 1)
 constexpr int kFueLoopEnd     = 3; ///< frame of KEY_LoopEnd (anim key 2)
 
+// A called Pikmin stops to notice the whistle: PikiLookAtState plays PIKIANIM_Kizuku
+// (info 66), turns on its KEY_Action0, waits on KEY_Action1 and joins the squad on
+// KEY_Finished, so the motion's length is most of the delay between a whistle and a
+// Pikmin joining (whistle_delay, issue #133: the generic 40 frames gave about 1.5 s, the
+// disc about 0.5 s). Measured on the disc (VERSION_GPIE01_01 install, read through the
+// game's own AnimMgr, read-only, 2026-11-02): frame count 16, anim keys [0, 1, 11, 15],
+// KEY_Action0 at anim key 1, KEY_Action1 at anim key 2, flags 5, speed 30. No curves.
+constexpr int kAnimInfoKizuku = 66; ///< PIKIANIM_Kizuku (45)
+
 /// One info: its AnimMgr record and the frame count of its payload.
 struct StandInAnim {
 	AnimInfoSpec info;
