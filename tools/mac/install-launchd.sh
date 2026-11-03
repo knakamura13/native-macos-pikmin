@@ -6,10 +6,12 @@
 #   org.opennectar.kyle-develop-autoinstall
 #       auto-install-kyle-develop.sh: keeps /Applications/Open Nectar Develop.app
 #       on origin/kyle-develop. Log: ~/Library/Logs/OpenNectar/auto-install.log
+#       (a few summary lines per run; build output in last-build-develop.log)
 #   org.opennectar.upstream-autoinstall
 #       auto-install-upstream.sh: runs `build-upstream.sh --install --if-changed`
 #       to keep /Applications/Open Nectar.app on upstream main.
 #       Log: ~/Library/Logs/OpenNectar/auto-install-upstream.log
+#       (a few summary lines per run; build output in last-build-upstream.log)
 #
 # Run it from the checkout that should supply `git fetch` and the packaging
 # scripts (a kyle-patches checkout is the usual one). --only limits it to one
