@@ -104,6 +104,15 @@ constexpr int kFueLoopEnd     = 3; ///< frame of KEY_LoopEnd (anim key 2)
 // KEY_Action0 at anim key 1, KEY_Action1 at anim key 2, flags 5, speed 30. No curves.
 constexpr int kAnimInfoKizuku = 66; ///< PIKIANIM_Kizuku (45)
 
+// A Pikmin shaken off an enemy lies in PikiFlickState playing the Flick motion (info 58)
+// until it ends (bulborb_fight, issue #136: the generic 40 frames kept stand-in Pikmin
+// down for 4.6 s on average where the disc's 10 frames keep them down for 2.9 s, so a
+// squad fighting a Dwarf Bulborb lost twice as many Pikmin and took 3.5 times longer to
+// win). Measured on the disc (VERSION_GPIE01_01 install, read through the game's own
+// AnimMgr, read-only, 2026-11-02): frame count 10, anim keys [0, 1, 9], KEY_Action0 at
+// anim key 1, flags 6 (not 5), speed 30. No curves.
+constexpr int kAnimInfoFlick = 58; ///< the Flick motion, shaking a Pikmin off an enemy
+
 /// One info: its AnimMgr record and the frame count of its payload.
 struct StandInAnim {
 	AnimInfoSpec info;
