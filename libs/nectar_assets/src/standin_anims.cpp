@@ -51,22 +51,24 @@ StandInAnimSet buildPikiSet()
 			a.measured       = true;
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
-		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari || i == kAnimInfoPickLoop || i == kAnimInfoKizuku) {
+		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari || i == kAnimInfoPickLoop || i == kAnimInfoKizuku || i == kAnimInfoFlick) {
 			// Disc timing (standin_anims.h): anim keys, then info keys as (anim-key
 			// index, type) with 0 loop start, 1 loop end, 2 KEY_Action0, 3 KEY_Action1.
 			struct Timing {
 				std::vector<std::int32_t> animKeys;
 				std::vector<std::pair<int, int>> infoKeys;
 				int effectFrame; ///< event key of type 1 (action: ActBreakWall's hit effect), or -1
+				int flags = 5;
 			};
 			const Timing t = i == kAnimInfoKuttuku  ? Timing { { 0, 11, 17, 30, 34 }, { { 1, 0 }, { 1, 2 }, { 2, 3 }, { 3, 1 } }, 11 }
 			               : i == kAnimInfoJob2     ? Timing { { 0, 10, 12, 24 }, { { 0, 0 }, { 1, 2 }, { 2, 3 }, { 3, 1 } }, 11 }
 			               : i == kAnimInfoPickLoop ? Timing { { 0, 10, 13, 18, 20, 29 }, { { 1, 2 }, { 2, 0 }, { 3, 1 }, { 4, 3 } }, -1 }
 			               : i == kAnimInfoKizuku   ? Timing { { 0, 1, 11, 15 }, { { 1, 2 }, { 2, 3 } }, -1 }
+			               : i == kAnimInfoFlick    ? Timing { { 0, 1, 9 }, { { 1, 2 } }, -1, 6 }
 			                                        : Timing { { 0, 21, 38, 69 }, { { 1, 0 }, { 2, 1 } }, -1 };
 			a.frameCount    = t.animKeys.back() + 1;
 			a.measured      = true;
-			a.info.flags    = 5;
+			a.info.flags    = t.flags;
 			a.info.speed    = 30.0f;
 			a.info.animKeys = t.animKeys;
 			for (const auto& [key, type] : t.infoKeys) {
