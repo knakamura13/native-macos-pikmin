@@ -813,6 +813,11 @@ What the run does and does not touch:
   `free_play`, Infinite Day on. Changes in the F1 menu last until you close the
   window; the frame rate, Infinite Day and Whistle Pluck do not change from the
   menu.
+- Whistle ring and cursor (issue #131): the stand-in effects bundle emits no particles,
+  so `Navi::renderCircle` draws them with lines in a hand-off run on a stand-in stage: a
+  white cross at the cursor always, a yellow ring while B is down. A call reaches only
+  Pikmin within the ring, around the cursor (`Navi::callPikis`), so aim at them and hold
+  B for a moment (the radius grows from its minimum over `mWhistleExpandTime`).
 - Keys: the disc's game bindings (pluck and throw on A, whistle on B); the
   stand-in tree has no `parms/key.bin`. Keyboard, mouse and controller bindings
   are the port's defaults.

@@ -15,6 +15,7 @@
 #include "gl/pc_gfx.h"
 #if PIKI_SCENARIOS
 #include "scenarios/pc_scenario.h"
+#include <cstring>
 #endif
 #include "timing/pc_anim_timing.h"
 #include "netplay/pc_netplay_camlead.h"
@@ -4408,6 +4409,16 @@ void Navi::draw(Graphics& gfx)
 	STACK_PAD_VAR(7);
 }
 
+#if PIKI_SCENARIOS
+/// True in a --scenario-handoff run on a stand-in stage (stages/sandbox*.ini, stages/practice.ini).
+static bool pcStandInWhistleRing()
+{
+	if (!pc_scenario_handed_off()) return false;
+	const char* stage = pc_scenario_requested_stage_file();
+	return stage && (std::strncmp(stage, "stages/sandbox", 14) == 0 || std::strncmp(stage, "stages/practice", 15) == 0);
+}
+#endif
+
 /**
  * @todo: Documentation
  */
@@ -4451,6 +4462,36 @@ void Navi::renderCircle(Graphics& gfx)
 		pos.y               = mapMgr->getMinY(pos.x, pos.z, true);
 		mWhistleFxPosArr[i] = pos;
 	}
+
+#if PIKI_SCENARIOS
+	if (pcStandInWhistleRing()) {
+		// The whistle ring and cursor are particle effects, and the stand-in effects bundle emits
+		// none, so a hand-off player cannot see where a call lands (issue #131). Lines instead:
+		// a cross at the cursor always, the ring (three layers, off the ground) while whistling.
+		Matrix4f mtx;
+		gfx.calcViewMatrix(Matrix4f::ident, mtx);
+		gfx.useMatrix(mtx, 0);
+		const bool lighting = gfx.setLighting(false, nullptr);
+		const f32 cursorY   = mapMgr->getMinY(mCursorWorldPos.x, mCursorWorldPos.z, true) + 3.0f;
+		gfx.setColour(Colour(255, 255, 255, 255), true);
+		gfx.drawLine(Vector3f(mCursorWorldPos.x - 8.0f, cursorY, mCursorWorldPos.z), Vector3f(mCursorWorldPos.x + 8.0f, cursorY, mCursorWorldPos.z));
+		gfx.drawLine(Vector3f(mCursorWorldPos.x, cursorY, mCursorWorldPos.z - 8.0f), Vector3f(mCursorWorldPos.x, cursorY, mCursorWorldPos.z + 8.0f));
+		if (mWhistleCircleMode != 0) {
+			gfx.setColour(Colour(255, 230, 0, 255), true);
+			for (int layer = 0; layer < 3; layer++) {
+				const f32 lift = 3.0f + 3.0f * layer;
+				for (int i = 0; i < 24; i++) {
+					Vector3f a = mWhistleFxPosArr[i];
+					Vector3f b = mWhistleFxPosArr[(i + 1) % 24];
+					a.y += lift;
+					b.y += lift;
+					gfx.drawLine(a, b);
+				}
+			}
+		}
+		gfx.setLighting(lighting, nullptr);
+	}
+#endif
 }
 
 /**
