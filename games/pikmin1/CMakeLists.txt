@@ -498,6 +498,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_piki_throw_water.cpp
         pc_port/scenarios/scenario_settings.cpp
         pc_port/scenarios/scenario_throw_release_mods.cpp
+        pc_port/scenarios/scenario_throw_cadence.cpp
         pc_port/gl/pc_gfx_png_write.cpp)
 endif()
 

@@ -112,5 +112,15 @@ PcScenario* pc_scenario_make_speedrun_cheats(void);
 PcScenario* pc_scenario_make_unlock_zones(void);
 PcScenario* pc_scenario_make_settings_menu_pause(void);
 PcScenario* pc_scenario_make_throw_release_quick_grab(void);
+PcScenario* pc_scenario_make_throw_cadence_hold(void);
+PcScenario* pc_scenario_make_throw_cadence_tap1(void);
+PcScenario* pc_scenario_make_throw_cadence_tap2(void);
+PcScenario* pc_scenario_make_throw_cadence_tap3(void);
+PcScenario* pc_scenario_make_throw_cadence_tap5(void);
+PcScenario* pc_scenario_make_throw_cadence_hold_qg(void);
+PcScenario* pc_scenario_make_throw_cadence_tap1_qg(void);
+PcScenario* pc_scenario_make_throw_cadence_tap2_qg(void);
+PcScenario* pc_scenario_make_throw_cadence_tap3_qg(void);
+PcScenario* pc_scenario_make_throw_cadence_tap5_qg(void);
 
 #endif
