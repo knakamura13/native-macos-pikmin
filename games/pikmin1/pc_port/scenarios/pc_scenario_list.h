@@ -122,5 +122,10 @@ PcScenario* pc_scenario_make_throw_cadence_tap1_qg(void);
 PcScenario* pc_scenario_make_throw_cadence_tap2_qg(void);
 PcScenario* pc_scenario_make_throw_cadence_tap3_qg(void);
 PcScenario* pc_scenario_make_throw_cadence_tap5_qg(void);
+PcScenario* pc_scenario_make_throw_flight_leaf(void);
+PcScenario* pc_scenario_make_throw_flight_bud(void);
+PcScenario* pc_scenario_make_throw_flight_flower(void);
+PcScenario* pc_scenario_make_throw_flight_yellow(void);
+PcScenario* pc_scenario_make_throw_flight_hold(void);
 
 #endif

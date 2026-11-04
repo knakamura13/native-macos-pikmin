@@ -36,6 +36,10 @@
 // the in-hand intervals (held->grab, grab->throw, throw->release) at equal
 // input phase, and the _qg cases as whole lists.
 //
+// PIKMIN_TC_SPOT="x,z" moves the still captain to a flat, wall-free spot (facing +z, no
+// speed) before the Pikmin are born on their fixed ring, as throw_flight's PIKMIN_TF_SPOT; with
+// it the vanilla cases no longer depend on where the walk north ends.
+//
 // Diagnostics (env, off by default): PIKMIN_TC_TRACE=N prints a TRACE line per
 // tick for the first N ticks from T0 (and SETTLE lines each second); with it,
 // PIKMIN_TC_WATCH=k adds a WATCH line for Pikmin k (distance, state, mode).
@@ -53,6 +57,8 @@
 #include "CPlate.h"
 #include "Dolphin/pad.h"
 #include "GameStat.h"
+#include "MoviePlayer.h"
+#include "gameflow.h"
 #include "KeyConfig.h"
 #include "Kontroller.h"
 #include "MapMgr.h"
@@ -149,13 +155,51 @@ public:
 			}
 			return;
 		case Still:
+			// A cutscene still running after the intro (the stand-in plays demo 45 after
+			// its intro is reported done; the disc before) restarts the still second, so
+			// the Pikmin are never born under a movie.
+			if (gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive) {
+				mPhaseTick = t + 1;
+				return;
+			}
 			if (t + 1 >= mPhaseTick + unsigned(rate)) {
+				// PIKMIN_TC_SPOT="x,z": put the still captain on a flat, wall-free spot
+				// (the one throw_flight uses), facing +z with no speed, before the Pikmin
+				// are born round him, so the stage under the plate is the same on both trees.
+				if (const char* spot = std::getenv("PIKMIN_TC_SPOT")) {
+					Vector3f p;
+					if (std::sscanf(spot, "%f,%f", &p.x, &p.z) == 2) {
+						p.y           = mapMgr->getMinY(p.x, p.z, true);
+						navi->mSRT.t  = p;
+						navi->mVelocity.set(0.0f, 0.0f, 0.0f);
+						navi->mTargetVelocity.set(0.0f, 0.0f, 0.0f);
+						navi->mFaceDirection = 0.0f;
+						mSpot                = p;
+						mSpotSet             = true;
+						std::printf("[scenario] %s: captain put on the spot (%.2f, %.2f, %.2f)\n", mName, p.x, p.y, p.z);
+					}
+				}
 				spawn(navi);
 				mPhase     = Settle;
 				mPhaseTick = t + 1;
 			}
 			return;
 		case Settle:
+			// With PIKMIN_TC_SPOT the whole settle pins the captain on the spot and each
+			// Pikmin on its ring point (no speed, facing +z): T0 starts from the same
+			// fixed offsets on both trees instead of wherever the formation AI drifted.
+			if (mSpotSet) {
+				navi->mSRT.t = mSpot;
+				navi->mVelocity.set(0.0f, 0.0f, 0.0f);
+				navi->mTargetVelocity.set(0.0f, 0.0f, 0.0f);
+				navi->mFaceDirection = 0.0f;
+				for (int i = 0; i < kCount; ++i) {
+					mPiki[i]->mSRT.t = mRing[i];
+					mPiki[i]->mVelocity.set(0.0f, 0.0f, 0.0f);
+					mPiki[i]->mTargetVelocity.set(0.0f, 0.0f, 0.0f);
+					mPiki[i]->mFaceDirection = 0.0f;
+				}
+			}
 			if (mSettle == 0) mSettle = std::getenv("PIKMIN_TC_SETTLE") ? unsigned(std::atoi(std::getenv("PIKMIN_TC_SETTLE"))) : 3u;
 			if (mTrace > 0 && (t - mPhaseTick) % unsigned(rate) == 0) {
 				for (int i = 0; i < 2; ++i) {
@@ -197,6 +241,7 @@ private:
 			at.z += 10.0f * std::sin(a);
 			at.y = mapMgr->getMinY(at.x, at.z, true);
 			piki->Creature::init(at);
+			mRing[i] = at;
 			piki->initColor(kBlue);
 			piki->changeMode(PikiMode::FormationMode, navi);
 			mPiki[i] = piki;
@@ -344,6 +389,9 @@ private:
 	int mReleased = 0;
 	int mTrace    = -1;
 	unsigned mSettle = 0;
+	Vector3f mRing[kCount];
+	Vector3f mSpot;
+	bool mSpotSet = false;
 };
 
 } // namespace
