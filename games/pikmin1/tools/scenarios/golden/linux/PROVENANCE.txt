@@ -2,3 +2,11 @@ runner: Linux X64, image ubuntu24 20261026.354.1
 commit: 8d5aa8b844ff5c87679ae6abd686712022b230a2
 date: 2026-11-04T10:16:32Z
 mesa: 25.2.8-0ubuntu0.24.04.4
+
+file_select.png refresh (the other five PNGs are byte-identical to this run):
+run: https://github.com/knakamura13/native-macos-pikmin-1/actions/runs/41908195609/job/126848392229
+artifact: scenario-screenshots-Linux/title_screens_30/file_select_30.png
+head: a3db1639759391c4758bcfb41ff230fbc3c79f29
+checked-out merge: cd76e405ffcbb2140ef3ce8442084541963c3d90 (same tree as head)
+recipe: title_boot, stages/sandbox.ini, 30 Hz, boot tick 528, capture-tick resize to 640x480
+reason: merged #148 widens the New Game plate and reduces its text size

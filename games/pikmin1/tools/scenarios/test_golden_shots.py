@@ -2,10 +2,12 @@
 """Negative controls for golden_shots.py (compare, tolerance, advisory, update)."""
 import json
 import os
+import runpy
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import golden_shots as gs  # noqa: E402
@@ -82,10 +84,21 @@ class RunCheck(unittest.TestCase):
                 "a = sys.argv\n"
                 "for i, v in enumerate(a):\n"
                 "    if v == '--scenario-screenshot':\n"
-                "        shutil.copyfile(%r, a[i + 1].split(':')[-1])\n"
+                "        phase, _, path = a[i + 1].partition(':')\n"
+                "        if phase in ('boot', 'between'):\n"
+                "            _, _, path = path.partition(':')\n"
+                "        shutil.copyfile(%r, path)\n"
                 % (sys.executable, self.pic)
             )
+        self.fake_script = self.game
         os.chmod(self.game, 0o755)
+        if os.name == "nt":
+            # CreateProcess cannot execute a Python shebang. Keep the fake game
+            # executable-shaped for the same capture path as the real game.
+            launcher = os.path.join(self.d, "fake_game.cmd")
+            with open(launcher, "w", encoding="utf-8") as f:
+                f.write(f'@"{sys.executable}" "{self.game}" %*\n')
+            self.game = launcher
         self.golden_dir = os.path.join(self.d, "golden")
         os.makedirs(os.path.join(self.golden_dir, "linux"))
         with open(os.path.join(self.golden_dir, "tolerance.json"), "w", encoding="utf-8") as f:
@@ -105,6 +118,14 @@ class RunCheck(unittest.TestCase):
     def fill_goldens(self, px):
         for n in gs.shot_names():
             gs.write_png_rgb(os.path.join(self.golden_dir, "linux", n + ".png"), gs.WIDTH, gs.HEIGHT, px)
+
+    def test_fixture_preserves_windows_drive_path(self):
+        path = r"C:\golden shots\capture.png"
+        for spec in ("100", "boot:314", "between:70"):
+            argv = [self.fake_script, "--scenario-screenshot", f"{spec}:{path}"]
+            with self.subTest(spec=spec), patch("sys.argv", argv), patch("shutil.copyfile") as copy:
+                runpy.run_path(self.fake_script, run_name="__main__")
+                copy.assert_called_once_with(self.pic, path)
 
     def test_matching_goldens_pass(self):
         self.fill_goldens(picture())

@@ -44,6 +44,62 @@ build with `-DPIKMIN_NATIVE_JAUDIO=ON`. The generator writes a stand-in
 ships it. `PIKMIN_BUILD_SCENARIOS` also calls `enable_testing()` and defines
 `PIKI_SCENARIOS=1`; every scenario source is wrapped in `#if PIKI_SCENARIOS`.
 
+## Golden screenshots
+
+`scenario_screenshot_goldens` captures six 640×480 pictures: the boot scene,
+title prompt, title menu, file select, and idle and confirmed world maps.
+`golden_shots.py` owns the shot table used by CTest, refreshes and before/after
+captures. Expected images live in `golden/linux/`, `golden/macos/` and
+`golden/windows/`. These are stand-in assets. Disc-quality pictures require a
+local disc install or the self-hosted runner tracked by #47.
+
+The check is blocking on all three operating systems. Each pixel's largest
+channel difference may be at most 4; no pixels may exceed that threshold
+(`golden/tolerance.json`). Wrong dimensions, blank pictures and missing goldens
+also fail. A deliberate `PIKMIN_GOLDEN_ADVISORY=1` run reports differences as
+warnings; normal CI passes `0`. A developer GPU may differ from the hosted
+runner, so local advisory output is not permission to replace hosted goldens.
+Failed comparisons upload the actual
+pictures and expected/actual/difference composites as `scenario-screenshots-*`.
+
+Flake measurement: [run 41815060332](https://github.com/knakamura13/native-macos-pikmin-1/actions/runs/41815060332),
+2026-11-04, branch `golden-flake/r1`, head `5d2e25f27` lineage. Each OS had
+20 fresh-runner captures, six pictures per capture (360 pictures total):
+
+| OS | Captures with metrics | Captures with a mismatch | Largest channel difference | Pixels differing by more than 2 |
+|---|---:|---:|---:|---:|
+| Linux, Ubuntu 24.04 llvmpipe | 20 | 0/20 | 0 | 0 |
+| macOS 26 arm64 | 20 | 0/20 | 1 | 0 |
+| Windows MinGW/Mesa | 20 | 0/20 | 0 | 0 |
+
+The measured macOS variation affected at most 0.004% of a picture and was one
+channel value. The selected threshold of 4 leaves room above that noise while
+rejecting layout changes. Twenty clean runs measure this sample, not a guarantee
+against future driver changes. The one failed Windows scenario job in the same
+run was the Python fake-game launch self-test, not a golden comparison; #151
+fixes that fixture. The temporary 60-job flake matrix and dispatch input were
+removed after collecting the measurement.
+
+Linux uses `ubuntu-24.04` and the Mesa package version in `golden/linux/MESA_PIN`.
+If the archive cannot supply that version, CI warns and reports the actual
+version; golden mismatches remain blocking. Refreshes record the runner image,
+source revision and driver/package information in each OS's `PROVENANCE.txt`.
+
+For an intentional visual change, run `bash games/pikmin1/tools/scenarios/refresh_goldens.sh`
+on the branch to update. It pushes a temporary `golden-refresh/**` branch,
+downloads the three runners' `golden-update-*` artifacts, then removes the remote
+branch. With `--run RUN_ID`, it imports an existing refresh run. Review the PNGs
+and provenance before committing `golden/`. This helper waits for CI; unattended
+agents should start the refresh, retain its run ID, and resume when it finishes
+rather than polling or repeatedly retrying unavailable runners.
+
+`.github/workflows/screenshot-before-after.yml` builds the PR base and head on
+Linux llvmpipe, captures the same shots and uploads `screenshot-before-after`:
+expected, actual and difference panels plus a Markdown summary. It runs for
+rendering, stand-in and capture-tool changes, or by manual dispatch where the
+workflow is available on the default branch. A fork-token comment failure does
+not discard the artifact or fail an otherwise successful comparison.
+
 ## Run
 
 Through CTest. CTest does not build: build the two targets above first. The
