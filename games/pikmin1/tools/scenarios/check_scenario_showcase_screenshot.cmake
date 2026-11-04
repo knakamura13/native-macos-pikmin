@@ -50,6 +50,22 @@ execute_process(
         --onion-region 15,0,205,280 --min-onion-red 6000
         --ship-region 355,115,610,265 --min-ship-silver 6000
         --max-edge-object-pixels 20
+        # The Blender folk art (ART_DIRECTION.md): the teal captain with his amber
+        # lantern, then a red folk with the tier-1 bead, a yellow one with the tier-2
+        # shards and a blue one with the tier-3 star. Each body must show its colour
+        # and each crest its own colour, and not the colour of another tier's crest.
+        --region-colour 165,285,230,380:1E787D:30:600
+        --region-colour 170,295,195,325:FFAA3C:40:30
+        --region-colour 265,325,315,385:E63C2D:40:180
+        --region-colour 340,325,385,385:F0C31E:40:170
+        --region-colour 415,325,465,385:2D69E1:40:190
+        --region-colour 275,320,305,345:D7D2C3:30:25
+        --max-region-colour 275,320,305,345:7DE1F0:35:5
+        --max-region-colour 275,320,305,345:FFEC9E:20:5
+        --region-colour 345,318,375,345:7DE1F0:35:30
+        --max-region-colour 345,318,375,345:FFEC9E:20:5
+        --region-colour 425,318,460,345:FFEC9E:20:80
+        --max-region-colour 425,318,460,345:7DE1F0:35:5
     RESULT_VARIABLE pos_rc)
 if(NOT pos_rc STREQUAL "0")
     message(FATAL_ERROR "standin_showcase PNG composition check failed")

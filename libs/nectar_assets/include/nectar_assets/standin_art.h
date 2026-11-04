@@ -41,6 +41,9 @@ struct StandInArtBinding {
 	const char* path; ///< as in StandInModelSpec::path
 	const char* art;  ///< the art model's name (its collection's nectar_model)
 	float scale;      ///< applied about the model origin
+	/// The art on this joint is drawn with material 0, the one the game tints at
+	/// run time (pikiheadItem.cpp sets it to the folk colour); -1 for none.
+	int tintJoint = -1;
 };
 const std::vector<StandInArtBinding>& standInArtBindings();
 

@@ -398,6 +398,13 @@ void testStandIns(const std::string& manifestPath)
 		if (!spec) continue;
 		const nectar::Model m = nectar::buildStandInModel(*spec);
 		check(!m.colours.empty(), std::string(b.path) + ": drawn from its Blender art (vertex colours)");
+		// A tinted joint draws with material 0 (the one the game recolours), made white.
+		if (b.tintJoint >= 0) {
+			const auto& mp = m.joints[std::size_t(b.tintJoint)].matPolys;
+			check(mp.size() == 1 && mp[0].first == 0, std::string(b.path) + ": the tinted joint uses material 0");
+			const nectar::Rgba8 c = m.materials[0].colour;
+			check(c.r == 255 && c.g == 255 && c.b == 255, std::string(b.path) + ": material 0 is white under the tint");
+		}
 	}
 	check(nectar::writeStandInModels(files, err), "writeStandInModels: " + err);
 	check(files.size() == specs.size(), "one file per spec");

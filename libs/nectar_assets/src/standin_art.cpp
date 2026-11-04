@@ -590,13 +590,26 @@ std::vector<std::uint8_t> artHudTexture(const std::string& baseName)
 
 const std::vector<StandInArtBinding>& standInArtBindings()
 {
-	// Pellets: one token per value (white1-4 are the 1, 5, 10 and 20 pellets),
-	// authored at the stand-in size, so no scale.
+	// Every model is authored at its stand-in size, so no scale.
 	static const std::vector<StandInArtBinding> bindings = {
+		// Pellets: one token per value (white1-4 are the 1, 5, 10 and 20 pellets).
 		{ "dataDir/objects/pellets/white1.mod", "pellet_1", 1.0f },
 		{ "dataDir/objects/pellets/white2.mod", "pellet_5", 1.0f },
 		{ "dataDir/objects/pellets/white3.mod", "pellet_10", 1.0f },
 		{ "dataDir/objects/pellets/white4.mod", "pellet_20", 1.0f },
+		// The captain and the pebble folk (art/blender/folk.blend). kinModel is the
+		// Puffmin: a folk body in pale violet with no trait.
+		{ "dataDir/pikis/nv3Model.mod", "captain", 1.0f },
+		{ "dataDir/pikis/redModel.mod", "folk_red", 1.0f },
+		{ "dataDir/pikis/yelModel.mod", "folk_yellow", 1.0f },
+		{ "dataDir/pikis/bluModel.mod", "folk_blue", 1.0f },
+		{ "dataDir/pikis/kinModel.mod", "folk_kin", 1.0f },
+		// The maturity crests, drawn at the folk's joint 6 (the origin): bead, shards, star.
+		{ "dataDir/pikis/happas/leaf.mod", "crest_bead", 1.0f },
+		{ "dataDir/pikis/happas/bud.mod", "crest_shards", 1.0f },
+		{ "dataDir/pikis/happas/flower.mod", "crest_star", 1.0f },
+		// The buried folk: its body (joint 0) takes the folk colour the game sets on material 0.
+		{ "dataDir/objects/pikihead/pikihead.mod", "buried_folk", 1.0f, 0 },
 	};
 	return bindings;
 }
@@ -615,7 +628,7 @@ bool checkStandInArtBindings(const std::vector<StandInModelSpec>& specs, std::st
 			return false;
 		}
 		Model m = skeletonModel(*spec);
-		if (!addArtModel(m, *spec, *art, b.scale, error)) return false;
+		if (!addArtModel(m, *spec, *art, b.scale, error, b.tintJoint)) return false;
 	}
 	return true;
 }
@@ -627,7 +640,7 @@ Model buildArtStandInModel(const StandInModelSpec& spec)
 		if (spec.path != b.path) continue;
 		const ArtModel* art = findArtModel(b.art);
 		std::string err;
-		if (art && addArtModel(m, spec, *art, b.scale, err)) {
+		if (art && addArtModel(m, spec, *art, b.scale, err, b.tintJoint)) {
 			fillEmptyJointMeshes(m, spec);
 			addPlatformCollision(m, spec);
 			return m;

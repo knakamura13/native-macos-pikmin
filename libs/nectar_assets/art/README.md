@@ -58,8 +58,14 @@ scale; `buildArtStandInModel` then puts the art on the spec's own skeleton, so
 joint counts, parents, joint bounds and the collision text (`collinfo`) stay
 exactly what they were. Every mesh is vertex-coloured on one white material;
 the scenario build's unlit stand-in draw multiplies the material colour by the
-vertex colour (`dgxGraphics.cpp`). `nectar_mod_writer_test` checks every
-binding.
+vertex colour (`dgxGraphics.cpp`). A binding's `tintJoint` puts that joint's
+mesh on material 0 instead, the material the game recolours at run time (the
+buried folk takes its folk colour that way), so its art is authored white.
+`nectar_mod_writer_test` checks every binding.
+
+A model shows its vertex colours only where the game draws it inside
+`pc_scenario_push_creature_unlit_draw()`; the lit draw uses the material colour
+alone, so art drawn there comes out white.
 
 ### Why C++ includes and not OBJ, glTF or JSON
 
