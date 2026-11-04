@@ -512,6 +512,14 @@ void artDrawDigit(Image& img, int digit, int x, int y, int scale, std::uint8_t r
 	};
 	if (digit < 0 || digit > 9) return;
 	const auto seg = [&](int sx0, int sy0, int sx1, int sy1) { artFillRect(img, x + sx0 * scale, y + sy0 * scale, x + sx1 * scale, y + sy1 * scale, r, g, b); };
+	if (digit == 1) {
+		// The seven-segment "1" is only the right-hand bar, one stroke wide and off centre, so it vanishes at menu
+		// sizes. Draw it as a stem two strokes wide in the middle of the cell, with a flag and a foot.
+		seg(1, 0, 3, 7);
+		seg(0, 1, 1, 2);
+		seg(0, 6, 4, 7);
+		return;
+	}
 	if (kSeg[digit][0]) seg(1, 0, 3, 1);
 	if (kSeg[digit][1]) seg(0, 1, 1, 3);
 	if (kSeg[digit][2]) seg(3, 1, 4, 3);

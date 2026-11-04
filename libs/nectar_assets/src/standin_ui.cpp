@@ -466,8 +466,10 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.add(placed(pane("ce_p"), { cx, cy, 2, 2 }));
 		k.add(placed(pane("ef_c"), { cx - 8, cy - 24, 16, 16 }));
 		k.add(placed(pane("efmc"), { cx - 8, cy + 52, 16, 16 }));
-		k.add(with(texPic("newi", "sx_btn.bti", { cx - 66, cy - 48, 132, 40 }),
-		           { txt("nwtx", "New Game", { 0, 0, 132, 40 }, 18, kWhite, kSky) }));
+		// The plate is feathered at its ends and the font is wide: "New Game" at size 18 reached the plate's edge, so the
+		// plate is 148 wide (the card is 160) and the text size 16.
+		k.add(with(texPic("newi", "sx_btn.bti", { cx - 74, cy - 48, 148, 40 }),
+		           { txt("nwtx", "New Game", { 0, 0, 148, 40 }, 16, kWhite, kSky) }));
 		k.add(texPic("nemi", "sx_pikmin_r.bti", { cx - 12, cy + 4, 24, 48 }));
 		k.add(placed(pic("sm_c"), { cx, cy, 1, 1 }));
 		if (slot == 1) // only mSlotScreensData[0] is searched for them
