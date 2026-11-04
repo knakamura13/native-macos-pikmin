@@ -2660,6 +2660,33 @@ if(PIKMIN_BUILD_SCENARIOS)
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
         TIMEOUT 1200)
+    # A slow memory card (issue #125): the challenge results window's save step makes the
+    # default card file on the card thread and polls it once per tick. With the card thread
+    # sleeping 1 s before each command, the scenario's synchronous card wait must keep the
+    # per-tick log identical. Negative control: --scenario-card-async (the game's own
+    # polling) with the same slow card must change the exit tick or miss the 60 s bound.
+    set(_card_delay "--scenario-card-delay-ms$<SEMICOLON>1000")
+    add_test(NAME scenario_card_delay_determinism_challenge_extinction_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=challenge_extinction -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-card-delay-determinism
+            "-DSECOND_ARGS=${_card_delay}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    add_test(NAME scenario_card_delay_determinism_negative_challenge_extinction_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=challenge_extinction -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-card-delay-determinism-negative
+            "-DSECOND_ARGS=${_card_delay}$<SEMICOLON>--scenario-card-async"
+            -DEXPECT_DIFFER=1 -DSECOND_MAY_FAIL=1
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    set_tests_properties(scenario_card_delay_determinism_challenge_extinction_30
+                         scenario_card_delay_determinism_negative_challenge_extinction_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 1200)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_test(NAME scenario_screenshot_verify_png_self
         COMMAND ${Python3_EXECUTABLE}
