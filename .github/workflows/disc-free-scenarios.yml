@@ -17,13 +17,23 @@ on:
           builds then keep the platform's floats and the cross-OS comparison must fail.
         type: boolean
         default: true
+      update_goldens:
+        description: >-
+          Write fresh golden screenshots instead of comparing (tools/scenarios/refresh_goldens.sh
+          starts this and downloads the golden-update-* artifacts). The scenarios job passes.
+        type: boolean
+        default: false
+      flake_repeat:
+        description: Temporary (#87 P2): 20 golden-screenshot runs per OS for the flake measurement.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 # A new push to the same PR or branch cancels the run it replaces.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -37,6 +47,8 @@ env:
   SCENARIO_SKIP_OS: ""
   # PIKMIN_SCENARIO_FLOAT_DET for the scenario builds; OFF only from a manual run.
   FLOAT_DET: ${{ github.event.inputs.float_det == 'false' && 'OFF' || 'ON' }}
+  # Golden screenshots (tools/scenarios/README.md, "Golden screenshots"): 1 writes new goldens.
+  GOLDEN_UPDATE: ${{ github.event.inputs.update_goldens == 'true' && '1' || '0' }}
 
 jobs:
   scenarios:
@@ -47,15 +59,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # golden_advisory "1": a golden mismatch on this OS warns instead of failing
+          # (README, "Golden screenshots", says why an OS is advisory).
           - name: macOS (arm64)
             os: macos-26
             shell: bash
+            golden_advisory: "1"
+          # ubuntu-24.04, not ubuntu-latest: the goldens are llvmpipe pictures, so the image
+          # (and its Mesa) must not move under them.
           - name: Linux (x86-64)
-            os: ubuntu-latest
+            os: ubuntu-24.04
             shell: bash
+            golden_advisory: "1"
           - name: Windows (x86-64, MinGW-w64)
             os: windows-latest
             shell: msys2 {0}
+            golden_advisory: "1"
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -69,13 +88,33 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install sdl2 ninja ccache
 
+      # Pins Mesa to the version in golden/linux/MESA_PIN (the version the Linux goldens were
+      # drawn with) through an apt source-package pin, then reports the version in use. If the
+      # archive no longer has that version the pin does nothing and the step warns; the golden
+      # compare then runs on the newer Mesa and its metrics show whether it still matches.
+      # A golden refresh skips the pin and records the Mesa it gets.
+      - name: Pin Mesa (Linux)
+        if: runner.os == 'Linux' && env.GOLDEN_UPDATE != '1'
+        run: |
+          PIN_FILE=games/pikmin1/tools/scenarios/golden/linux/MESA_PIN
+          if [ -s "$PIN_FILE" ]; then
+            PIN=$(tr -d '[:space:]' < "$PIN_FILE")
+            printf 'Package: src:mesa\nPin: version %s\nPin-Priority: 1001\n' "$PIN" | sudo tee /etc/apt/preferences.d/mesa-pin
+            echo "MESA_PIN=$PIN" >> "$GITHUB_ENV"
+          fi
+
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get install -y --no-install-recommends --allow-downgrades \
             cmake ninja-build ccache pkg-config libsdl2-dev libgl1-mesa-dev libx11-dev \
             libgl1-mesa-dri libglx-mesa0 libegl-mesa0 xvfb
+          MESA_NOW=$(dpkg-query -W -f='${Version}' libgl1-mesa-dri)
+          echo "Mesa in use: $MESA_NOW"
+          if [ -n "${MESA_PIN:-}" ] && [ "$MESA_NOW" != "$MESA_PIN" ]; then
+            echo "::warning title=Mesa pin not applied::golden/linux/MESA_PIN is $MESA_PIN but the runner has $MESA_NOW; the Linux goldens may need a refresh."
+          fi
 
       # The release .exe files are built with MinGW-w64 GCC (cross-compiled
       # from Linux), so Windows uses the same compiler natively through MSYS2
@@ -155,10 +194,15 @@ jobs:
           # 4-core runner, the default (one rasteriser thread per core each) only
           # adds contention. macOS uses Apple's renderer and keeps -j 3.
           LP_NUM_THREADS: "1"
+          # scenario_screenshot_goldens: advisory per OS (matrix), or write new goldens.
+          PIKMIN_GOLDEN_ADVISORY: ${{ matrix.golden_advisory }}
+          PIKMIN_UPDATE_GOLDENS: ${{ env.GOLDEN_UPDATE }}
+          PIKMIN_GOLDEN_OUT: ${{ github.workspace }}/golden-out
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             # Without Mesa beside the exe, Windows returns GDI Generic GL 1.1.
             cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll build/pikmin1/bin/
+            export PIKMIN_GOLDEN_OUT="$(cygpath -m "$PIKMIN_GOLDEN_OUT")"
           fi
           JOBS=4
           if [ "$RUNNER_OS" = "macOS" ]; then JOBS=3; fi
@@ -203,6 +247,36 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      # A golden refresh (workflow_dispatch update_goldens): the new goldens plus where they
+      # came from. refresh_goldens.sh downloads these and copies them into tools/scenarios/golden/.
+      - name: Golden provenance
+        if: ${{ !cancelled() && env.GOLDEN_UPDATE == '1' }}
+        run: |
+          mkdir -p golden-out
+          {
+            echo "runner: $RUNNER_OS $RUNNER_ARCH, image ${ImageOS:-?} ${ImageVersion:-?}"
+            echo "commit: $GITHUB_SHA"
+            echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            case "$RUNNER_OS" in
+              Linux) echo "mesa: $(dpkg-query -W -f='${Version}' libgl1-mesa-dri)" ;;
+              Windows) echo "mesa: $(pacman -Q mingw-w64-x86_64-mesa)" ;;
+              macOS) echo "macOS: $(sw_vers -productVersion), $(sysctl -n machdep.cpu.brand_string)" ;;
+            esac
+          } > golden-out/PROVENANCE.txt
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            dpkg-query -W -f='${Version}\n' libgl1-mesa-dri > golden-out/MESA_PIN
+          fi
+          cat golden-out/PROVENANCE.txt
+
+      - name: Upload new goldens
+        if: ${{ !cancelled() && env.GOLDEN_UPDATE == '1' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-update-${{ runner.os }}
+          path: golden-out/*
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload scenario screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -222,6 +296,111 @@ jobs:
             build/pikmin1/scenario-logs/
             build/pikmin1/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: ignore
+
+  # TEMPORARY (#87 P2): flake measurement for the golden screenshots. 20 fresh runners per OS each
+  # run only scenario_screenshot_goldens against the committed goldens and upload the metric
+  # lines. Dispatch with flake_repeat. Removed once the rates are in the README.
+  golden-flake:
+    name: Golden flake (${{ matrix.name }} #${{ matrix.rep }})
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.flake_repeat == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [macOS, Linux, Windows]
+        rep: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        include:
+          - name: macOS
+            os: macos-26
+            shell: bash
+          - name: Linux
+            os: ubuntu-24.04
+            shell: bash
+          - name: Windows
+            os: windows-latest
+            shell: msys2 {0}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sdl2 ninja ccache
+      - name: Pin Mesa (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          PIN_FILE=games/pikmin1/tools/scenarios/golden/linux/MESA_PIN
+          if [ -s "$PIN_FILE" ]; then
+            PIN=$(tr -d '[:space:]' < "$PIN_FILE")
+            printf 'Package: src:mesa\nPin: version %s\nPin-Priority: 1001\n' "$PIN" | sudo tee /etc/apt/preferences.d/mesa-pin
+            echo "MESA_PIN=$PIN" >> "$GITHUB_ENV"
+          fi
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends --allow-downgrades \
+            cmake ninja-build ccache pkg-config libsdl2-dev libgl1-mesa-dev libx11-dev \
+            libgl1-mesa-dri libglx-mesa0 libegl-mesa0 xvfb
+          echo "Mesa in use: $(dpkg-query -W -f='${Version}' libgl1-mesa-dri) (pin: ${MESA_PIN:-none})"
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-ccache
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-mesa
+      - name: Platform flags
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo 'PLATFORM_FLAGS=-DCMAKE_C_FLAGS=-UWIN32 -DCMAKE_CXX_FLAGS=-UWIN32' >> "$GITHUB_ENV"
+          fi
+      - name: Restore ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: .ccache
+          key: ccache-scen-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: ccache-scen-${{ runner.os }}-${{ runner.arch }}-
+      - name: Build
+        run: |
+          cmake -S games/pikmin1 -B build/pikmin1 -G Ninja \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPIKMIN_BUILD_LAUNCHER=OFF -DPIKMIN_BUILD_TESTS=ON \
+            -DPIKMIN_NATIVE_JAUDIO=OFF -DPIKMIN_BUILD_SCENARIOS=ON \
+            -DPIKMIN_SCENARIO_FLOAT_DET="$FLOAT_DET" \
+            $PLATFORM_FLAGS
+          cmake --build build/pikmin1 --parallel --target pikmin_pc nectar_standin_generator
+      - name: Run the golden check
+        env:
+          SDL_AUDIODRIVER: dummy
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          LP_NUM_THREADS: "1"
+          PIKMIN_GOLDEN_ADVISORY: "1"
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll build/pikmin1/bin/
+          fi
+          RUN="ctest --test-dir build/pikmin1 -V --timeout 600 -R ^scenario_screenshot_goldens$"
+          if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi | tee ctest.txt
+          rg_free() { sed -n 's/.*\(golden-metrics .*\)/\1/p' ctest.txt; }
+          { echo "runner: $RUNNER_OS ${ImageVersion:-?} ${MESA_PIN:-}"; rg_free; } > flake-${{ matrix.name }}-${{ matrix.rep }}.txt
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: flake-${{ matrix.name }}-${{ matrix.rep }}
+          path: flake-${{ matrix.name }}-${{ matrix.rep }}.txt
+          retention-days: 7
 
   # The stand-in scenarios on a native JAudio build (standin-audio.md): the
   # stand-in pikiseq.arc lets the engine boot a stage with no disc. A separate

@@ -1,0 +1,5 @@
+{
+  "linux":   {"channel": 10, "max_diff_ratio": 0.03},
+  "macos":   {"channel": 10, "max_diff_ratio": 0.03},
+  "windows": {"channel": 10, "max_diff_ratio": 0.03}
+}
