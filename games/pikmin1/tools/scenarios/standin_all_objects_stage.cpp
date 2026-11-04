@@ -1,8 +1,10 @@
 // The sandbox_all_objects stage (see standin_all_objects_stage.h).
 #include "standin_all_objects_stage.h"
+#include "standin_map_dressing.h"
 
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/standin_objects.h"
+#include "nectar_assets/standin_terrain.h"
 #include "nectar_mapcore/compile.h"
 #include "nectar_mapcore/map.h"
 
@@ -36,6 +38,7 @@ bool sourceMod(Bytes& out, std::string& error)
 		mat.colour  = i == 0 ? nectar::Rgba8 { 120, 110, 100, 255 } : nectar::Rgba8 { 110, 150, 90, 255 };
 		m.materials.push_back(mat);
 	}
+	nectar::addStandInTerrainTextures(m); // grass floor (14), sandstone walls (0)
 	if (!nectar::writeModTables(m, out, error)) return fail(error, "sandbox_all_objects source .mod: " + error);
 	return true;
 }
@@ -102,6 +105,22 @@ std::vector<nectar::ObjectGenSpec> generators()
 	return g;
 }
 
+/// Draw-only dressing (standin_map_dressing.h): rock faces along the map edge, a
+/// soil path from the captain's start to the soft gate and on, and a branch to the
+/// long bridge.
+standin::MapDressing mapDressing()
+{
+	standin::MapDressing d;
+	standin::DressPath main;
+	main.points = { { 20.0f, 260.0f }, { 0.0f, 120.0f }, { -15.0f, 0.0f }, { 5.0f, -170.0f }, { 0.0f, -350.0f }, { -20.0f, -560.0f } };
+	d.paths.push_back(main);
+	standin::DressPath branch;
+	branch.width  = 46.0f;
+	branch.points = { { -5.0f, -120.0f }, { 120.0f, -170.0f }, { 260.0f, -165.0f }, { 400.0f, -150.0f } };
+	d.paths.push_back(branch);
+	return d;
+}
+
 } // namespace
 
 bool addAllObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error)
@@ -142,8 +161,9 @@ bool addAllObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, 
 		std::fprintf(stderr, "[standin] compileMap asked for %s, which the generator does not serve\n", path.c_str());
 		return false;
 	};
+	const standin::MapDressing dressing = mapDressing();
 	nectar::CompiledMap compiled;
-	if (!nectar::compileMap(data, read, kMapMod, compiled, error)) return fail(error, "sandbox_all_objects map: " + error);
+	if (!standin::compileDressedMap(data, read, kMapMod, dressing, compiled, error)) return fail(error, "sandbox_all_objects map: " + error);
 
 	tree[std::string("dataDir/") + kMapMod]                       = compiled.mod;
 	tree[std::string("dataDir/") + kAllObjectsStageIni]           = compiled.ini;
