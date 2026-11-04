@@ -491,7 +491,10 @@ std::vector<std::uint8_t> writeObjectGen(const ObjectGenSpec& g)
 		putGenId(w, "v0.1");
 		putGenString(w, g.name);
 		for (int i = 0; i < 64; i++) w.u8(0);
-		putGenParams(w, { parmInt("p00", g.itemParam) });
+		std::vector<ParmEntry> params = { parmInt("p00", g.itemParam) };
+		if (g.itemDays >= 0) params.push_back(parmInt("p01", g.itemDays));
+		if (g.itemHours >= 0) params.push_back(parmInt("p02", g.itemHours));
+		putGenParams(w, params);
 		break;
 	}
 	case ObjectGenSpec::Pellet: // GenObjectPellet::doRead: the pellet id
