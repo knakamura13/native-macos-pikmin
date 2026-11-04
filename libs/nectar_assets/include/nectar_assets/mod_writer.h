@@ -10,7 +10,7 @@
 // No se escribe el bloque MatrixEnvelope.
 //
 // Lo que escribe, en este orden (el de writeMeshMod): 0x00 cabecera, 0x10
-// posiciones, 0x11 normales, 0x18..0x1F UV que haya, 0x30 materiales, 0x40
+// posiciones, 0x11 normales, 0x13 colores de vértice (si hay), 0x18..0x1F UV que haya, 0x30 materiales, 0x40
 // matrices de vértices, 0x50 mallas, 0x60 articulaciones, 0x61 nombres (solo
 // si alguna articulación tiene), 0xFFFF fin. Cada bloque empieza alineado a 32
 // y su largo cubre el relleno final: el juego ignora el largo de los bloques
@@ -18,9 +18,13 @@
 // bloque final va Model::trailingIni tal cual (texto collinfo, sin relleno,
 // como los .mod del disco).
 //
+// Vertex colours (#115 Blender art): a mesh whose flags carry the colour bit
+// (Mesh::FeatureFlags::VtxColor, 1 << 2) sends a 16-bit colour index after the
+// normal in its display list, and Model::colours is written as chunk 0x13.
+//
 // Lo que NO escribe (devuelve error si el Model lo trae, para no perderlo en
-// silencio): texturas, atributos de textura, materiales PVW o TEV, colores de
-// vértice, envolventes y colisión de mapa (0x100, 0x110). El bloque 0xF00 del
+// silencio): texturas, atributos de textura, materiales PVW o TEV,
+// envolventes y colisión de mapa (0x100, 0x110). El bloque 0xF00 del
 // port tampoco se escribe: se usa la ruta de dibujo clásica.
 
 #include "nectar_assets/mod.h"

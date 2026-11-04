@@ -932,6 +932,14 @@ Each writer is a pure function (a plain input struct, bytes out, an error
 string, no file I/O) with a write-then-read unit test registered in CTest, for
 example `nectar_mod_writer_test`.
 
+Some models are made in Blender (the pellets so far; more follow under #115).
+Their `.blend` sources, the export script and the committed exports the
+generator compiles in are in `libs/nectar_assets/art/` (see its README for the
+one re-export command and `check_export.py`); the designs are in
+`libs/nectar_assets/art/ART_DIRECTION.md`. Building never needs Blender. Art
+models sit on the spec's own skeleton, so joint counts, joint bounds and
+collision spheres do not change.
+
 ### Fidelity rule
 
 A stand-in matches the real data **only where a scenario depends on it**: joint
@@ -940,7 +948,8 @@ values. Take values from the decompiled source or code defaults first. A number
 only the disc has is recorded in a comment saying where it came from (the
 `throw_release` movement and grab parameters are the main case, see `parmFiles`
 in `standin_generator.cpp`). No disc geometry, textures, audio or text is used.
-Models are flat colours on an invented rig, animations are identity poses.
+Models are original art (flat colours, or Blender models with baked vertex
+colours) on the disc's joint structure, animations are identity poses.
 
 ### The allowlist and the boot manifest
 
