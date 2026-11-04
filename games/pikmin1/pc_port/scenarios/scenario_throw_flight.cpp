@@ -5,6 +5,16 @@
 // none he stays where the intro left him). PIKMIN_TF_PROBE=1 instead prints the ground range
 // within 170 of each point of a grid round the start and passes.
 //
+// The spot must also be clear of objects for every throw, not only flat: a yellow Pikmin flies
+// 104 over the release height (a blue one 61), so it can land on an Onion that the others pass
+// under, and that landing ends its flight ticks early (yellow on the stand-in once gave 22 and
+// 27 ticks for 37 from (-228,-276), 30 units from the red Onion at (-120,-250)). A throw whose
+// Pikmin lands more than kOnGround over the map therefore fails the run (OFF GROUND). Spots
+// checked for every case at 30 and 60 Hz (2026-11-03):
+//   disc stage1 (GPIE01 rev 1)  PIKMIN_TF_SPOT=-228,1976
+//   stand-in stages/stage1.ini  PIKMIN_TF_SPOT=-350,350   (every landing on the map at
+//                               y-ground 0.00, at least 200 from the Onions and the cliff)
+//
 // Every throw starts the same way: the captain is put back on the spot facing +z with no speed,
 // one Pikmin is born 8 behind him (inside the 15-unit hand-over range, so nobody walks in) and
 // both stand for 1 s. A goes down (tick tA) and stays down until the grab (ThrowWait
@@ -60,6 +70,7 @@ constexpr float kDist[kDists]      = { 0.0f, 25.0f, 50.0f, 75.0f, 100.0f, 140.0f
 constexpr int kYaws                = 3;
 constexpr float kYawDeg[kYaws]     = { 0.0f, 90.0f, 225.0f };
 constexpr float kHoldSecs          = 2.6f;
+constexpr float kOnGround          = 1.0f; // a landing higher than this over the map is on an object
 
 struct Stat {
 	double n = 0, s = 0, ss = 0, lo = 1e30, hi = -1e30;
@@ -390,6 +401,12 @@ private:
 		            mCursor.z - mFrom.z, mHoldT);
 		mS[d][0].add(g), mS[d][1].add(r), mS[d][2].add(f), mS[d][3].add(mPeak - mRelY), mS[d][4].add(mPeak - pkGnd), mS[d][5].add(err);
 		if (mPiki->getState() != PIKISTATE_Normal) mBad++;
+		if (std::fabs(at.y - ground) > kOnGround) {
+			// Landed on an object (an Onion, say), not on the map: its flight says nothing about the throw.
+			mOffGround++;
+			std::printf("[scenario] %s: OFF GROUND throw %d landed %.2f over the map at (%.2f, %.2f); pick a clearer PIKMIN_TF_SPOT\n", mName, mIdx,
+			            at.y - ground, at.x, at.z);
+		}
 		// Erase, not die: Piki::doKill would otherwise let a flower Pikmin leave a seed
 		// (a getRand draw, then a PikiHeadItem born and killed without startAI, which
 		// takes GameStat::mePikis below 0).
@@ -408,6 +425,7 @@ private:
 				std::printf("[scenario] %s: SUMMARY rate %d dist %.0f %s n %.0f mean %.4f sd %.4f min %.4f max %.4f\n", mName, rate, kDist[d], nm[m], mS[d][m].n,
 				            mS[d][m].mean(), mS[d][m].sd(), mS[d][m].lo, mS[d][m].hi);
 		if (mBad) scenarioFailf(t, "every Pikmin Normal after landing", "%d not", mBad);
+		else if (mOffGround) scenarioFailf(t, "every Pikmin landing on the map (a spot clear of objects)", "%d landed on something", mOffGround);
 		else scenarioPass();
 	}
 
@@ -417,7 +435,7 @@ private:
 	int mReps;
 	Phase mPhase = Hold;
 	unsigned mHold = 0, mPhaseTick = 0, mTA = 0, mUpAt = ~0u, mGrab = 0, mRel = 0, mLand = 0;
-	int mIdx = 0, mTotal = 0, mBad = 0, mCharge = -1;
+	int mIdx = 0, mTotal = 0, mBad = 0, mOffGround = 0, mCharge = -1;
 	Piki* mPiki = nullptr;
 	Vector3f mSpot, mAim, mFrom, mPeakAt, mRelPos, mRelVel, mNaviVel, mCursor;
 	unsigned mTrTick = 0;

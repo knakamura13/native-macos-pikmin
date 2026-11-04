@@ -46,6 +46,12 @@ flower Pikmin falls at that fraction of gravity after the peak, so on the stand-
 and 122-123 instead of 71 (60 Hz), with the same peak (`throw_flight_flower`). Now written as 0.5; the flower throw matches
 the disc tick for tick. Still left at code defaults and on a flower path, not yet measured: `p06` flower energy (disc 1,
 code 2), `p51` grow-up time (disc 120, code 4), `p52` wilt time (disc 180, code 4).
+Not a parameter: the yellow throw on the stand-in gave 22 and 27 flight ticks for the disc's 37 (30 Hz) and 55 for 77
+(60 Hz) on two of its 18 throws because the scratch spot (-228,-276) was 30 units from the stand-in red Onion; the yellow
+Pikmin's +104 peak carries it onto the Onion (landing 85-108 over the map), which the lower leaf, bud and flower throws pass
+under. Grab, release, launch speed 370 and peak 104.40 already matched the disc. `throw_flight` now fails a landing more
+than 1 over the map (OFF GROUND), and from the stand-in spot `-350,350` all 18 yellow throws match the disc tick for tick:
+grab 1/2, release 2/3, flight 37/77, peak 104.40/113.16, launch 370 at 30/60 Hz.
 Left at code defaults (none on a v1 path): health and attack, press factors, seed timers, wall push, flick,
 panic, bomb, drown, free-boid time, idle attack and work search ranges, sunset safety range.
 
