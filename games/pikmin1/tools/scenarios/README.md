@@ -89,7 +89,10 @@ For an intentional visual change, run `bash games/pikmin1/tools/scenarios/refres
 on the branch to update. It pushes a temporary `golden-refresh/**` branch,
 downloads the three runners' `golden-update-*` artifacts, then removes the remote
 branch. With `--run RUN_ID`, it imports an existing refresh run. Review the PNGs
-and provenance before committing `golden/`. This helper waits for CI; unattended
+and provenance before committing `golden/`. CI validates the complete six-image
+set before uploading an update artifact. The helper validates all three OS sets,
+provenance and the Linux Mesa pin before replacing any local golden.
+This helper waits for CI; unattended
 agents should start the refresh, retain its run ID, and resume when it finishes
 rather than polling or repeatedly retrying unavailable runners.
 

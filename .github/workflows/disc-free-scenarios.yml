@@ -267,8 +267,13 @@ jobs:
           fi
           cat golden-out/PROVENANCE.txt
 
-      - name: Upload new goldens
+      - name: Validate new goldens
+        id: validate-goldens
         if: ${{ !cancelled() && env.GOLDEN_UPDATE == '1' }}
+        run: python3 games/pikmin1/tools/scenarios/golden_shots.py validate --dir golden-out
+
+      - name: Upload new goldens
+        if: ${{ !cancelled() && env.GOLDEN_UPDATE == '1' && steps.validate-goldens.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: golden-update-${{ runner.os }}

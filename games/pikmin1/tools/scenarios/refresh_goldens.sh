@@ -48,8 +48,17 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 for pair in Linux:linux macOS:macos Windows:windows; do
   art="golden-update-${pair%%:*}"
-  dir="$golden/${pair##*:}"
   gh run download "$run" --repo "$repo" --name "$art" --dir "$tmp/$art"
+  [ -s "$tmp/$art/PROVENANCE.txt" ] || { echo "missing provenance: $art" >&2; exit 1; }
+  if [ "${pair%%:*}" = "Linux" ]; then
+    [ -s "$tmp/$art/MESA_PIN" ] || { echo "missing Mesa pin: $art" >&2; exit 1; }
+  fi
+  python3 "$here/golden_shots.py" validate --dir "$tmp/$art"
+done
+# Validate every OS before replacing any committed golden.
+for pair in Linux:linux macOS:macos Windows:windows; do
+  art="golden-update-${pair%%:*}"
+  dir="$golden/${pair##*:}"
   mkdir -p "$dir"
   cp "$tmp/$art"/* "$dir/"
   echo "updated $dir ($(ls "$tmp/$art" | wc -l | tr -d ' ') files)"

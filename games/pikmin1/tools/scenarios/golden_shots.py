@@ -3,6 +3,7 @@
 
 Subcommands:
   capture  run the scenarios and write every shot in SHOTS as <name>.png into --out
+  validate require the complete, readable, nonblank capture set in --dir
   check    capture, then compare each PNG with golden/<os>/<name>.png using the OS's
            tolerance from golden/tolerance.json (or, with PIKMIN_UPDATE_GOLDENS=1, copy the
            PNGs into $PIKMIN_GOLDEN_OUT instead of comparing)
@@ -199,20 +200,32 @@ def load_tolerance(golden_root: str, os_name: str) -> tuple[int, float]:
     return int(t["channel"]), float(t["max_diff_ratio"])
 
 
+def validate_capture_set(directory: str) -> None:
+    """Require every expected capture, with readable nonblank pixels at the target size."""
+    expected = {name + ".png" for name in shot_names()}
+    actual = {name for name in os.listdir(directory) if name.endswith(".png")}
+    if actual != expected:
+        raise RuntimeError(
+            f"incomplete capture set in {directory}: "
+            f"missing {sorted(expected - actual)}, unexpected {sorted(actual - expected)}"
+        )
+    for name in sorted(expected):
+        w, h, pixels = read_png_rgb(os.path.join(directory, name))
+        if (w, h) != (WIDTH, HEIGHT) or len(set(pixels)) < MIN_DISTINCT_COLOURS:
+            raise RuntimeError(f"invalid capture {name}: blank or wrong size ({w}x{h})")
+
+
 def run_check(args) -> int:
     os_name = args.os or os_key()
     update = os.environ.get("PIKMIN_UPDATE_GOLDENS") == "1"
     advisory = os.environ.get("PIKMIN_GOLDEN_ADVISORY") == "1"
     capture(args.game, args.data, args.work_dir)
+    validate_capture_set(args.work_dir)
     if update:
         out = os.environ.get("PIKMIN_GOLDEN_OUT") or os.path.join(args.work_dir, "updated-goldens", os_name)
         os.makedirs(out, exist_ok=True)
         for name in shot_names():
             png = os.path.join(args.work_dir, name + ".png")
-            w, h, pixels = read_png_rgb(png)
-            if (w, h) != (WIDTH, HEIGHT) or len(set(pixels)) < MIN_DISTINCT_COLOURS:
-                print(f"refusing to save a blank or wrong-size golden: {name}", file=sys.stderr)
-                return 1
             shutil.copyfile(png, os.path.join(out, name + ".png"))
         print(f"golden update: wrote {len(shot_names())} PNGs to {out}")
         return 0
@@ -264,13 +277,19 @@ def main() -> int:
             s.add_argument("--work-dir", required=True)
             s.add_argument("--golden-dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden"))
             s.add_argument("--os", default="", help="override the OS key (linux, macos, windows)")
+    validate = sub.add_parser("validate", help="reject incomplete or invalid golden artifacts")
+    validate.add_argument("--dir", required=True)
     args = p.parse_args()
     try:
+        if args.cmd == "validate":
+            validate_capture_set(args.dir)
+            print(f"validated {len(shot_names())} golden captures")
+            return 0
         if args.cmd == "capture":
             capture(args.game, args.data, args.out)
             return 0
         return run_check(args)
-    except (RuntimeError, subprocess.TimeoutExpired) as e:
+    except (RuntimeError, subprocess.TimeoutExpired, OSError, ValueError) as e:
         print(f"golden_shots: {e}", file=sys.stderr)
         return 1
 

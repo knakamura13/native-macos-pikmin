@@ -3,6 +3,7 @@
 import json
 import os
 import runpy
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -119,6 +120,18 @@ class RunCheck(unittest.TestCase):
         for n in gs.shot_names():
             gs.write_png_rgb(os.path.join(self.golden_dir, "linux", n + ".png"), gs.WIDTH, gs.HEIGHT, px)
 
+    def test_blank_capture_fails_even_when_advisory(self):
+        gs.write_png_rgb(self.pic, gs.WIDTH, gs.HEIGHT, [(0, 0, 0)] * (gs.WIDTH * gs.HEIGHT))
+        self.fill_goldens(picture())
+        result = self.run_it({"PIKMIN_GOLDEN_ADVISORY": "1"})
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+
+    def test_wrong_size_capture_fails_even_when_advisory(self):
+        gs.write_png_rgb(self.pic, 64, 36, picture()[:64 * 36])
+        self.fill_goldens(picture())
+        result = self.run_it({"PIKMIN_GOLDEN_ADVISORY": "1"})
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+
     def test_fixture_preserves_windows_drive_path(self):
         path = r"C:\golden shots\capture.png"
         for spec in ("100", "boot:314", "between:70"):
@@ -147,6 +160,67 @@ class RunCheck(unittest.TestCase):
         r = self.run_it({"PIKMIN_UPDATE_GOLDENS": "1", "PIKMIN_GOLDEN_OUT": out})
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(sorted(os.listdir(out)), sorted(n + ".png" for n in gs.shot_names()))
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "refresh helper requires bash")
+class RefreshArtifacts(unittest.TestCase):
+    def run_refresh(self, invalid):
+        with tempfile.TemporaryDirectory() as root:
+            here = os.path.dirname(os.path.abspath(__file__))
+            for name in ("refresh_goldens.sh", "golden_shots.py", "verify_scenario_png.py"):
+                shutil.copyfile(os.path.join(here, name), os.path.join(root, name))
+            artifacts = os.path.join(root, "artifacts")
+            for runner in ("Linux", "macOS", "Windows"):
+                out = os.path.join(artifacts, "golden-update-" + runner)
+                os.makedirs(out)
+                for name in gs.shot_names():
+                    gs.write_png_rgb(os.path.join(out, name + ".png"), gs.WIDTH, gs.HEIGHT, picture())
+                with open(os.path.join(out, "PROVENANCE.txt"), "w") as f:
+                    f.write("fixture provenance\n")
+                if runner == "Linux":
+                    with open(os.path.join(out, "MESA_PIN"), "w") as f:
+                        f.write("fixture Mesa\n")
+            bad = os.path.join(artifacts, "golden-update-Windows", gs.shot_names()[-1] + ".png")
+            if invalid == "missing":
+                os.remove(bad)
+            elif invalid == "blank":
+                gs.write_png_rgb(bad, gs.WIDTH, gs.HEIGHT, [(0, 0, 0)] * (gs.WIDTH * gs.HEIGHT))
+            golden = os.path.join(root, "golden")
+            os.makedirs(golden)
+            marker = os.path.join(golden, "untouched.txt")
+            with open(marker, "w") as f:
+                f.write("existing goldens")
+            bin_dir = os.path.join(root, "bin")
+            os.makedirs(bin_dir)
+            fake_gh = os.path.join(bin_dir, "gh")
+            with open(fake_gh, "w") as f:
+                f.write(f"#!{sys.executable}\nimport os, shutil, sys\n"
+                        f"source = {artifacts!r}\n"
+                        "args = sys.argv\n"
+                        "name = args[args.index('--name') + 1]\n"
+                        "out = args[args.index('--dir') + 1]\n"
+                        "shutil.copytree(os.path.join(source, name), out)\n")
+            os.chmod(fake_gh, 0o755)
+            env = dict(os.environ, PATH=bin_dir + os.pathsep + os.environ["PATH"])
+            result = subprocess.run(["bash", os.path.join(root, "refresh_goldens.sh"), "--run", "fixture"],
+                                    env=env, capture_output=True, text=True)
+            if invalid:
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertEqual(os.listdir(golden), ["untouched.txt"], result.stdout)
+            else:
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for os_name in ("linux", "macos", "windows"):
+                    pngs = {name for name in os.listdir(os.path.join(golden, os_name)) if name.endswith(".png")}
+                    self.assertEqual(pngs, {name + ".png" for name in gs.shot_names()})
+
+    def test_complete_artifacts_update_all_goldens(self):
+        self.run_refresh(None)
+
+    def test_incomplete_last_os_does_not_update_any_goldens(self):
+        self.run_refresh("missing")
+
+    def test_blank_last_os_does_not_update_any_goldens(self):
+        self.run_refresh("blank")
 
 
 class BeforeAfter(unittest.TestCase):
