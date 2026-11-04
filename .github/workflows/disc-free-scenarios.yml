@@ -8,7 +8,10 @@ name: Disc-free scenarios
 on:
   pull_request:
   push:
-    branches: [main, kyle-develop, 'knakamura/rng-scenarios-250']
+    # golden-refresh/** and golden-flake/**: branch names that start a golden refresh or the flake
+    # measurement (refresh_goldens.sh pushes one). A branch push works where workflow_dispatch
+    # does not: GitHub only dispatches a workflow file that exists on the default branch.
+    branches: [main, kyle-develop, 'knakamura/rng-scenarios-250', 'golden-refresh/**', 'golden-flake/**']
   workflow_dispatch:
     inputs:
       float_det:
@@ -48,7 +51,7 @@ env:
   # PIKMIN_SCENARIO_FLOAT_DET for the scenario builds; OFF only from a manual run.
   FLOAT_DET: ${{ github.event.inputs.float_det == 'false' && 'OFF' || 'ON' }}
   # Golden screenshots (tools/scenarios/README.md, "Golden screenshots"): 1 writes new goldens.
-  GOLDEN_UPDATE: ${{ github.event.inputs.update_goldens == 'true' && '1' || '0' }}
+  GOLDEN_UPDATE: ${{ (github.event.inputs.update_goldens == 'true' || startsWith(github.ref, 'refs/heads/golden-refresh/')) && '1' || '0' }}
 
 jobs:
   scenarios:
@@ -247,7 +250,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      # A golden refresh (workflow_dispatch update_goldens): the new goldens plus where they
+      # A golden refresh (a golden-refresh/** branch push, or workflow_dispatch update_goldens): the new goldens plus where they
       # came from. refresh_goldens.sh downloads these and copies them into tools/scenarios/golden/.
       - name: Golden provenance
         if: ${{ !cancelled() && env.GOLDEN_UPDATE == '1' }}
@@ -299,10 +302,10 @@ jobs:
 
   # TEMPORARY (#87 P2): flake measurement for the golden screenshots. 20 fresh runners per OS each
   # run only scenario_screenshot_goldens against the committed goldens and upload the metric
-  # lines. Dispatch with flake_repeat. Removed once the rates are in the README.
+  # lines. Started by pushing a golden-flake/** branch (or flake_repeat). Removed once the rates are in the README.
   golden-flake:
     name: Golden flake (${{ matrix.name }} #${{ matrix.rep }})
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.flake_repeat == 'true' }}
+    if: ${{ github.event.inputs.flake_repeat == 'true' || startsWith(github.ref, 'refs/heads/golden-flake/') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
