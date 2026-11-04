@@ -27,7 +27,8 @@ on:
         type: boolean
         default: false
       flake_repeat:
-        description: Temporary (#87 P2): 20 golden-screenshot runs per OS for the flake measurement.
+        description: >-
+          Temporary, #87 P2. 20 golden-screenshot runs per OS for the flake measurement.
         type: boolean
         default: false
 
