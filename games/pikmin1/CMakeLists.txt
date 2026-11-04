@@ -2420,6 +2420,27 @@ if(PIKMIN_BUILD_SCENARIOS)
         endforeach()
     endforeach()
 
+    # throw_flight (scenario_throw_flight.cpp) for leaf, bud and flower Pikmin on the stand-in
+    # stage1 (the Onion layout), from a spot clear of the Onions and the cliff. CI's
+    # tools/scenarios/check_throw_flight.py asserts every throw of these logs against the
+    # disc-verified grab, release and flight ticks, peak height and launch speed.
+    foreach(scenario throw_flight_leaf throw_flight_bud throw_flight_flower)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/stage1.ini;PIKMIN_TF_SPOT=-350,350"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
     # Runner self-tests on the stand-in tree: the scratch save directory and the
     # exit codes of the negative paths (pc_scenario.h). Each asserts its code in
     # a cmake -P wrapper, so a pass means exactly that code.
