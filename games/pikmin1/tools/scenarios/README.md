@@ -75,6 +75,8 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `--scenario-realtime` | Pace the ticks in real time at the tick rate (the fixed-step scheduler) instead of unthrottled. Deterministic mode stays on, so the per-tick state is the same (`scenario_realtime_determinism_first_yellow_30`). With `--scenario-visible` the window defaults to 1280x720. |
 | `--scenario-handoff` | Play from the scenario's hand-off point: a visible 1280x720 window, real-time pacing, then the game is handed to the real keyboard, mouse and controllers. Only for scenarios that declare one (`free_play`, `first_yellow`); any other exits 2. See [Free play and hand-off](#free-play-and-hand-off). |
 | `--scenario-screenshot <tick>:<path>` | Repeatable. After the sim and draw for that scenario tick (tick 0 is the first tick after the intro gate), writes a PNG of the finished frame to `path`. On capture ticks only, the render target is temporarily enlarged to **640×480** (override with `PIKMIN_SCENARIO_SCREENSHOT_WINDOW=WxH`; sizes other than the GameCube 640×480 virtual framebuffer can read back blank on headless CI) while normal ticks stay at the default 64×36. Uses the same offscreen colour buffer as `PIKMIN_FRAME_DUMP`. Does not change the per-tick state-hash log. |
+| `--scenario-card-delay-ms <ms>` | Test knob: the memory-card thread sleeps this long before each command (0 to 60000; anything else exits 2). With the runner's card wait (see [The memory card](#the-memory-card)) the per-tick state is the same (`scenario_card_delay_determinism_challenge_extinction_30`); the run only takes longer. |
+| `--scenario-card-async` | Turns the runner's card wait off, so card operations run on the card thread as in normal play and screens that poll it see them end on a tick that follows the thread's wall-clock speed. Only for the negative control of the card-delay check. |
 
 | Environment variable | Meaning |
 |----------------------|---------|
@@ -124,6 +126,21 @@ A scenario run forces its own conditions:
 fixed-step scheduler instead of unthrottled). After a hand-off the game is no
 longer deterministic and nothing is checked; see
 [Free play and hand-off](#free-play-and-hand-off) for what stays.
+
+### The memory card
+
+The game runs memory-card operations on a card thread (`cardutil.cpp`), and some
+screens poll it once per tick without waiting: `ogScrMakeDefaultMgr` (making the
+card file, which every save screen does first on the runner's empty scratch card)
+leaves its "Processing" state only when 2 s of game time have passed **and**
+`MemoryCard::hasCardFinished()` says the thread is done. In an unthrottled run 2 s
+of game time pass in a few hundred milliseconds, so the tick that state ends on
+followed the card thread's wall-clock speed (issue #125). While a scenario runs,
+`CardUtilCommand` now waits for the card thread before it returns
+(`pc_scenario_card_sync`), so every poll sees the operation done and the outcome
+depends on the tick count alone. After a hand-off, and in every build without
+`PIKMIN_BUILD_SCENARIOS`, the card stays asynchronous as on the GameCube.
+`--scenario-card-delay-ms` and `--scenario-card-async` exist to test this.
 
 ### Window size
 
@@ -318,6 +335,8 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | `scenario_first_yellow_<rate>`, `scenario_coop_smoke_<rate>`, `scenario_coop_look_30` | stand-in tree | none | As `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates). `first_yellow` passes at its hand-off point (no `--scenario-handoff`). |
 | `scenario_handoff_free_play_30`, `_60`, `scenario_handoff_first_yellow_30`, `scenario_handoff_day_end_handoff_30`, `_60` | a private copy of the stand-in tree | none | `check_scenario_handoff.cmake`, see [The hand-off check](#the-hand-off-check). About 6 to 8 s each: the scripted part and 2 s after the hand-off run in real time. 600 s timeout. |
 | `scenario_realtime_determinism_first_yellow_30` | stand-in tree | none | `check_scenario_determinism.cmake` with `-DSECOND_ARGS=--scenario-realtime`: the per-tick state hash log of a real-time run equals the unthrottled one. |
+| `scenario_card_delay_determinism_challenge_extinction_30` | stand-in tree | none | Issue #125. `check_scenario_determinism.cmake` with `-DSECOND_ARGS=--scenario-card-delay-ms;1000`: with the card thread 1 s slower per command, the per-tick hash log equals the normal run's (the challenge results window's save step makes the card file and polls the thread). About 12 s. |
+| `scenario_card_delay_determinism_negative_challenge_extinction_30` | stand-in tree | none | Negative control for the entry above: the same slow card with `--scenario-card-async` (the game's own polling). Passes only if the logs differ, or if run 2 fails one of the scenario's checks (`-DEXPECT_DIFFER=1 -DSECOND_MAY_FAIL=1`): on a fast machine the window misses the scenario's 60 s bound, on a slower one it exits late. |
 | `scenario_screenshot_verify_png_self` | n/a | none | `test_verify_scenario_png.py`: PNG filter decode and golden-compare sanity (regression for Codex P2). |
 | `scenario_screenshot_boot_smoke_30` | stand-in tree | none | `check_scenario_screenshot.cmake` with `USE_FULL_WINDOW`: whole run at 640×480, same gates + Linux fuzzy golden. |
 | `scenario_screenshot_boot_smoke_30_resize` | stand-in tree | none | Same gates without `PIKMIN_SCENARIO_WINDOW`: default 64×36 with capture-tick resize to 640×480 (`pc_window_poll_events` path). |
@@ -461,12 +480,27 @@ Seen once, on 2026-10-31 (PR #122, run 41266102728, W4 #96): `scenario_challenge
 passed on all three OSes, but Linux's hash log had 463 lines against 421 on macOS
 and Windows. The first 420 lines were identical. Linux's soft reset out of the
 challenge results window came 42 ticks later, and the state hash did not change in
-those ticks (the window waits, everything else is still). On that branch the log
-is byte-identical to its base's locally. Locally (Linux, 2026-10-31), 8 runs gave 421 lines and the
-soft reset at t=412 every time: 3 on an idle machine and 5 with 16 busy loops.
-Not explained. The results window's exit goes through the save screen
-(`DrawCMresult::modeSave`, the card thread in `cardutil.cpp`), which is one
-candidate for a wall-clock dependence. A rerun of the whole workflow is the check.
+those ticks (the window waits, everything else is still). Locally (Linux,
+2026-10-31), 8 runs gave 421 lines and the soft reset at t=412 every time.
+
+Cause (issue #125, fixed): the card thread's wall-clock speed. The window's save
+step (`DrawCMresult::modeSave`, `DrawOptionSave`, `ogScrMemChkMgr`) finds the
+runner's scratch card empty and makes the card file through `ogScrMakeDefaultMgr`,
+which queues the write on the card thread and then, each tick, waits for 2 s of game
+time and `hasCardFinished()`. When the thread was still writing at the 2 s mark,
+the screen stayed up until it was done; the scenario presses A every 6 ticks on
+that screen, so the delay showed up in steps of 6 ticks (42 = 7 x 6). Evidence, on
+macOS (2026-11-04), with the runner's card wait turned off (`--scenario-card-async`,
+the code as it was): no delay or a 50 ms delay per card command gave the 421-line
+log; a 200 ms delay gave 637 and then 541 lines in two identical runs, both passing,
+with the first 420 lines equal to the CI Linux log; a 1 s delay missed the 60 s
+bound. The same happened to `scenario_captain_death_30` (the story save screen
+makes the card file the same way): a baseline suite run with `-j 6` gave 710 lines
+where every other run gives 674. With the card wait on (see
+[The memory card](#the-memory-card)), every run gives the normal log, also with a
+1 s delay, and all 175 stand-in hash logs are byte-identical to those of the base
+branch's CI run 41792644808. `scenario_card_delay_determinism_challenge_extinction_30`
+and its negative control keep it that way.
 
 #### macOS jobs cancelled with no runner
 

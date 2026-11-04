@@ -4,15 +4,19 @@
 # deterministic mode and the pad script is the scenario's own. Called by CTest as:
 #   cmake -DGAME=<nectar> -DSCENARIO=<name> -DRATE=<30|60> -DWORK_DIR=<dir>
 #         [-DSECOND_ENV=<VAR=value>] [-DSECOND_ARGS=<arguments>] [-DEXPECT_DIFFER=1]
-#         -P check_scenario_determinism.cmake
+#         [-DSECOND_MAY_FAIL=1] -P check_scenario_determinism.cmake
 # SECOND_ARGS adds arguments to the second run only (--scenario-realtime: the
-# real-time pacing must not change the per-tick state).
+# real-time pacing must not change the per-tick state; --scenario-card-delay-ms: a
+# slow memory card must not either). Separate several with $<SEMICOLON> in add_test.
 # Both runs must exit 0 and write the same non-empty log. Negative control:
 # SECOND_ENV sets one environment variable for the second run only, and
 # EXPECT_DIFFER=1 inverts the comparison (passes only when the logs differ).
 # The test uses PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini to make run 2 a
 # different world. (The runner clears PIKMIN_NETPLAY_TEST_PREROLL_RAND, so the
-# RNG preroll cannot serve as the perturbation.)
+# RNG preroll cannot serve as the perturbation.) With EXPECT_DIFFER, SECOND_MAY_FAIL=1
+# also counts a second run that fails one of the scenario's own checks (exit 1 and a
+# "[scenario] FAIL" line) as a difference: the card-delay control's run can miss the
+# scenario's time bound on a fast machine and exit late on a slow one.
 # PIKMIN_SCENARIO_DATA_DIR and PIKMIN_SCENARIO_STAGE come from the test's environment.
 cmake_minimum_required(VERSION 3.16)
 
@@ -46,6 +50,10 @@ foreach(run 1 2)
         OUTPUT_VARIABLE out
         ERROR_VARIABLE out
         RESULT_VARIABLE rc)
+    if(run EQUAL 2 AND DEFINED EXPECT_DIFFER AND DEFINED SECOND_MAY_FAIL AND rc STREQUAL "1" AND out MATCHES "\\[scenario\\] FAIL [^\r\n]*")
+        message("[determinism] ${SCENARIO} at ${RATE}: run 2 (${SECOND_ARGS}) failed a scenario check, which counts as a difference: ${CMAKE_MATCH_0}")
+        return()
+    endif()
     if(NOT rc STREQUAL "0")
         message("${out}")
         message(FATAL_ERROR "run ${run} of scenario ${SCENARIO} at ${RATE} exited with '${rc}'")
@@ -69,7 +77,7 @@ message("[determinism] ${SCENARIO} at ${RATE}: ${lines_a} hash lines per run, lo
 
 if(DEFINED EXPECT_DIFFER)
     if(same)
-        message(FATAL_ERROR "negative control: the logs are identical although run 2 had ${SECOND_ENV}; the comparison cannot detect divergence")
+        message(FATAL_ERROR "negative control: the logs are identical although run 2 had ${SECOND_ENV} ${SECOND_ARGS}; the comparison cannot detect divergence")
     endif()
     return()
 endif()
