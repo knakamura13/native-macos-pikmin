@@ -2694,12 +2694,31 @@ if(PIKMIN_BUILD_SCENARIOS)
     set_tests_properties(scenario_screenshot_verify_png_self PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios
         TIMEOUT 60)
+    # Per-OS golden pictures (#87 P2): the stand-in boot, title, main menu, file select and world map
+    # shots (golden_shots.py's SHOTS) against tools/scenarios/golden/<os>/ with that OS's tolerance.
+    # PIKMIN_UPDATE_GOLDENS=1 writes the captures instead of comparing (refresh_goldens.sh).
+    add_test(NAME scenario_screenshot_goldens_self
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/test_golden_shots.py)
+    set_tests_properties(scenario_screenshot_goldens_self PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios
+        TIMEOUT 300)
+    add_test(NAME scenario_screenshot_goldens
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/golden_shots.py check
+            --game $<TARGET_FILE:${NECTAR_GAME}>
+            --data ${PIKMIN_STANDIN_DATA}
+            --work-dir ${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/goldens)
+    set_tests_properties(scenario_screenshot_goldens PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        RUN_SERIAL TRUE
+        TIMEOUT 900)
     add_test(NAME scenario_screenshot_boot_smoke_30
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30
             -DUSE_FULL_WINDOW=1
-            $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:-DGOLDEN_COMPARE=1>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
     set_tests_properties(scenario_screenshot_boot_smoke_30 PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree
@@ -2711,7 +2730,6 @@ if(PIKMIN_BUILD_SCENARIOS)
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30_resize
-            $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:-DGOLDEN_COMPARE=1>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
     set_tests_properties(scenario_screenshot_boot_smoke_30_resize PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree
