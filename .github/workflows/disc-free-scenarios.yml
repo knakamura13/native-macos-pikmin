@@ -180,6 +180,16 @@ jobs:
           fi
           python3 games/pikmin1/tools/scenarios/record_rng_provenance.py build/pikmin1
 
+      # The throw itself on the stand-in tree, held to the disc: every throw of
+      # throw_flight_{leaf,bud,flower} at 30 and 60 Hz must have the disc's grab,
+      # release and flight ticks exactly, its peak height within 0.05 and its launch
+      # speed within 0.1 (check_throw_flight.py has the values and where they come
+      # from). Yellow, the 2.6 s hold and throw_cadence are not asserted yet. Runs after
+      # the provenance step, which installs Python on Windows.
+      - name: Throw flight against the disc (leaf, bud, flower)
+        if: ${{ !cancelled() && steps.build-p1.outcome == 'success' && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
+        run: python3 games/pikmin1/tools/scenarios/check_throw_flight.py build/pikmin1/scenario-logs --label "(${{ matrix.name }})"
+
       - name: Upload scenario state-hash logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -188,6 +198,7 @@ jobs:
           path: |
             build/pikmin1/scenario-logs/*.hash.log
             build/pikmin1/scenario-logs/scenario_throw_release_*.log
+            build/pikmin1/scenario-logs/scenario_throw_flight_*.log
             build/pikmin1/scenario-evidence/*
           if-no-files-found: warn
           retention-days: 14
@@ -379,6 +390,9 @@ jobs:
 
       - name: Verify timing comparator negative controls
         run: python3 -m unittest discover -s games/pikmin1/tools/scenarios -p 'test_compare_throw_timing.py' -v
+
+      - name: Verify throw-flight checker negative controls
+        run: python3 -m unittest discover -s games/pikmin1/tools/scenarios -p 'test_check_throw_flight.py' -v
 
       - name: Require equal throw-release calibration at 30 and 60 Hz
         run: |

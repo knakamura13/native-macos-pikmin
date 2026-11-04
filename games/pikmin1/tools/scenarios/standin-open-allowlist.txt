@@ -54,6 +54,9 @@ dataDir/stages/sandbox_play/plants.gen
 dataDir/stages/stage1/2.gen
 dataDir/stages/stage1/init.gen
 dataDir/stages/stage1/plants.gen
+# throw_flight_{leaf,bud,flower} start a new game on stage1.ini at Day 1, so the day file
+# is 0.gen; the read is guarded like 2.gen and the scenario spawns its own Pikmin.
+dataDir/stages/stage1/0.gen
 # The tutorial stage (standin_practice_stage.h) writes default.gen, init.gen and
 # the Day 1 file 0.gen; plants.gen is guarded like the others.
 dataDir/stages/practice/plants.gen
