@@ -1,0 +1,4 @@
+runner: macOS ARM64, image macos26 20261026.0455.2
+commit: 8d5aa8b844ff5c87679ae6abd686712022b230a2
+date: 2026-11-04T10:32:14Z
+macOS: 26.6.2, Apple M1 (Virtual)

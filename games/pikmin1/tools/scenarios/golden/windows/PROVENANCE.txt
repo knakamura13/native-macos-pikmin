@@ -1,0 +1,4 @@
+runner: Windows X64, image win25-vs2026 20261030.294.1
+commit: 8d5aa8b844ff5c87679ae6abd686712022b230a2
+date: 2026-11-04T10:30:10Z
+mesa: mingw-w64-x86_64-mesa 26.2.3-1
