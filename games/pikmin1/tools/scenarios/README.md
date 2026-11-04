@@ -75,6 +75,8 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `--scenario-realtime` | Pace the ticks in real time at the tick rate (the fixed-step scheduler) instead of unthrottled. Deterministic mode stays on, so the per-tick state is the same (`scenario_realtime_determinism_first_yellow_30`). With `--scenario-visible` the window defaults to 1280x720. |
 | `--scenario-handoff` | Play from the scenario's hand-off point: a visible 1280x720 window, real-time pacing, then the game is handed to the real keyboard, mouse and controllers. Only for scenarios that declare one (`free_play`, `first_yellow`); any other exits 2. See [Free play and hand-off](#free-play-and-hand-off). |
 | `--scenario-screenshot <tick>:<path>` | Repeatable. After the sim and draw for that scenario tick (tick 0 is the first tick after the intro gate), writes a PNG of the finished frame to `path`. On capture ticks only, the render target is temporarily enlarged to **640×480** (override with `PIKMIN_SCENARIO_SCREENSHOT_WINDOW=WxH`; sizes other than the GameCube 640×480 virtual framebuffer can read back blank on headless CI) while normal ticks stay at the default 64×36. Uses the same offscreen colour buffer as `PIKMIN_FRAME_DUMP`. Does not change the per-tick state-hash log. |
+| `--scenario-card-delay-ms <ms>` | Test knob: the memory-card thread sleeps this long before each command (0 to 60000; anything else exits 2). With the runner's card wait (see [The memory card](#the-memory-card)) the per-tick state is the same (`scenario_card_delay_determinism_challenge_extinction_30`); the run only takes longer. |
+| `--scenario-card-async` | Turns the runner's card wait off, so card operations run on the card thread as in normal play and screens that poll it see them end on a tick that follows the thread's wall-clock speed. Only for the negative control of the card-delay check. |
 
 | Environment variable | Meaning |
 |----------------------|---------|
@@ -124,6 +126,21 @@ A scenario run forces its own conditions:
 fixed-step scheduler instead of unthrottled). After a hand-off the game is no
 longer deterministic and nothing is checked; see
 [Free play and hand-off](#free-play-and-hand-off) for what stays.
+
+### The memory card
+
+The game runs memory-card operations on a card thread (`cardutil.cpp`), and some
+screens poll it once per tick without waiting: `ogScrMakeDefaultMgr` (making the
+card file, which every save screen does first on the runner's empty scratch card)
+leaves its "Processing" state only when 2 s of game time have passed **and**
+`MemoryCard::hasCardFinished()` says the thread is done. In an unthrottled run 2 s
+of game time pass in a few hundred milliseconds, so the tick that state ends on
+followed the card thread's wall-clock speed (issue #125). While a scenario runs,
+`CardUtilCommand` now waits for the card thread before it returns
+(`pc_scenario_card_sync`), so every poll sees the operation done and the outcome
+depends on the tick count alone. After a hand-off, and in every build without
+`PIKMIN_BUILD_SCENARIOS`, the card stays asynchronous as on the GameCube.
+`--scenario-card-delay-ms` and `--scenario-card-async` exist to test this.
 
 ### Window size
 
@@ -261,7 +278,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `piki_hazard_deaths`, `piki_drown`, `piki_throw_water` | 30, 60 | Hazard injections and drown timers use frame-time sums (`gsys->getFrameTime()`); whistle rescue and flick get-up bounds are in seconds. |
 | `pikmin_cap`, `pikmin_cap_1`, `pikmin_cap_250`, `pikmin_cap_999`, `day_clock`, `demo_timers`, `throw_levels`, `whistle_radius`, `navi_invincible` | 30, 60 | The W3 (#95) bounds are in seconds and the demo timers, hurry-up banner, Pressed timer and whistle growth are frame-time sums. `throw_levels` compares peaks within one run: the peak itself differs by rate (+61.3 at 30 Hz, +68.0 at 60 Hz). |
 | `whistle_gather_release`, `whistle_pluck_held` | 30, 60 | W4 (#96): the whistle's growth, hold and Release are frame-time sums, so tick counts differ by rate (`KEY_LoopStart` 1 tick after Gather at 30 Hz, 2 at 60 Hz; the 0.08 s pluck interval is 3 and 5 ticks); the scenarios assert seconds and the call site's own arithmetic. |
-| `enemy_kills`, `onion_menu_transfer`, `navi_states`, `gate_break` | 30, 60 | The W7 (#98) bounds are in seconds. Kills, the menu's walk and timers, the geyser flight and the gate's hits land on different ticks per rate. `navi_states` prints the Bury escape: 6.30 s at 30 Hz, 3.80 s at 60 Hz, because `mEscapeTimer` counts ticks (W7 findings on #100); both are inside its 10 s bound. |
+| `enemy_kills`, `onion_menu_transfer`, `navi_states`, `gate_break` | 30, 60 | The W7 (#98) bounds are in seconds. Kills, the menu's walk and timers, the geyser flight and the gate's hits land on different ticks per rate. `navi_states` asserts the Bury escape at 5 to 7 s: 6.30 s at both rates, since `mEscapeTimer` is scaled by `PC_TICKS30` (before that fix 60 Hz gave 3.80 s; W7 findings on #100). |
 
 Wall time of every stand-in entry, one run at a time on an M3 Max, `/usr/bin/time -p`
 (2026-10-28, base `ee769374`; the last three rows on base `a1065fef`, CTest's own per-test time, `-j 1`). "GPU" is the Mac's own GL, "software" is Apple's
@@ -318,6 +335,8 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | `scenario_first_yellow_<rate>`, `scenario_coop_smoke_<rate>`, `scenario_coop_look_30` | stand-in tree | none | As `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates). `first_yellow` passes at its hand-off point (no `--scenario-handoff`). |
 | `scenario_handoff_free_play_30`, `_60`, `scenario_handoff_first_yellow_30`, `scenario_handoff_day_end_handoff_30`, `_60` | a private copy of the stand-in tree | none | `check_scenario_handoff.cmake`, see [The hand-off check](#the-hand-off-check). About 6 to 8 s each: the scripted part and 2 s after the hand-off run in real time. 600 s timeout. |
 | `scenario_realtime_determinism_first_yellow_30` | stand-in tree | none | `check_scenario_determinism.cmake` with `-DSECOND_ARGS=--scenario-realtime`: the per-tick state hash log of a real-time run equals the unthrottled one. |
+| `scenario_card_delay_determinism_challenge_extinction_30` | stand-in tree | none | Issue #125. `check_scenario_determinism.cmake` with `-DSECOND_ARGS=--scenario-card-delay-ms;1000`: with the card thread 1 s slower per command, the per-tick hash log equals the normal run's (the challenge results window's save step makes the card file and polls the thread). About 12 s. |
+| `scenario_card_delay_determinism_negative_challenge_extinction_30` | stand-in tree | none | Negative control for the entry above: the same slow card with `--scenario-card-async` (the game's own polling). Passes only if the logs differ, or if run 2 fails one of the scenario's checks (`-DEXPECT_DIFFER=1 -DSECOND_MAY_FAIL=1`): on a fast machine the window misses the scenario's 60 s bound, on a slower one it exits late. |
 | `scenario_screenshot_verify_png_self` | n/a | none | `test_verify_scenario_png.py`: PNG filter decode and golden-compare sanity (regression for Codex P2). |
 | `scenario_screenshot_boot_smoke_30` | stand-in tree | none | `check_scenario_screenshot.cmake` with `USE_FULL_WINDOW`: whole run at 640×480, same gates + Linux fuzzy golden. |
 | `scenario_screenshot_boot_smoke_30_resize` | stand-in tree | none | Same gates without `PIKMIN_SCENARIO_WINDOW`: default 64×36 with capture-tick resize to 640×480 (`pc_window_poll_events` path). |
@@ -461,12 +480,27 @@ Seen once, on 2026-10-31 (PR #122, run 41266102728, W4 #96): `scenario_challenge
 passed on all three OSes, but Linux's hash log had 463 lines against 421 on macOS
 and Windows. The first 420 lines were identical. Linux's soft reset out of the
 challenge results window came 42 ticks later, and the state hash did not change in
-those ticks (the window waits, everything else is still). On that branch the log
-is byte-identical to its base's locally. Locally (Linux, 2026-10-31), 8 runs gave 421 lines and the
-soft reset at t=412 every time: 3 on an idle machine and 5 with 16 busy loops.
-Not explained. The results window's exit goes through the save screen
-(`DrawCMresult::modeSave`, the card thread in `cardutil.cpp`), which is one
-candidate for a wall-clock dependence. A rerun of the whole workflow is the check.
+those ticks (the window waits, everything else is still). Locally (Linux,
+2026-10-31), 8 runs gave 421 lines and the soft reset at t=412 every time.
+
+Cause (issue #125, fixed): the card thread's wall-clock speed. The window's save
+step (`DrawCMresult::modeSave`, `DrawOptionSave`, `ogScrMemChkMgr`) finds the
+runner's scratch card empty and makes the card file through `ogScrMakeDefaultMgr`,
+which queues the write on the card thread and then, each tick, waits for 2 s of game
+time and `hasCardFinished()`. When the thread was still writing at the 2 s mark,
+the screen stayed up until it was done; the scenario presses A every 6 ticks on
+that screen, so the delay showed up in steps of 6 ticks (42 = 7 x 6). Evidence, on
+macOS (2026-11-04), with the runner's card wait turned off (`--scenario-card-async`,
+the code as it was): no delay or a 50 ms delay per card command gave the 421-line
+log; a 200 ms delay gave 637 and then 541 lines in two identical runs, both passing,
+with the first 420 lines equal to the CI Linux log; a 1 s delay missed the 60 s
+bound. The same happened to `scenario_captain_death_30` (the story save screen
+makes the card file the same way): a baseline suite run with `-j 6` gave 710 lines
+where every other run gives 674. With the card wait on (see
+[The memory card](#the-memory-card)), every run gives the normal log, also with a
+1 s delay, and all 175 stand-in hash logs are byte-identical to those of the base
+branch's CI run 41792644808. `scenario_card_delay_determinism_challenge_extinction_30`
+and its negative control keep it that way.
 
 #### macOS jobs cancelled with no runner
 
@@ -640,7 +674,7 @@ run above is wine 9.0).
 | `whistle_pluck_held` | Day 1 | PL4, MD1: Whistle Pluck at its `NaviGatherState::exec` call site, each tick checked against it: nearest sprout first, the growing radius, the 0.08 s interval, one Pikmin per pluck of the sprout's colour in AutoNuki, nothing outside R; with the setting off the same hold plucks nothing. |
 | `enemy_kills` | Day 1, all-objects stage | EC-50, EN1: each of the seven enemies (chappy, swallow, palm, beatle, kabekuiA, otama, kabekuiB) at health 0 adds exactly 1 to `GameStat::killTekis`; one that has burrowed (kabekuiA) stays uncounted until the captain comes near; the Burrowing Snagret at life 0 is not counted until it surfaces, then once; the plugged geyser at life 0 counts nothing; Beatle's and Snake's diary flags become 2 (seen). Rolling boulders break by themselves and each adds 1; they are counted apart. |
 | `onion_menu_transfer` | Day 1, object stage | EC-03, EC-35, EC-47: the Onion menu (field limit 10) pauses the world (`mPauseAll`, the clock stands still); four Pikmin go in (store, `containerPikis` +4, squad 2); B cancels a second transfer; at a field count of 9 a withdrawal stops at -1 with `MSG_SquadTotalFull`, and the field count ends at exactly 10. The field count includes the stage's three buried sprouts. |
-| `navi_states` | Day 1 | EC-34, EC-51 (geyser): InteractGeyzer is taken once (the second is refused), flies the captain to the target (within 40 units) and ends in Walk; InteractBury is taken once (the second refused, invincible), costs its damage, and with no input the captain is out after 150 ticks plus his get-up motion; at health 5 a Bury takes him to Dead. Rope, Funbari, Stuck, Pellet, Pick and Water are not driven (no injection path on a stand-in stage). |
+| `navi_states` | Day 1 | EC-34, EC-51 (geyser): InteractGeyzer is taken once (the second is refused), flies the captain to the target (within 40 units) and ends in Walk; InteractBury is taken once (the second refused, invincible), costs its damage, and with no input the captain is out after the 5 s escape timer (150 ticks at 30 Hz, scaled by `PC_TICKS30`) plus his get-up motion, 5 to 7 s at both rates; at health 5 a Bury takes him to Dead. Rope, Funbari, Stuck, Pellet, Pick and Water are not driven (no injection path on a stand-in stage). |
 | `gate_break` | Day 1, all-objects stage | EC-51 (gate): the soft gate (health 300 from the stand-in generator: days 12, hours 12) takes a 1-damage scratch with no stage change, then one stage per stage's worth of damage, its waypoint opens, and a completed gate refuses hits. The reinforced and bomb gates, the bridge and the push box are not covered. |
 | `tutorial_day1` | Day 1, tutorial stage | The Pikmin firsts and the tutorial's own day end (DF14, DF15, DF10, DF12 by a Pikmin, DF13, T16). Red Pikmin are born free beside each object and handed to `Piki::actOnSituaton`, as a thrown Pikmin's landing does. Nine at the push box (the disc's 10 Pikmin, speed 50, 270 units) move nothing for 3 s; a tenth sets StartBoxPush as it starts; FinishBoxPush when it arrives 270 units on. One carries the red pellet into the red Onion (CollectFirstPellet). Twenty at the Main Engine set ApproachEngine (`Piki::demoCheck`, the captain over 1,000 away) and carry it to the ship: CollectEngine with ship text CollectEngine and no part id, then the ship takes it (a visible part, 1 part, level 1, Forest open). The day ends only through the ship-upgrade movie (stand-in demo17's ForceDayEnd) with the clock still at 14.8 h; `DayOverModeState` with no take-off movie, Day 2 once, the Day 1 diary entry `RESFLAG_EndFirstDay` (two pages), the results for at least 3 s, the soft reset to MapSelect, `isTutorial()` false. The captain plucks every sprout first (see the T16 notes in `coverage/terminals.md`). |
 | `extinction_day30` | Day 30 | Every Pikmin dies on the last day (T05, EC-12). Three blue Pikmin are killed as in `extinction`. Asserted, each within a bound in seconds: PikiZero; `GAMEEND_PikminExtinction` with demo46 playing; demo46's own key resets the flag to `GAMEEND_None` while demo46 still plays and the clock is still below the end hour (the Day 30 branch of `GameMovieInterface::parse`); `DayOverModeState` follows at once and sets the clock to 19:00; the bad ending runs (demo73 with the final results window, which A presses take through the scores, the parts list and the options save, up at least 4 s); the soft reset goes to `ONEPLAYER_GameExit` within 60 s of demo73. Throughout: demo47 (ExtDayEnd) never starts, the flag is set once, the day stays 30, `mEndingType` stays None. A build without the Day 30 test at NPG:3323 fails with `demo47 started`. At 30 Hz: flag t=35, reset t=93, demo73 t=97, GameExit t=517; at 60 Hz: 35, 150, 157, 966. Needs the stand-in demo73 and the results screens (`standin-cinema.md`). |

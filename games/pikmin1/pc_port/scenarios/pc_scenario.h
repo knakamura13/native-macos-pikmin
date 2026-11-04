@@ -126,6 +126,17 @@ int pc_scenario_exit_code(void);
 // verdict so the exit handler (which main's return also runs) reports it.
 void pc_scenario_on_no_gl(void);
 
+// The memory-card thread (issue #125). Screens such as ogScrMakeDefaultMgr poll
+// MemoryCard::hasCardFinished() once per tick, so on the game's own path the tick a
+// card operation is seen to end follows the card thread's wall-clock speed. While a
+// scenario runs (until a hand-off), CardUtilCommand waits for the card thread before
+// it returns, so every poll sees the operation done and the outcome depends only on
+// the tick count. --scenario-card-async turns that wait off (the negative control).
+bool pc_scenario_card_sync(void);
+// Called by the card thread before it runs each command: sleeps for
+// --scenario-card-delay-ms (none by default), a slow card for the determinism check.
+void pc_scenario_card_thread_delay(void);
+
 // Hooks in the boot path.
 void pc_scenario_on_course_init(void); // PlayerState::initCourse, after initGame has reset the flags, before the stage generators run
 void pc_scenario_pre_stage(void);      // OnePlayerSection, before NewPikiGameSection is built

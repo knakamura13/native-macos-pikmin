@@ -102,6 +102,10 @@ std::string sScenarioReplayPath;     // --scenario-replay: replay file for EC-62
 bool sHandoffRequested = false;
 bool sRealtime         = false;
 bool sHandedOff        = false;
+// Memory-card thread (pc_scenario_card_sync, issue #125). The thread reads the delay;
+// both are set by the argument parser before the card thread starts.
+bool sCardAsync       = false; // --scenario-card-async
+unsigned sCardDelayMs = 0;     // --scenario-card-delay-ms
 unsigned sProviderCalls = 0; // scripted-provider calls, for the hand-off probe
 // The watchdog thread reads this when it wakes; the hand-off disarms it.
 std::atomic<bool> sWatchdogArmed { true };
@@ -270,7 +274,7 @@ void startWatchdog(const char* name)
 void usage(const char* msg)
 {
 	std::fprintf(stderr, "[scenario] %s\n", msg);
-	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible] [--scenario-realtime] [--scenario-handoff] [--scenario-screenshot [boot:|between:]tick:path]...\n");
+	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible] [--scenario-realtime] [--scenario-handoff] [--scenario-screenshot [boot:|between:]tick:path]... [--scenario-card-delay-ms ms] [--scenario-card-async]\n");
 	std::fprintf(stderr, "scenarios:");
 	for (PcScenario* s : pc_scenario_all()) {
 		if (!s->testOnly()) std::fprintf(stderr, " %s", s->name());
@@ -656,6 +660,17 @@ int pc_scenario_parse_argv(int argc, char** argv)
 			sRealtime = true;
 		} else if (std::strcmp(argv[i], "--scenario-handoff") == 0) {
 			sHandoffRequested = true;
+		} else if (std::strcmp(argv[i], "--scenario-card-async") == 0) {
+			sCardAsync = true;
+		} else if (std::strcmp(argv[i], "--scenario-card-delay-ms") == 0) {
+			char* end = nullptr;
+			const long ms = i + 1 < argc ? std::strtol(argv[i + 1], &end, 10) : -1;
+			if (i + 1 >= argc || end == argv[i + 1] || *end != '\0' || ms < 0 || ms > 60000) {
+				usage("--scenario-card-delay-ms needs milliseconds from 0 to 60000");
+				return PC_SCENARIO_EXIT_USAGE;
+			}
+			sCardDelayMs = unsigned(ms);
+			++i;
 		} else if (std::strcmp(argv[i], "--scenario-screenshot") == 0) {
 			if (i + 1 >= argc) {
 				usage("--scenario-screenshot needs tick:path");
@@ -802,6 +817,13 @@ int pc_scenario_parse_argv(int argc, char** argv)
 }
 
 bool pc_scenario_active(void) { return sActive; }
+
+bool pc_scenario_card_sync(void) { return sActive && !sHandedOff && !sCardAsync; }
+
+void pc_scenario_card_thread_delay(void)
+{
+	if (sActive && sCardDelayMs > 0) std::this_thread::sleep_for(std::chrono::milliseconds(sCardDelayMs));
+}
 
 static PcScenarioDebugCamera sDebugCamera {};
 
