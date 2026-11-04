@@ -377,6 +377,9 @@ bool parmFiles(Tree& tree, std::string& error)
 		          parmFloat("p27", 3.0f),   // mMinPikiSize (code 6)
 		          parmFloat("p34", 5.0f),   // mMaxPikiSize (code 10)
 		          parmFloat("p39", 8.5f),   // mCollisionRadius (code 8)
+		          // Flower Pikmin fall at this fraction of gravity after the peak of a throw. With the
+		          // code default the descent takes 1.75x (30 Hz) to 2.2x (60 Hz) as long as on the disc.
+		          parmFloat("p48", 0.5f),   // mFlowerGravityScale (code 0.01)
 		      },
 		  } },
 	};
