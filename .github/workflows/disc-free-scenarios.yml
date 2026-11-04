@@ -181,12 +181,12 @@ jobs:
           python3 games/pikmin1/tools/scenarios/record_rng_provenance.py build/pikmin1
 
       # The throw itself on the stand-in tree, held to the disc: every throw of
-      # throw_flight_{leaf,bud,flower} at 30 and 60 Hz must have the disc's grab,
+      # throw_flight_{leaf,bud,flower,yellow} at 30 and 60 Hz must have the disc's grab,
       # release and flight ticks exactly, its peak height within 0.05 and its launch
       # speed within 0.1 (check_throw_flight.py has the values and where they come
-      # from). Yellow, the 2.6 s hold and throw_cadence are not asserted yet. Runs after
+      # from). The 2.6 s hold and throw_cadence are not asserted yet. Runs after
       # the provenance step, which installs Python on Windows.
-      - name: Throw flight against the disc (leaf, bud, flower)
+      - name: Throw flight against the disc (leaf, bud, flower, yellow)
         if: ${{ !cancelled() && steps.build-p1.outcome == 'success' && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
         run: python3 games/pikmin1/tools/scenarios/check_throw_flight.py build/pikmin1/scenario-logs --label "(${{ matrix.name }})"
 
