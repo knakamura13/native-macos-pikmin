@@ -2420,11 +2420,11 @@ if(PIKMIN_BUILD_SCENARIOS)
         endforeach()
     endforeach()
 
-    # throw_flight (scenario_throw_flight.cpp) for leaf, bud and flower Pikmin on the stand-in
+    # throw_flight (scenario_throw_flight.cpp) for leaf, bud, flower and yellow Pikmin on the stand-in
     # stage1 (the Onion layout), from a spot clear of the Onions and the cliff. CI's
     # tools/scenarios/check_throw_flight.py asserts every throw of these logs against the
     # disc-verified grab, release and flight ticks, peak height and launch speed.
-    foreach(scenario throw_flight_leaf throw_flight_bud throw_flight_flower)
+    foreach(scenario throw_flight_leaf throw_flight_bud throw_flight_flower throw_flight_yellow)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

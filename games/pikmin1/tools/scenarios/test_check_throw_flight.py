@@ -57,6 +57,14 @@ class CheckerTests(unittest.TestCase):
         # p48 at the code default: the stand-in flower glided 122 ticks at 60 Hz.
         self.assertTrue(self.write(change={'f': 122}))
 
+    def test_yellow_on_the_onion(self):
+        # The stand-in yellow from (-228,-276): throws onto the red Onion ended after 22 or 27 ticks.
+        self.assertEqual(self.write('yellow', 30), [])
+        self.assertTrue(self.write('yellow', 30, change={'f': 27, 'yg': 107.62}))
+        self.assertTrue(self.write('yellow', 30, change={'f': 22}))
+        self.assertTrue(self.write('yellow', 60, change={'peak': 104.40}))
+        self.assertTrue(self.write('yellow', 60, change={'vs': 290.0}))
+
 
 if __name__ == '__main__':
     unittest.main()
