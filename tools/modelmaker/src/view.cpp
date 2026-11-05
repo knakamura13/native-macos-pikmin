@@ -1,47 +1,74 @@
 #include "view.h"
 
+// La ecuación de luz de GX del juego (canal 0), la misma que usa pc_gfx.cpp.
+// Por ruta: la carpeta pc_port tiene cabeceras (wingdi.h) que no deben
+// tapar las del sistema.
+#include "../../../games/pikmin1/pc_port/gl/pc_gx_lighting_glsl.h"
+
 #include <SDL.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <string>
 
 namespace mm {
 
 namespace {
 
-const char* kVertex = R"(#version 330 core
+const char* kVertexHead = R"(#version 330 core
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNrm;
 layout(location = 2) in vec2 aUv;
 layout(location = 3) in vec4 aCol;
 uniform mat4 uMvp;
-out vec3 vNrm;
+uniform int uGame;
+out vec3 vNormal;
+out vec3 vWorldPos;
 out vec2 vUv;
 out vec4 vCol;
+out vec3 vLit;
+)";
+const char* kVertexBody = R"(
 void main() {
 	gl_Position = uMvp * vec4(aPos, 1.0);
-	vNrm = aNrm;
+	vNormal = aNrm;
+	vWorldPos = aPos;
 	vUv = aUv;
 	vCol = aCol;
+	// Por vértice, como el juego con la opción "Original".
+	vLit = vec3(1.0);
+	if (uGame != 0) vLit = gxLit0(length(aNrm) > 1e-5 ? normalize(aNrm) : vec3(0.0), vec4(aPos, 1.0));
 })";
 
-// Luz parecida a la del juego: una principal desde arriba y delante, otra
-// suave desde atrás, y ambiente.
-const char* kFragment = R"(#version 330 core
-in vec3 vNrm;
+// Sin uGame, luz parecida a la del juego: una principal desde arriba y
+// delante, otra suave desde atrás, y ambiente. Con uGame, la del juego al
+// dibujar un pack HD (pc_hd_models.cpp, drawModel): textura × color del
+// material × luz, sin descartar por alfa.
+const char* kFragmentHead = R"(#version 330 core
 in vec2 vUv;
 in vec4 vCol;
+in vec3 vLit;
 uniform sampler2D uTex;
 uniform int uUseTex;
 uniform float uLit;
 uniform float uAlpha;
+uniform int uGame;
+uniform vec4 uMatColor;
 out vec4 frag;
+)";
+const char* kFragmentBody = R"(
 void main() {
 	vec4 c = vCol;
 	if (uUseTex != 0) c *= texture(uTex, vUv);
+	if (uGame != 0) {
+		if (uLit > 0.5) c.rgb *= uMatColor.rgb * gxPixelLit0(vLit);
+		frag = vec4(c.rgb, c.a * uAlpha);
+		return;
+	}
 	if (c.a < 0.04) discard;
 	if (uLit > 0.5) {
-		vec3 n = normalize(vNrm);
+		vec3 n = normalize(vNormal);
 		float l = 0.38 + 0.55 * max(dot(n, normalize(vec3(0.35, 0.8, 0.6))), 0.0) + 0.22 * max(dot(n, normalize(vec3(-0.5, 0.3, -0.7))), 0.0);
 		c.rgb *= min(l, 1.15);
 	}
@@ -111,9 +138,11 @@ DynamicMesh::~DynamicMesh()
 
 bool View::init(std::string& error)
 {
-	const GLuint vs = compile(GL_VERTEX_SHADER, kVertex, error);
+	const std::string vertex   = std::string(kVertexHead) + kGxLightingGlsl + kVertexBody;
+	const std::string fragment = std::string(kFragmentHead) + kGxLightingGlsl + kGxLightingFragGlsl + kFragmentBody;
+	const GLuint vs = compile(GL_VERTEX_SHADER, vertex.c_str(), error);
 	if (!vs) return false;
-	const GLuint fs = compile(GL_FRAGMENT_SHADER, kFragment, error);
+	const GLuint fs = compile(GL_FRAGMENT_SHADER, fragment.c_str(), error);
 	if (!fs) return false;
 	program_ = glCreateProgram();
 	glAttachShader(program_, vs);
@@ -134,6 +163,15 @@ bool View::init(std::string& error)
 	uLit_    = glGetUniformLocation(program_, "uLit");
 	uAlpha_  = glGetUniformLocation(program_, "uAlpha");
 	uTex_    = glGetUniformLocation(program_, "uTex");
+	uGame_       = glGetUniformLocation(program_, "uGame");
+	uMatColor_   = glGetUniformLocation(program_, "uMatColor");
+	uNumLights_  = glGetUniformLocation(program_, "uNumLights");
+	uLightPos_   = glGetUniformLocation(program_, "uLightPos");
+	uLightColor_ = glGetUniformLocation(program_, "uLightColor");
+	uLightK_     = glGetUniformLocation(program_, "uLightK");
+	uAmbColor_   = glGetUniformLocation(program_, "uAmbColor");
+	uChan0En_    = glGetUniformLocation(program_, "uChan0En");
+	uPerPixel_   = glGetUniformLocation(program_, "uPerPixel");
 	nectar::Image w;
 	w.resize(2, 2);
 	std::fill(w.rgba.begin(), w.rgba.end(), std::uint8_t(255));
@@ -163,9 +201,10 @@ void View::resize(int w, int h)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void View::begin(const nm::M4& viewProj)
+void View::begin(const nm::M4& viewProj, const GameLook* look)
 {
 	viewProj_ = viewProj;
+	look_     = look;
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
 	glViewport(0, 0, width_, height_);
 	// Fondo neutro como el de los editores 3D: permite juzgar colores y
@@ -181,6 +220,26 @@ void View::begin(const nm::M4& viewProj)
 	glUniformMatrix4fv(uMvp_, 1, GL_FALSE, viewProj_.m);
 	glUniform1i(uTex_, 0);
 	glActiveTexture(GL_TEXTURE0);
+	glUniform1i(uGame_, look_ ? 1 : 0);
+	if (look_) {
+		// Canal 0 encendido con GX_AF_SPOT y atenuación 1, 0, 0 (Light::update
+		// de las paralelas); el alfa sin luz, como en drawModel.
+		float pos[16] = {}, colour[16] = {}, k[16] = {};
+		const int n = int(std::min<std::size_t>(look_->lights.size(), 4));
+		for (int i = 0; i < n; ++i) {
+			const GameLook::Light& l = look_->lights[std::size_t(i)];
+			pos[i * 4] = l.pos.x, pos[i * 4 + 1] = l.pos.y, pos[i * 4 + 2] = l.pos.z;
+			colour[i * 4] = l.colour[0], colour[i * 4 + 1] = l.colour[1], colour[i * 4 + 2] = l.colour[2], colour[i * 4 + 3] = 1;
+			k[i * 4] = 1, k[i * 4 + 3] = 1;
+		}
+		glUniform1i(uChan0En_, 1);
+		glUniform1i(uNumLights_, n);
+		glUniform4fv(uLightPos_, 4, pos);
+		glUniform4fv(uLightColor_, 4, colour);
+		glUniform4fv(uLightK_, 4, k);
+		glUniform4f(uAmbColor_, look_->ambient[0], look_->ambient[1], look_->ambient[2], 1);
+		glUniform1i(uPerPixel_, look_->perPixel ? 1 : 0);
+	}
 }
 
 void View::drawMesh(const DynamicMesh& m, bool lit, float alpha)
@@ -196,9 +255,20 @@ void View::drawMesh(const DynamicMesh& m, bool lit, float alpha)
 			if (r.blend != (pass == 1) || !r.count) continue;
 			glUniform1i(uUseTex_, r.texture ? 1 : 0);
 			glBindTexture(GL_TEXTURE_2D, r.texture ? r.texture : white_);
+			if (look_) {
+				// Los triángulos del pack van en sentido antihorario: GX_CULL_FRONT
+				// del juego (con glFrontFace(GL_CW)) es quitar GL_BACK aquí.
+				if (r.cull) glEnable(GL_CULL_FACE);
+				else glDisable(GL_CULL_FACE);
+				glCullFace(GL_BACK);
+				const float* t = look_->tint;
+				if (r.tint) glUniform4f(uMatColor_, t[0], t[1], t[2], 1);
+				else glUniform4f(uMatColor_, 1, 1, 1, 1);
+			}
 			glDrawArrays(GL_TRIANGLES, r.first, r.count);
 		}
 	}
+	glDisable(GL_CULL_FACE);
 	glDepthMask(GL_TRUE);
 	glBindVertexArray(0);
 }
@@ -224,6 +294,8 @@ void View::drawLines(const std::vector<Vec3>& pairs, const float colour[4])
 
 void View::end()
 {
+	look_ = nullptr;
+	glUniform1i(uGame_, 0);
 	glUseProgram(0);
 	glDisable(GL_DEPTH_TEST);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -259,6 +331,7 @@ bool View::renderImage(int w, int h, const nm::M4& viewProj, const DynamicMesh& 
 		glUseProgram(program_);
 		glUniformMatrix4fv(uMvp_, 1, GL_FALSE, viewProj.m);
 		glUniform1i(uTex_, 0);
+		glUniform1i(uGame_, 0);
 		glActiveTexture(GL_TEXTURE0);
 		drawMesh(mesh, true);
 		nectar::Image img;

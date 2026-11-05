@@ -72,6 +72,14 @@ private:
 	nm::M4 viewProj_;
 	ImVec2 viewOrigin_, viewSize_;
 	DynamicMesh modelMesh_, olimarMesh_;
+	// Aspecto del juego (paso de animaciones): la luz de un escenario y las
+	// piezas del pack tal como se instalan, en lugar del modelo importado.
+	bool gameLook_ = false, smoothLighting_ = false, gameLookLoaded_ = false;
+	GameLook gameLookData_;
+	DynamicMesh exportMesh_;
+	std::vector<GLuint> exportTex_;
+	bool exportTexDirty_ = true;
+	bool gameLookActive() const { return gameLook_ && gameLookLoaded_ && editorStep_ == 3 && hasModel_; }
 	std::vector<GLuint> modelTex_, olimarTex_;
 	std::vector<char> modelTexBaked_; ///< por material: su textura ya lleva el color y el retoque
 	GLuint startPortrait_[4] = {}; ///< Olimar y los tres Pikmin, renderizados desde los assets del juego
@@ -130,6 +138,7 @@ private:
 	void uploadTextures();
 	void fillMeshes();
 	void fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool unbent, bool weights);
+	void fillExportMesh(const std::vector<Mat34>* skin);
 	void resetCamera();
 
 	void drawStartScreen(float width, float height);
