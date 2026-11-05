@@ -479,8 +479,14 @@ protected:
 			startCase(t);
 			return;
 		}
-		if (t - mPhaseTick > 10u * (unsigned)rate) {
-			fail(t, "both planted sprouts can be plucked within 10 s", "states %d and %d", mSprout[0]->getCurrState()->getID(), mSprout[1]->getCurrState()->getID());
+		// Bury lasts p49 mSeedUpTime and Tane p50 mPluckWaitTime, each plus up to 2 s at random (PikiHeadAI, itemAI.cpp),
+		// then the Hatuga motion: the two parameters plus 4 s of random plus 4 s for the motions (10 s with the code's 1
+		// and 1 s, 13.1 s with the disc's 0.1 and 5 s).
+		PikiProp::Parms& pp      = pikiMgr->mPikiParms->mPikiParms;
+		const float limitS        = pp.mSeedUpTime() + pp.mPluckWaitTime() + 8.0f;
+		if (t - mPhaseTick > unsigned(limitS * rate)) {
+			fail(t, "both planted sprouts can be plucked within p49 + p50 + 8 s", "%.1f s: states %d and %d", limitS, mSprout[0]->getCurrState()->getID(),
+			     mSprout[1]->getCurrState()->getID());
 		}
 	}
 
