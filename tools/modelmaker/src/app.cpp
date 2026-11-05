@@ -194,24 +194,21 @@ void App::speciesColour(float out[3]) const
 }
 
 // Material liso para el tallo original (el del juego no tiene textura: se tiñe
-// del color del Pikmin). Va el último, detrás de los del modelo.
-static const char* const kStemMaterial = "stem (Pikmin)";
+// del color del Pikmin). Va detrás de los del modelo (layoutMaterials).
+bool App::stemMaterial(ImpMaterial& stem) const
+{
+	if (!isPikmin()) return false;
+	stem.name = "stem (Pikmin)";
+	float c[3];
+	speciesColour(c);
+	// Para los tres colores, blanco: el juego lo tiñe.
+	for (int i = 0; i < 3; ++i) stem.color[i] = target_ == T_ALL ? 1.0f : c[i];
+	return true;
+}
+
 void App::ensureStemMaterial()
 {
-	if (!model_.materials.empty() && model_.materials.back().name == kStemMaterial) model_.materials.pop_back();
-	fit_.stemMaterial = -1;
-	if (isPikmin()) {
-		ImpMaterial stem;
-		stem.name = kStemMaterial;
-		float c[3];
-		speciesColour(c);
-		// Para los tres colores, blanco: el juego lo tiñe.
-		for (int i = 0; i < 3; ++i) stem.color[i] = target_ == T_ALL ? 1.0f : c[i];
-		fit_.stemMaterial = int(model_.materials.size());
-		model_.materials.push_back(stem);
-	}
-	exportOpt_.noTint.resize(model_.materials.size(), 0);
-	exportOpt_.looks.resize(model_.materials.size());
+	layoutMaterials();
 	resetLookHistory();
 	exportOpt_.pikmin = isPikmin();
 }
@@ -236,12 +233,12 @@ void App::setTarget(int target)
 	}
 	ensureStemMaterial();
 	autoFit(model_, olimar_, fit_);
-	if (std::size_t(targetTris_) < model_.triangles() || source_.triangles() > model_.triangles()) {
+	// Ya, aunque luego se simplifique: los materiales han cambiado (el tallo,
+	// las piezas detrás) y la vista no puede seguir con los triángulos de antes.
+	uploadTextures();
+	rebuild();
+	if (std::size_t(targetTris_) < model_.triangles() || source_.triangles() > model_.triangles())
 		resimplify(); // termina en finishLoad, que vuelve a montar todo
-	} else {
-		uploadTextures();
-		rebuild();
-	}
 	resetCamera();
 }
 
@@ -314,6 +311,7 @@ void App::finishLoad()
 	if (pendingResimplify_) {
 		// Misma colocación y puntos: solo cambia la malla.
 		model_ = std::move(pending_);
+		modelReplaced(true);
 		ensureStemMaterial();
 		uploadTextures();
 		rebuild();
@@ -325,6 +323,7 @@ void App::finishLoad()
 	model_    = std::move(pending_);
 	source_   = std::move(pendingSource_);
 	hasModel_ = true;
+	modelReplaced(false);
 	// Nombre del personaje: el del archivo, hasta que el usuario ponga otro.
 	std::snprintf(charName_, sizeof(charName_), "%s", fs::u8path(path).stem().u8string().c_str());
 	fit_                 = FitSettings();
@@ -383,6 +382,7 @@ void App::finishLoad()
 					lk.hidden     = o.value("hidden", false);
 				}
 			}
+			restoreParts(j);
 		} catch (const std::exception&) {
 		}
 		if (editingId_.empty() && !editingOlimar_) say(L("Seguimos con tu modelo de la última vez.", "Picking up your model from last time."));
@@ -443,6 +443,7 @@ void App::rebuild()
 {
 	if (!hasModel_) return;
 	rig_          = buildRig(model_, olimar_, fit_);
+	appendAttachments();
 	// Triángulos por material (los del modelo y, en un Pikmin, el tallo añadido).
 	order_.clear();
 	for (std::size_t t = 0; t < rig_.triMaterial.size(); ++t) order_.push_back(t);
@@ -946,21 +947,19 @@ void App::resetLookHistory()
 {
 	lookUndo_.clear();
 	lookRedo_.clear();
-	lookCommitted_ = exportOpt_.looks;
+	lookCommitted_ = editState();
 }
 
-// Guarda el estado anterior si los retoques cambiaron desde el último paso.
+// Guarda el estado anterior si los retoques o las piezas cambiaron desde el
+// último paso.
 void App::commitLooks()
 {
-	if (exportOpt_.looks.size() != lookCommitted_.size()) {
-		resetLookHistory();
-		return;
-	}
-	if (exportOpt_.looks == lookCommitted_) return;
-	lookUndo_.push_back(lookCommitted_);
+	EditState now = editState();
+	if (now == lookCommitted_) return;
+	lookUndo_.push_back(std::move(lookCommitted_));
 	if (lookUndo_.size() > 100) lookUndo_.erase(lookUndo_.begin());
 	lookRedo_.clear();
-	lookCommitted_ = exportOpt_.looks;
+	lookCommitted_ = std::move(now);
 }
 
 void App::undoLooks(bool redo)
@@ -968,11 +967,11 @@ void App::undoLooks(bool redo)
 	commitLooks();
 	auto& from = redo ? lookRedo_ : lookUndo_;
 	auto& to   = redo ? lookUndo_ : lookRedo_;
-	if (from.empty() || from.back().size() != exportOpt_.looks.size()) return;
-	to.push_back(exportOpt_.looks);
-	exportOpt_.looks = from.back();
+	if (from.empty()) return;
+	to.push_back(editState());
+	applyEditState(from.back());
 	from.pop_back();
-	lookCommitted_ = exportOpt_.looks;
+	lookCommitted_ = editState();
 	looksDirty_    = true;
 	exportDirty_   = true;
 }
@@ -989,7 +988,7 @@ void App::drawColours()
 	if (!ImGui::CollapsingHeader(L("Colores", "Colours"))) return;
 	hint(L("Cambia el color de cada parte o escóndela. El juego lo verá igual.",
 	       "Change each part's colour, or hide it. The game shows it the same way."));
-	ImGui::BeginDisabled(lookUndo_.empty() && (exportOpt_.looks == lookCommitted_));
+	ImGui::BeginDisabled(lookUndo_.empty() && editState() == lookCommitted_);
 	if (ImGui::Button(L("Deshacer", "Undo"))) undoLooks(false);
 	ImGui::EndDisabled();
 	ImGui::SameLine();
@@ -1117,6 +1116,7 @@ void App::drawPanel(float x, float y, float width, float height)
 			if (ImGui::Button(L("Aplicar", "Apply"), ImVec2(-1, 0))) resimplify();
 		}
 		drawColours();
+		drawParts();
 	}
 	if (target_ == T_ALL)
 		hint(L("El juego teñirá este modelo de rojo, amarillo y azul. Usa colores claros o neutros.",
@@ -1568,6 +1568,7 @@ json App::projectJson(const std::string& source) const
 	for (const MaterialLook& lk : exportOpt_.looks)
 		looks.push_back({ { "colour", { lk.colour[0], lk.colour[1], lk.colour[2] } }, { "hue", lk.hue }, { "brightness", lk.brightness }, { "hidden", lk.hidden } });
 	j["looks"] = looks;
+	j["parts"] = partsJson();
 	return j;
 }
 
@@ -1605,7 +1606,9 @@ void App::projectFiles(std::vector<std::pair<std::string, std::vector<std::uint8
 		seen.push_back(rel);
 		out.push_back({ rel, std::move(data) });
 	}
-	const std::string text = projectJson(mainRel).dump(1);
+	json project = projectJson(mainRel);
+	bundlePartFiles(project, out);
+	const std::string text = project.dump(1);
 	out.push_back({ "project.json", std::vector<std::uint8_t>(text.begin(), text.end()) });
 }
 
@@ -1663,6 +1666,7 @@ void App::editCreation(const std::string& dir, const nectar::CharacterInfo& info
 	}
 	if (!source.empty() && nectar::safeProjectPath(source) && fs::is_regular_file(sourcePath, ec)) {
 		restoreJson_ = text;
+		restoreBase_ = (root / "project").u8string();
 		loadModel(sourcePath.u8string(), true);
 	} else {
 		restoreJson_.clear();

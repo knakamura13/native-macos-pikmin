@@ -8,6 +8,7 @@
 #include "export_nhm.h"
 #include "import.h"
 #include "olimar.h"
+#include "parts.h"
 #include "rig.h"
 #include "view.h"
 
@@ -17,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <map>
 #include <string>
 #include <thread>
 #include <vector>
@@ -59,12 +61,37 @@ private:
 	ExportResult export_;
 	bool rigDirty_ = false, exportDirty_ = false;
 	bool looksDirty_ = false; ///< retoques de color: volver a subir las texturas al soltar el ratón
-	// Deshacer los retoques de color: copias de exportOpt_.looks. Un cambio
-	// cuenta al soltar el ratón (un arrastre entero es un solo paso).
-	std::vector<std::vector<MaterialLook>> lookUndo_, lookRedo_;
-	std::vector<MaterialLook> lookCommitted_;
+	// Deshacer los retoques de color y las piezas: copias de los dos. Un
+	// cambio cuenta al soltar el ratón (un arrastre entero es un solo paso).
+	std::vector<EditState> lookUndo_, lookRedo_;
+	EditState lookCommitted_;
 	double lastRebuild_ = 0;
 	std::vector<std::size_t> order_; ///< triángulos ordenados por material
+
+	// Piezas enganchadas (parts_ui.cpp). Los materiales de model_ son los del
+	// modelo [0, baseMaterials_), el tallo de los Pikmin y los de cada pieza.
+	std::vector<Attachment> attachments_;
+	PartLibrary parts_;
+	std::size_t baseMaterials_ = 0;
+	std::vector<std::string> tailKeys_;  ///< quién es cada material añadido ("stem", "part<uid>.<i>")
+	std::map<std::string, std::pair<MaterialLook, char>> tailMemory_; ///< su color y tinte, aunque se quite
+	std::vector<int> partMaterial_;      ///< primer material de cada pieza (-1: no se pudo abrir)
+	int nextPartUid_ = 1;
+	std::string restoreBase_; ///< carpeta del proyecto que se abre (rutas relativas de las piezas)
+	bool stemMaterial(ImpMaterial& stem) const;
+	void modelReplaced(bool keepParts);
+	void layoutMaterials();
+	void appendAttachments();
+	void partsChanged();
+	bool addAttachment(const std::string& part, int point);
+	void removeAttachment(std::size_t index);
+	EditState editState() const;
+	void applyEditState(const EditState& s);
+	std::string partsDir() const;
+	void drawParts();
+	nlohmann::json partsJson() const;
+	void restoreParts(const nlohmann::json& project);
+	void bundlePartFiles(nlohmann::json& project, std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& out) const;
 
 	// Vista.
 	View view_;

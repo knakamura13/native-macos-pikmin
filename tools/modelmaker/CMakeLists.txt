@@ -79,6 +79,8 @@ add_executable(nectar_modelmaker
     third_party/ufbx/ufbx.c
     src/rig.cpp
     src/export_nhm.cpp
+    src/parts.cpp
+    src/parts_ui.cpp
     src/simplify.cpp
     src/view.cpp
     src/stb_impl.cpp
