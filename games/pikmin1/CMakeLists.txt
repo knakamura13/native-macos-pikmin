@@ -481,6 +481,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_whistle_gather_release.cpp
         pc_port/scenarios/scenario_whistle_pluck_held.cpp
         pc_port/scenarios/scenario_bulborb_fight.cpp
+        pc_port/scenarios/scenario_flick_out_of_range.cpp
         pc_port/scenarios/scenario_whistle_delay.cpp
         pc_port/scenarios/scenario_enemy_kills.cpp
         pc_port/scenarios/scenario_onion_menu_transfer.cpp
@@ -2372,6 +2373,8 @@ if(PIKMIN_BUILD_SCENARIOS)
         whistle_radius:sandbox:30,60 navi_invincible:sandbox:30,60
         # Disc-free W4 (issue #96): the real whistle, gather and release paths.
         whistle_gather_release:sandbox:30,60 whistle_pluck_held:sandbox:30,60 whistle_delay:sandbox:30,60 bulborb_fight:sandbox_objects:30,60
+        # Issue #146: a Pikmin flicked past its work-search range (p41) goes back to the fight.
+        flick_out_of_range:sandbox_objects:30,60
         # Disc-free W9 (#99): the Y menu's map and controller pages on the stand-in screens;
         # a day end through the real world map, a title round trip from it.
         map_menu:practice:30,60 map_menu_lockout:practice:30,60
