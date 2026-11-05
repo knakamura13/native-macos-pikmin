@@ -47,7 +47,8 @@ namespace {
 
 constexpr float kFlickPower  = 10.0f;  // times the Bulborb's TPF_UpperFlickPower
 constexpr float kApproachS   = 10.0f; // to reach attack mode
-constexpr float kWatchS      = 6.0f;  // printed after the flick
+constexpr float kWatchS      = 6.0f;  // printed after the flick (at least)
+constexpr float kGetUpS      = 8.0f;  // flight plus knock-down (disc up to 3.83 s, stand-ins 2.23 s)
 constexpr float kReturnS     = 5.0f;  // to reach the Bulborb again after getting up
 
 // ActAttack keeps the enemy it fights in the protected mOther; a pointer to that member taken in a
@@ -168,11 +169,13 @@ public:
 			            state >= 0 ? mPiki->mMode : -1, state >= 0 ? action() : -9, (int)(state >= 0 && target() == mBulb), (int)(state >= 0 && mPiki->mStickTarget == mBulb),
 			            dist());
 		}
-		if (since >= unsigned(kWatchS * rate)) {
-			if (!mReachTick) {
-				fail(t, "the Pikmin gets up and reaches the Bulborb within 6 s of the flick", "state %d, got up %d", state, (int)(mUpTick != 0));
-				return;
-			}
+		// Getting up (flight plus knock-down) has its own bound; the return window (kReturnS) then
+		// starts at mUpTick, so a long valid knock-down never shortens it.
+		if (!mUpTick && since > unsigned(kGetUpS * rate)) {
+			fail(t, "the Pikmin gets up within 8 s of the flick", "still down after %.2f s (state %d)", since / float(rate), state);
+			return;
+		}
+		if (mReachTick && since >= unsigned(kWatchS * rate)) {
 			std::printf("[scenario] flick_out_of_range: PASS at tick %u: out of range %.2f s after the flick, got up attacking the Bulborb, reached it %.2f s later\n", t,
 			            (mOutTick - mFlickTick) / float(rate), (mReachTick - mUpTick) / float(rate));
 			mDone = true;
