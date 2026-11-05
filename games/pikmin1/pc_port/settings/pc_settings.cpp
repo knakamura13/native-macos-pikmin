@@ -3912,12 +3912,14 @@ int achievementAtRow(int row); // logro de esa fila de la pestaña, o -1
 // liberada y los píxeles reutilizados). Pero un archivo que falta no entra en
 // el registro, así que loadTexture lo reabría (y DVDOpen lo anotaba en el log)
 // en cada dibujo: en datos sin disco faltan los iconos de logros. Se recuerdan
-// las rutas que faltan; los datos no cambian durante la partida.
+// las rutas que faltan, junto con la carpeta de texturas del idioma (mTexDir):
+// cambiar de idioma cambia la carpeta y el icono puede existir en la nueva.
 static Texture* uiTexture(const char* path) {
     static std::vector<std::string> sMissing;
-    if (std::find(sMissing.begin(), sMissing.end(), path) != sMissing.end()) return nullptr;
+    const std::string key = std::string(gsys->mTexDir ? gsys->mTexDir : "") + '|' + path;
+    if (std::find(sMissing.begin(), sMissing.end(), key) != sMissing.end()) return nullptr;
     Texture* tex = zen::loadTexExp(path, true, true);
-    if (!tex) sMissing.emplace_back(path);
+    if (!tex) sMissing.push_back(key);
     return tex;
 }
 
