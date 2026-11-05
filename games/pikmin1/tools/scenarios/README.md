@@ -1020,7 +1020,8 @@ The writers live in `libs/nectar_assets`: `mod_writer.h` and `standin_models.h`
 and `.dsk` cutscenes, see `standin-cinema.md`), and `parms.h`, `archive.h`,
 `stages_ini.h` and `gen.h`. The stand-in `parms/aiconst.bin` carries the
 disc's value for every ID that differs from the code default
-(`standin-aiconst.md`).
+(`standin-aiconst.md`), and the stand-in `parms/pikiMgr.bin` is byte-identical
+to the disc's: all 77 Pikmin IDs with the disc's values (`standin-piki-parms.md`).
 
 Each writer is a pure function (a plain input struct, bytes out, an error
 string, no file I/O) with a write-then-read unit test registered in CTest, for

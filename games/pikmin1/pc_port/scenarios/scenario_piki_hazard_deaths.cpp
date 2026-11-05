@@ -174,9 +174,10 @@ public:
 					return;
 				}
 				mHealthBefore = mVictim->mHealth;
-				mVictim->stimulate(InteractAttack(mNavi, nullptr, 40.0f, false));
+				mVictim->stimulate(InteractAttack(mNavi, nullptr, nonLethalDamage(), false));
 			}
-			if (t >= mStepTick + 2 && mVictim->mHealth > 0.0f && mVictim->getState() != PIKISTATE_Dying && mVictim->mHealth < mHealthBefore - 30.0f) {
+			if (t >= mStepTick + 2 && mVictim->mHealth > 0.0f && mVictim->getState() != PIKISTATE_Dying
+			    && mVictim->mHealth < mHealthBefore - 0.75f * nonLethalDamage()) {
 				std::printf("[scenario] piki_hazard_deaths: non-lethal attack health %.1f state %d\n", mVictim->mHealth, mVictim->getState());
 				mStep = AttackKill;
 				mStepTick = t + 1;
@@ -359,6 +360,9 @@ private:
 	bool mFlickSeen = false, mPressSeen = false, mFlownSeen = false;
 	int mPlateBefore = 0, mBlueDeadBefore = 0;
 	float mHealthBefore = 0.0f;
+	// 40% of the Pikmin's health (p03 mPikiMaxHealth: 30 on the disc and the stand-ins, 100 in code), so the
+	// hit is non-lethal whichever value the parameter file gives; 40 and a 30 drop at the code's 100.
+	static float nonLethalDamage() { return 0.4f * pikiMgr->mPikiParms->mPikiParms.mPikiMaxHealth(); }
 	int mWhistlePads = 0;
 };
 

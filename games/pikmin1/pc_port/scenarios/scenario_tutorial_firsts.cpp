@@ -98,12 +98,26 @@ public:
 	{
 		Navi* navi = naviMgr->getNavi();
 		if (!navi || mPhase == Done) return;
-		// A closes any text window (the red Onion text, TUT_NukiAndFree).
+		// A or B closes any text window (the red Onion text, TUT_NukiAndFree; ogMessage.cpp). TUT_NukiAndFree opens while
+		// the captain is still plucking (Nuku), where an A press queues the next pluck and, with no sprout left, makes him
+		// grab the nearest Pikmin as the pluck ends (NaviNukuState::procAnimMsg, Navi::procActionButton). B does not, so B
+		// closes the text then.
 		if (gameflow.mIsUIOverlayActive) {
-			if (t % 15 == 0) pad.button = PAD_BUTTON_A;
+			if (t % 15 == 0) pad.button = navi->getCurrState()->getID() == NAVISTATE_Nuku ? PAD_BUTTON_B : PAD_BUTTON_A;
 			return;
 		}
-		if (navi->getCurrState()->getID() != NAVISTATE_Walk || currentMovie() != -1) return;
+		// The captain goes Idle (17) after a stretch with no input, for example while a sprout grows (p50 mPluckWaitTime,
+		// 5 s on the disc). One tick of stick wakes him; he leaves Idle only when the idle motion ends
+		// (NaviIdleState::procAnimMsg) and runs no demo check (Navi::demoCheck) until then, so the stick waits for Walk.
+		const int state = navi->getCurrState()->getID();
+		if ((state != NAVISTATE_Walk && state != NAVISTATE_Idle) || currentMovie() != -1) return;
+		if (state == NAVISTATE_Idle && mWoken) return;
+		drive(t, navi, state, pad);
+		mWoken = state == NAVISTATE_Idle && (pad.stickX != 0 || pad.stickY != 0);
+	}
+
+	void drive(unsigned t, Navi* navi, int state, PcInputPad& pad)
+	{
 		switch (mPhase) {
 		case ToOnion: steer(navi, mOnion->mSRT.t, pad, 0.0f); return;
 		case ToSeed: if (mSeed) steer(navi, mSeed->mSRT.t, pad, 0.0f); return;
@@ -111,7 +125,7 @@ public:
 		case Pluck:
 			if (mSeed) {
 				const float len = steer(navi, mSeed->mSRT.t, pad);
-				if (len < 12.0f && t % 4 == 0) pad.button = PAD_BUTTON_A; // NaviMgr p62 reach 15, released between clicks
+				if (state == NAVISTATE_Walk && len < 12.0f && t % 4 == 0) pad.button = PAD_BUTTON_A; // NaviMgr p62 reach 15, released between clicks
 			}
 			return;
 		default: return;
@@ -205,8 +219,8 @@ public:
 				std::printf("[scenario] tutorial_firsts: sprout planted at (%.0f, %.0f) at t=%u, captain %.1f from it\n", mSeed->mSRT.t.x, mSeed->mSRT.t.z, t,
 				            qdist2(mSeed, navi));
 				enter(ToSeed, t);
-			} else if (span > 10 * rate) {
-				fail(t, "the seed is planted (PIKIHEAD_Wait) within 10 s", "state %d", mSeed->getCurrState()->getID());
+			} else if (span > sproutLimitS() * rate) {
+				fail(t, "the seed is planted (PIKIHEAD_Wait) within p49 + p50 + 8 s", "%.1f s: state %d", sproutLimitS(), mSeed->getCurrState()->getID());
 			}
 			return;
 		case ToSeed: {
@@ -261,7 +275,9 @@ public:
 				mKnown.insert(p);
 				return;
 			}
-			if (span > 10 * rate) fail(t, "within 10 s of the pluck the Pikmin is in the party and the captain walks", "movie %d, captain %d", movie, navi->getCurrState()->getID());
+			if (span > 10 * rate)
+				fail(t, "within 10 s of the pluck the Pikmin is in the party and the captain walks", "movie %d, captain %d, overlay %d, Pikmin %d state %d mode %d", movie,
+				     navi->getCurrState()->getID(), (int)gameflow.mIsUIOverlayActive, (int)(p != nullptr), p ? p->getState() : -1, p ? (int)p->mMode : -1);
 			return;
 		}
 		case Grow:
@@ -269,8 +285,8 @@ public:
 				std::printf("[scenario] tutorial_firsts: sprout %d planted at t=%u, allPikis %d\n", mPlucks, t, (int)GameStat::allPikis);
 				mBefore = demoFlags();
 				enter(Pluck, t);
-			} else if (span > 10 * rate) {
-				fail(t, "the planted sprout can be plucked within 10 s", "state %d", mSeed->getCurrState()->getID());
+			} else if (span > sproutLimitS() * rate) {
+				fail(t, "the planted sprout can be plucked within p49 + p50 + 8 s", "%.1f s: state %d", sproutLimitS(), mSeed->getCurrState()->getID());
 			}
 			return;
 		case Text:
@@ -330,6 +346,15 @@ private:
 		}
 		mFlags = now;
 		return true;
+	}
+
+	// A sprout's Bury lasts p49 mSeedUpTime and its Tane p50 mPluckWaitTime, each plus up to 2 s at random (PikiHeadAI,
+	// itemAI.cpp), then the Hatuga motion: the two parameters plus 4 s of random plus 4 s for the motions and the landing
+	// (10 s with the code's 1 and 1 s, 13.1 s with the disc's 0.1 and 5 s).
+	static float sproutLimitS()
+	{
+		PikiProp::Parms& pp = pikiMgr->mPikiParms->mPikiParms;
+		return pp.mSeedUpTime() + pp.mPluckWaitTime() + 8.0f;
 	}
 
 	PikiHeadItem* findSeed()
@@ -408,6 +433,7 @@ private:
 	unsigned mPhaseTick = 0, mBootTick = 0, mWaitTick = 0;
 	int mInside = 0, mBorn = 0, mPlucks = 0, mMovieSeen = -1;
 	bool mTextSeen      = false;
+	bool mWoken         = false; // the one tick of stick that wakes an idle captain was sent
 	GoalItem* mOnion    = nullptr;
 	Pellet* mEngine     = nullptr;
 	PikiHeadItem* mSeed = nullptr;
