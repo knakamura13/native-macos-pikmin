@@ -27,6 +27,13 @@
 
 #include "netplay/pc_netplay_libm.h"
 
+#ifdef __APPLE__
+// Apple's <math.h> has no sincosf (it has __sincosf_stret). The software libm
+// under test defines the GNU-style sincosf, so declare it here to keep calling
+// our definition directly.
+extern "C" void sincosf(float x, float *s, float *c);
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -153,8 +160,11 @@ uint64_t fnv1a(uint64_t h, uint32_t w)
 // This file is compiled with the libm's -fno-builtin-* flags so that every
 // call reaches OUR definitions; with builtins on, GCC folds some of them at
 // compile time and the checksum depends on the optimisation level.
-// Measured 2026-10-13 on x86-64/MinGW, identical at -O1, -O2 and -O3.
-const uint64_t kGolden = 0xd58bb7cf26080cfdULL;
+// Measured 2026-10-13 on x86-64/MinGW, identical at -O1, -O2 and -O3. Updated
+// 2026-11-04 for the NaN canonicalisation in eatF/eatD: the only words that
+// changed are the three NaN results that came out negative on x86 (a macOS
+// x86_64 build reproduced the old value exactly before the change).
+const uint64_t kGolden = 0x4a959508a6080cfdULL;
 
 } // namespace
 
@@ -175,10 +185,16 @@ int main()
 	unsigned long long overBound[26] = { 0 }; // samples with d > bound
 	unsigned long long nSamples[26] = { 0 };
 	uint64_t sum = 1469598103934665603ull;
-	auto eatF = [&](float v) { sum = fnv1a(sum, bitsOf(v)); };
+	// The sign of a NaN produced by an invalid operation is set by the CPU: x86
+	// gives a negative quiet NaN, arm64 a positive one. Every NaN is hashed as
+	// the positive quiet NaN so the golden holds on both. Finite and infinite
+	// results are hashed bit for bit.
+	auto eatF = [&](float v) { sum = fnv1a(sum, v != v ? 0x7fc00000u : bitsOf(v)); };
 	auto eatD = [&](double v) {
 		uint64_t u;
 		memcpy(&u, &v, 8);
+		if (v != v)
+			u = 0x7ff8000000000000ull;
 		sum = fnv1a(sum, static_cast<uint32_t>(u));
 		sum = fnv1a(sum, static_cast<uint32_t>(u >> 32));
 	};

@@ -22,7 +22,7 @@ from verify_scenario_png import (
 )
 
 ROOT = Path(__file__).resolve().parent
-GOLDEN = ROOT / "golden" / "boot_smoke_tick100_640x480.png"
+GOLDEN = ROOT / "golden" / "linux" / "boot_smoke_tick100.png"
 
 
 def _crc32(chunk_type: bytes, data: bytes) -> int:
