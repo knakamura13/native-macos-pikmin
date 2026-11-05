@@ -17,9 +17,13 @@
 // Issue #154 (2026-11-04): Attack, StillJump, JKoke and GetUp carry the disc's timing as well
 // (standin_anims.h). Disc on this branch: dead at 3.4 s (30 Hz) and 2.5 s (60 Hz), Flick 2.9 s and 2.8 s.
 // Stand-ins before: 4.3 s and 4.5 s, Flick 3.6 s (5 flicks at 30 Hz, 1 at 60 Hz). After: 2.2 s and 1.5 s,
-// Flick 1.8 s (5 flicks at 30 Hz, none at 60 Hz). The stand-ins now win sooner than the disc: their Pikmin
-// parameters are the code defaults (knock-down 0.7 s where the disc's parms give 1 to 3 s), and the
-// stand-in Bulborb's collision spheres sit lower than the disc's.
+// Flick 1.8 s (5 flicks at 30 Hz, none at 60 Hz).
+//
+// The stand-in parms/pikiMgr.bin now carries every disc value (standin-piki-parms.md), among them the
+// knock-down time of 1 to 3 s (p74, p43; the code's is 0.7 s) and health 30 (p03; code 100). Stand-ins:
+// dead at 2.4 s (30 Hz) and 1.6 s (60 Hz), Flick 3.3 s (5 flicks at 30 Hz, none at 60 Hz); the disc 3.4 s
+// and 2.5 s, Flick 2.9 s. They still win sooner than the disc; the open lead is the stand-in Bulborb's
+// collision spheres, which sit lower than the disc's (#154).
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS

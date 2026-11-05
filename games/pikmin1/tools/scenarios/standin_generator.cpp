@@ -255,10 +255,12 @@ bool stagesIni(Tree& tree, std::string& error)
 // cunit.bin (read-only, decoded with the Parameters::read layout, 2026-10-27),
 // and each differs from the code default in NaviMgr.h, PikiMgr.h,
 // CreatureProp.h, AIConstant.h or CPlate.h (noted per line).
-// The other differing IDs (whistle, punch, health, growth, bombs) are left at
-// the code defaults because no v1 scenario touches them. Every ID of the three
-// disc files was diffed against these and the code defaults on 2026-10-28
-// (verification-log.md, item 4); the ones left at code defaults are:
+// The other differing captain and game IDs (whistle, punch) are left at the
+// code defaults because no v1 scenario touches them. pikiMgr.bin is the
+// exception: since 2026-11-04 it carries every ID the disc file sets, with the
+// disc's value (standin-piki-parms.md). Every ID of the three disc files was
+// diffed against these and the code defaults on 2026-10-28 (verification-log.md,
+// item 4); the ones left at code defaults are:
 //  - gamePrms.bin (stays empty): p00 daySpeed (disc 27, code 20) is overwritten
 //    on PC from the day-length setting (27 by default) in GameCoreSection's
 //    constructor, so the file value never reaches the clock; t00 startHour,
@@ -271,10 +273,6 @@ bool stagesIni(Tree& tree, std::string& error)
 //    punch damage, p57-p59 Kinoko flick and bury escape, p61 pluck zoom. No v1
 //    scenario whistles, runs into the escape speed, is pressed, pushes, plucks,
 //    punches or is buried.
-//  - pikiMgr.bin: health, attack, press, growth and seed timers, wall push,
-//    flick, panic, bomb, drown, free-boid and idle search ranges, sunset safety
-//    range. No v1 scenario hurts, grows, drowns, bombs or ends a day with
-//    Pikmin outside, and its Pikmin stay in the party.
 //
 // CreatureProp: the captain's effective code defaults are 1.0, 0.5, 0.5, 0.2,
 // 0.3 (the NaviProp constructor, navi.cpp, overrides s00, s02 and s03 of the
@@ -370,25 +368,89 @@ bool parmFiles(Tree& tree, std::string& error)
 		  {
 		      // CreatureProp, disc values (effective code defaults 0.1, 0.5, 0.25, 0.1, 0.3: s02 and s03 differ).
 		      { parmFloat("s00", 0.1f), parmFloat("s01", 0.5f), parmFloat("s02", 0.8f), parmFloat("s03", 0.14f), parmFloat("s04", 0.3f) },
+		      // PikiProp::Parms: all 77 IDs the disc file sets, in the disc file's order, with the disc
+		      // values (parms/pikiMgr.bin, read-only, 2026-11-04). The stand-in file is byte-identical to
+		      // the disc's. The full table, and what each differing ID changes, is in standin-piki-parms.md.
 		      {
-		          parmFloat("p00", 10.0f),  // mMinMoveSpeed (code 84)
-		          parmFloat("p01", 120.0f), // mMaxLeafMoveSpeed (code 162.5)
-		          parmFloat("p54", 170.0f), // mMaxFlowerMoveSpeed (code 220)
-		          parmFloat("p65", 140.0f), // mMaxBudMoveSpeed (code 160)
-		          parmFloat("p18", 8.0f),   // mWalkSpeedThreshold (code 35)
-		          parmFloat("p19", 20.0f),  // mRunSpeedThreshold (code 70)
-		          parmFloat("p20", 95.0f),  // mEscapeSpeedThreshold (code 160)
-		          // Walk, run and escape animation speeds (Piki walk animation, piki.cpp): the Pikmin
-		          // walk to the hand in throw_release. p21 (30) and p24 (60) equal the code defaults.
-		          parmFloat("p22", 50.0f),  // mMaxWalkAnimSpeed (code 60)
-		          parmFloat("p23", 40.0f),  // mMinRunAnimSpeed (code 30)
-		          parmFloat("p25", 60.0f),  // mEscapeAnimSpeed (code 30)
-		          parmFloat("p27", 3.0f),   // mMinPikiSize (code 6)
-		          parmFloat("p34", 5.0f),   // mMaxPikiSize (code 10)
-		          parmFloat("p39", 8.5f),   // mCollisionRadius (code 8)
+		          parmFloat("p00", 10.0f),    // mMinMoveSpeed (code 84.0)
+		          parmFloat("p01", 120.0f),   // mMaxLeafMoveSpeed (code 162.5)
+		          parmFloat("p54", 170.0f),   // mMaxFlowerMoveSpeed (code 220.0)
+		          parmFloat("p65", 140.0f),   // mMaxBudMoveSpeed (code 160.0)
+		          parmFloat("p38", 1.0f),     // mPikiDisplayScale, equals the code default
+		          parmFloat("p03", 30.0f),    // mPikiMaxHealth (code 100.0)
+		          parmFloat("p10", 10.0f),    // mSkinnyPikiHealth (code 150.0)
+		          parmFloat("p11", 10.0f),    // mFatPikiHealth (code 200.0)
+		          parmFloat("p04", 10.0f),    // mBlueAttackPower, equals the code default
+		          parmFloat("p12", 15.0f),    // mRedAttackPower, equals the code default
+		          parmFloat("p13", 10.0f),    // mYellowAttackPower, equals the code default
+		          parmInt("p05", 1),          // mBudEnergyRequirement, equals the code default
+		          parmInt("p06", 1),          // mFlowerEnergyRequirement (code 2)
+		          parmFloat("p07", 0.8f),     // mPluckStrength0, equals the code default
+		          parmFloat("p08", 1.5f),     // mPluckStrength1, equals the code default
+		          parmFloat("p09", 1.2f),     // mPluckStrength2, equals the code default
+		          parmFloat("p14", 2.5f),     // mPressDeathFactor (code 5.0)
+		          parmFloat("p15", 1.0f),     // mNormalPikiPressFactor (code 3.0)
+		          parmFloat("p16", 0.9f),     // mWildPikiPressFactor (code 1.0)
+		          parmFloat("p37", 35.0f),    // mFatPikiPressFactor (code 40.0)
+		          parmFloat("p17", 5.0f),     // mStepSpeedThreshold, equals the code default
+		          parmFloat("p18", 8.0f),     // mWalkSpeedThreshold (code 35.0)
+		          parmFloat("p19", 20.0f),    // mRunSpeedThreshold (code 70.0)
+		          parmFloat("p20", 95.0f),    // mEscapeSpeedThreshold (code 160.0)
+		          parmFloat("p21", 30.0f),    // mMinWalkAnimSpeed, equals the code default
+		          parmFloat("p22", 50.0f),    // mMaxWalkAnimSpeed (code 60.0)
+		          parmFloat("p23", 40.0f),    // mMinRunAnimSpeed (code 30.0)
+		          parmFloat("p24", 60.0f),    // mMaxRunAnimSpeed, equals the code default
+		          parmFloat("p25", 60.0f),    // mEscapeAnimSpeed (code 30.0)
+		          parmFloat("p26", 100.0f),   // mUnusedAnimSpeed (code 60.0)
+		          parmFloat("p27", 3.0f),     // mMinPikiSize (code 6.0)
+		          parmFloat("p34", 5.0f),     // mMaxPikiSize (code 10.0)
+		          parmFloat("p28", 100.0f),   // mInvMass, equals the code default
+		          parmFloat("p39", 8.5f),     // mCollisionRadius (code 8.0)
+		          parmFloat("p29", 600.0f),   // mFormationSlipRange, equals the code default
+		          parmFloat("p30", 1000.0f),  // mFormationBreakRange, equals the code default
+		          parmFloat("p31", 10.0f),    // mMaxLostChildTime, equals the code default
+		          parmFloat("p32", 50.0f),    // mUnusedWhiteFreeDistance (code 200.0)
+		          parmFloat("p33", 250.0f),   // mUnusedGrayFreeDistance (code 800.0)
+		          parmFloat("p35", 2.0f),     // mUnusedDynWallPushTime (code 0.6)
+		          parmFloat("p36", 2.0f),     // mUnusedStaticWallPushTime (code 0.6)
+		          parmFloat("p40", 120.0f),   // mDefaultFreeBoidTime (code 15.0)
+		          parmFloat("p41", 70.0f),    // mIdleAttackSearchRange (code 100.0)
+		          parmFloat("p42", 55.0f),    // mIdleWorkSearchRange (code 100.0)
+		          parmFloat("p43", 3.0f),     // mMaxFlickKnockDownTime (code 0.7)
+		          parmFloat("p74", 1.0f),     // mMinFlickKnockDownTime (code 0.7)
+		          parmFloat("p44", 2.0f),     // mUnusedLeafBudTime (code 10.0)
+		          parmFloat("p45", 2.0f),     // mUnusedBudFlowerTime (code 10.0)
+		          parmFloat("p46", 10.0f),    // mUnusedFlowerSeedTime, equals the code default
+		          parmFloat("p47", 10.0f),    // mUnusedSeedLeafTime, equals the code default
 		          // Flower Pikmin fall at this fraction of gravity after the peak of a throw. With the
 		          // code default the descent takes 1.75x (30 Hz) to 2.2x (60 Hz) as long as on the disc.
-		          parmFloat("p48", 0.5f),   // mFlowerGravityScale (code 0.01)
+		          parmFloat("p48", 0.5f),     // mFlowerGravityScale (code 0.01)
+		          parmFloat("p49", 0.1f),     // mSeedUpTime (code 1.0)
+		          parmFloat("p50", 5.0f),     // mPluckWaitTime (code 1.0)
+		          parmFloat("p51", 120.0f),   // mGrowUpTime (code 4.0)
+		          parmFloat("p52", 180.0f),   // mWiltTime (code 4.0)
+		          parmFloat("p53", 60.0f),    // mRebirthSeedTime (code 1.0)
+		          parmFloat("p55", 2.0f),     // mPanicTime (code 3.0)
+		          parmFloat("p56", 0.8f),     // mPikiLeaveSeedChance, equals the code default
+		          parmFloat("p57", 2.0f),     // mBombSetFuseTime, equals the code default
+		          parmFloat("p58", 50.0f),    // mBombExplodeRadius, equals the code default
+		          parmFloat("p59", 50.0f),    // mBombDamageBomb (code 200.0)
+		          parmFloat("p75", 20.0f),    // mBombDamageNavi (code 10.0)
+		          parmFloat("p76", 120.0f),   // mBombDamageEnemy, equals the code default
+		          parmFloat("p77", 765.0f),   // mBombDamagePiki, equals the code default
+		          parmFloat("p60", 300.0f),   // mSunsetSafetyRange (code 200.0)
+		          parmFloat("p61", 250.0f),   // mPostWorkJoinPartyRange, equals the code default
+		          parmInt("p62", 10),         // mMinStartDrownFrames (code 30)
+		          parmInt("p63", 10),         // mRandStartDrownFrames, equals the code default
+		          parmFloat("p64", 120.0f),   // mUnusedPushTime (code 5.0)
+		          parmFloat("p66", 170.0f),   // mBombTargetSearchRange (code 300.0)
+		          parmFloat("p67", 100.0f),   // mBombThrowMinDistance (code 110.0)
+		          parmFloat("p68", 130.0f),   // mBombThrowMaxDistance (code 160.0)
+		          parmFloat("p69", 1.5f),     // mBombThrowTimeoutTime, equals the code default
+		          parmFloat("p70", 150.0f),   // mBombThrowSpeed, equals the code default
+		          parmFloat("p71", 150.0f),   // mBombWarnPikiRange (code 300.0)
+		          parmFloat("p72", 0.65f),    // mBombAimTime, equals the code default
+		          parmFloat("p73", 50.0f),    // mBombSetDistance, equals the code default
 		      },
 		  } },
 	};
