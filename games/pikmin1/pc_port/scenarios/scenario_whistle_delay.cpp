@@ -7,9 +7,17 @@
 // in Formation and out of LookAt (it joined). The delay is the difference; LookAt's own duration
 // (the random 0 to 0.3 s wait, then the Kizuku motion, then the return) is most of it.
 //
-// Asserted: every Pikmin is called and joins within 1 s of the call (the disc: 0.50 to 0.75 s at 30 and
-// 60 Hz; the stand-ins' Kizuku motion carries the disc's timing since #133, standin_anims.h). The delays
-// are printed; the disc run is made by hand, with PIKMIN_SCENARIO_DATA_DIR on a disc install.
+// Asserted: every Pikmin is called, plays Kizuku in LookAt, and joins 0.45 to 1 s after the call (the
+// disc: 0.50 to 0.75 s at 30 and 60 Hz; the stand-ins' Kizuku motion carries the disc's timing since
+// #133, standin_anims.h). The delays are printed; the disc run is made by hand, with
+// PIKMIN_SCENARIO_DATA_DIR on a disc install.
+//
+// Issue #145: LookAt takes any KEY_Finished as Kizuku's end, including one from the motion the
+// Pikmin was already playing when called (PikiLookAtState::procAnimMsg sets LAS_Returning during
+// the random delay, and the leftover delay then ends LookAt). On the disc an idle Free Pikmin plays
+// Wait, which loops and never sends one; the stand-in Wait was a 40-frame one-shot until #145, and
+// at 30 Hz three of six Pikmin had it end inside the delay, skipped Kizuku and joined in 0.07 to
+// 0.20 s. Kizuku alone is 15 frames (0.5 s), so the lower bound and the Kizuku check catch that.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -23,6 +31,7 @@
 #include "Navi.h"
 #include "NaviMgr.h"
 #include "NaviState.h"
+#include "PaniPikiAnimator.h"
 #include "Piki.h"
 #include "PikiMgr.h"
 #include "PikiState.h"
@@ -32,6 +41,7 @@ namespace {
 
 constexpr int kCount     = 6;
 constexpr float kMaxJoin = 1.0f;
+constexpr float kMinJoin = 0.45f; // Kizuku is 15 frames at speed 30: 0.5 s, less one tick of rounding
 
 class WhistleDelay : public PcScenario {
 public:
@@ -120,6 +130,9 @@ private:
 		for (int i = 0; i < kCount; i++) {
 			if (!mPiki[i]) continue;
 			if (!mCalled[i] && mPiki[i]->getState() == PIKISTATE_LookAt) mCalled[i] = t;
+			if (mCalled[i] && !mJoined[i] && mPiki[i]->getState() == PIKISTATE_LookAt
+			    && mPiki[i]->mPikiAnimMgr.getUpperAnimator().getCurrentMotionIndex() == PIKIANIM_Kizuku)
+				mKizuku[i] = true;
 			if (mCalled[i] && !mJoined[i] && mPiki[i]->mMode == PikiMode::FormationMode && mPiki[i]->getState() != PIKISTATE_LookAt) mJoined[i] = t;
 		}
 	}
@@ -137,7 +150,7 @@ private:
 				return;
 			}
 			const float d = (mJoined[i] - mCalled[i]) / float(rate);
-			std::printf("[scenario] whistle_delay: Pikmin %d: called at tick %u, joined %.2f s later\n", i, mCalled[i], d);
+			std::printf("[scenario] whistle_delay: Pikmin %d: called at tick %u, joined %.2f s later%s\n", i, mCalled[i], d, mKizuku[i] ? "" : " (no Kizuku)");
 			minD = std::min(minD, d);
 			maxD = std::max(maxD, d);
 			sum += d;
@@ -146,6 +159,17 @@ private:
 		}
 		std::printf("[scenario] whistle_delay: call to joined %.2f s min, %.2f s mean, %.2f s max; calls spread over %.2f s\n", minD, sum / kCount, maxD,
 		            (last - first) / float(rate));
+		for (int i = 0; i < kCount; i++) {
+			if (!mKizuku[i]) {
+				fail(t, "every called Pikmin plays Kizuku before it joins (#145)", "Pikmin %d joined %.2f s after its call without Kizuku", i,
+				     (mJoined[i] - mCalled[i]) / float(rate));
+				return;
+			}
+		}
+		if (minD < kMinJoin) {
+			fail(t, "every called Pikmin joins at least 0.45 s after its call (#145)", "fastest %.2f s", minD);
+			return;
+		}
 		if (maxD > kMaxJoin) {
 			fail(t, "every called Pikmin joins within 1 s of its call", "slowest %.2f s", maxD);
 			return;
@@ -157,6 +181,7 @@ private:
 
 	Piki* mPiki[kCount]     = {};
 	unsigned mCalled[kCount] = {}, mJoined[kCount] = {};
+	bool mKizuku[kCount]     = {};
 	Phase mPhase            = Settle;
 	unsigned mPhaseTick = 0, mReleaseTick = ~0u;
 	float mExpand       = 0.0f;

@@ -524,6 +524,7 @@ void testStandInSet()
 		s.anims[nectar::kAnimInfoThrowWait].info.infoKeys.push_back(s.anims[nectar::kAnimInfoThrowWait].info.infoKeys[0]);
 	});
 	breaks("no KEY_LoopStart on Fue", [](nectar::StandInAnimSet& s) { s.anims[nectar::kAnimInfoFue].info.infoKeys.clear(); });
+	breaks("Wait does not loop", [](nectar::StandInAnimSet& s) { s.anims[nectar::kAnimInfoWait].info.infoKeys.clear(); });
 	breaks("Fue's KEY_LoopStart at the wrong frame", [](nectar::StandInAnimSet& s) { s.anims[nectar::kAnimInfoFue].info.infoKeys[0].frame = 2; });
 	check(set.anims[nectar::kAnimInfoFue].frameCount == nectar::kFueFrames
 	          && set.anims[nectar::kAnimInfoFue].info.animKeys == std::vector<std::int32_t>({ 0, nectar::kFueLoopStart, nectar::kFueLoopEnd, nectar::kFueFrames - 1 })

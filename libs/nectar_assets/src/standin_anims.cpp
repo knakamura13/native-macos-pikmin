@@ -52,7 +52,7 @@ StandInAnimSet buildPikiSet()
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
 		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari || i == kAnimInfoPickLoop || i == kAnimInfoKizuku || i == kAnimInfoFlick
-		           || i == kAnimInfoAttack || i == kAnimInfoStillJump || i == kAnimInfoJKoke || i == kAnimInfoGetUp) {
+		           || i == kAnimInfoWait || i == kAnimInfoAttack || i == kAnimInfoStillJump || i == kAnimInfoJKoke || i == kAnimInfoGetUp) {
 			// Disc timing (standin_anims.h): anim keys, then info keys as (anim-key
 			// index, type) with 0 loop start, 1 loop end, 2 KEY_Action0, 3 KEY_Action1.
 			struct Timing {
@@ -66,6 +66,7 @@ StandInAnimSet buildPikiSet()
 			               : i == kAnimInfoPickLoop ? Timing { { 0, 10, 13, 18, 20, 29 }, { { 1, 2 }, { 2, 0 }, { 3, 1 }, { 4, 3 } }, -1 }
 			               : i == kAnimInfoKizuku   ? Timing { { 0, 1, 11, 15 }, { { 1, 2 }, { 2, 3 } }, -1 }
 			               : i == kAnimInfoFlick    ? Timing { { 0, 1, 9 }, { { 1, 2 } }, -1, 6 }
+			               : i == kAnimInfoWait     ? Timing { { 0, 19 }, { { 0, 0 }, { 1, 1 } }, -1 }
 			               : i == kAnimInfoAttack   ? Timing { { 0, 3, 5, 19 }, { { 1, 2 }, { 2, 3 } }, 5 }
 			               : i == kAnimInfoStillJump ? Timing { { 0, 6, 26, 34 }, { { 1, 2 }, { 2, 3 } }, -1, 6 }
 			               : i == kAnimInfoJKoke    ? Timing { { 0, 15 }, {}, -1 }
@@ -211,6 +212,15 @@ bool checkStandInAnims(const StandInAnimSet& set, std::string& error)
 				if (k.keyType == 1 && f == kFueLoopEnd) ends++;
 			}
 			if (starts != 1 || ends != 1) return fail(i, "needs one KEY_LoopStart at the recorded frame and one KEY_LoopEnd after it");
+		}
+		if (i == kAnimInfoWait) {
+			// The disc's Wait loops: a one-shot ends in KEY_Finished, which PikiLookAtState takes as Kizuku's end (#145).
+			int starts = 0, ends = 0;
+			for (const AnimKeyRecord& k : a.info.infoKeys) {
+				if (k.keyType == 0 && k.frame == 0) starts++;
+				if (k.keyType == 1 && k.frame == std::int32_t(a.info.animKeys.size()) - 1) ends++;
+			}
+			if (starts != 1 || ends != 1) return fail(i, "needs the disc's loop: KEY_LoopStart at the first anim key, KEY_LoopEnd at the last");
 		}
 	}
 	return true;
