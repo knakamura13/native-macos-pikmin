@@ -599,6 +599,7 @@ std::vector<std::uint8_t> artHudTexture(const std::string& baseName)
 const std::vector<StandInArtBinding>& standInArtBindings()
 {
 	// Every model is authored at its stand-in size, so no scale.
+	static const std::vector<int> kFolkTintJoints = { 0, kPikiRigRightHandJoint, kPikiRigLeftHandJoint, 10, 11 };
 	static const std::vector<StandInArtBinding> bindings = {
 		// Pellets: one token per value (white1-4 are the 1, 5, 10 and 20 pellets).
 		{ "dataDir/objects/pellets/white1.mod", "pellet_1", 1.0f },
@@ -606,18 +607,22 @@ const std::vector<StandInArtBinding>& standInArtBindings()
 		{ "dataDir/objects/pellets/white3.mod", "pellet_10", 1.0f },
 		{ "dataDir/objects/pellets/white4.mod", "pellet_20", 1.0f },
 		// The captain and the pebble folk (art/blender/folk.blend). kinModel is the
-		// Puffmin: a folk body in pale violet with no trait.
+		// Puffmin: a folk body with no trait. The folk body (joint 0), arms and feet
+		// take the colour the game sets on material 0 (ViewPiki::demoDraw: the type
+		// colour, the idle pastel and the white damage flash); the eyes and the
+		// trait (joint 1) keep their own colours. The captain's draw sets no
+		// material colour, so his art keeps its own.
 		{ "dataDir/pikis/nv3Model.mod", "captain", 1.0f },
-		{ "dataDir/pikis/redModel.mod", "folk_red", 1.0f },
-		{ "dataDir/pikis/yelModel.mod", "folk_yellow", 1.0f },
-		{ "dataDir/pikis/bluModel.mod", "folk_blue", 1.0f },
-		{ "dataDir/pikis/kinModel.mod", "folk_kin", 1.0f },
+		{ "dataDir/pikis/redModel.mod", "folk_red", 1.0f, kFolkTintJoints },
+		{ "dataDir/pikis/yelModel.mod", "folk_yellow", 1.0f, kFolkTintJoints },
+		{ "dataDir/pikis/bluModel.mod", "folk_blue", 1.0f, kFolkTintJoints },
+		{ "dataDir/pikis/kinModel.mod", "folk_kin", 1.0f, kFolkTintJoints },
 		// The maturity crests, drawn at the folk's joint 6 (the origin): bead, shards, star.
 		{ "dataDir/pikis/happas/leaf.mod", "crest_bead", 1.0f },
 		{ "dataDir/pikis/happas/bud.mod", "crest_shards", 1.0f },
 		{ "dataDir/pikis/happas/flower.mod", "crest_star", 1.0f },
 		// The buried folk: its body (joint 0) takes the folk colour the game sets on material 0.
-		{ "dataDir/objects/pikihead/pikihead.mod", "buried_folk", 1.0f, 0 },
+		{ "dataDir/objects/pikihead/pikihead.mod", "buried_folk", 1.0f, { 0 } },
 		// The first enemy (chappy's role), standing on the ground at the stand-in
 		// size, so no scale. Its spec is in standInObjectModelSpecs().
 		{ "dataDir/tekis/chappy/chappy.mod", "chappy", 1.0f },
@@ -639,7 +644,7 @@ bool checkStandInArtBindings(const std::vector<StandInModelSpec>& specs, std::st
 			return false;
 		}
 		Model m = skeletonModel(*spec);
-		if (!addArtModel(m, *spec, *art, b.scale, error, b.tintJoint)) return false;
+		if (!addArtModel(m, *spec, *art, b.scale, error, b.tintJoints)) return false;
 	}
 	return true;
 }
@@ -651,7 +656,7 @@ Model buildArtStandInModel(const StandInModelSpec& spec)
 		if (spec.path != b.path) continue;
 		const ArtModel* art = findArtModel(b.art);
 		std::string err;
-		if (art && addArtModel(m, spec, *art, b.scale, err, b.tintJoint)) {
+		if (art && addArtModel(m, spec, *art, b.scale, err, b.tintJoints)) {
 			fillEmptyJointMeshes(m, spec);
 			addPlatformCollision(m, spec);
 			return m;

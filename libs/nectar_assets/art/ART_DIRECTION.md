@@ -34,15 +34,15 @@ as they mature. Their homes are geode hives cracked open at the top.
 
 | Use | Colour | Notes |
 |-----|--------|-------|
-| Red folk | `#E8412F` coral red | gameplay cue, always saturated |
-| Yellow folk | `#F5C518` sunflower | gameplay cue |
-| Blue folk | `#2F6FE0` cobalt | gameplay cue |
+| Red folk | `#E8412F` coral red | gameplay cue, always saturated; in game the body takes the game's own red (`Piki::pikiColors`) |
+| Yellow folk | `#F5C518` sunflower | gameplay cue; game colour in game, as above |
+| Blue folk | `#2F6FE0` cobalt | gameplay cue; game colour in game, as above |
 | Crest, tier 1 | `#D9D4C7` pale pebble | matte |
 | Crest, tier 2 | `#7FE3F0` ice cyan | glassy |
 | Crest, tier 3 | `#FFEC9E` pale star gold | glows (no shading); paler than the yellow folk |
 | Captain coat | `#1E7F86` deep teal | the only teal creature |
 | Captain lantern | `#FFA630` warm amber | glows |
-| Puffmin folk | `#A48CCB` pale violet | the hostile folk; violet is the threat colour |
+| Puffmin folk | `#A48CCB` pale violet | the hostile folk; violet is the threat colour. In game the body takes the game's deep purple (`Piki::kinokoColors`) |
 | Stone, hives, gates | `#8C8577` warm grey, `#5E574C` dark | |
 | Moss and grass | `#6E9E3A`, `#4F7A2A` | |
 | Soil and paths | `#8A6A45`, `#6B4F33` | |
@@ -90,14 +90,20 @@ one small trait of its own:
 - **Yellow:** round cheek pouches and a darker zig-zag band across the belly.
 - **Blue:** a wide flat paddle tail.
 
-- **Puffmin** (`kinModel.mod`): the same body in pale violet, with no trait.
+- **Puffmin** (`kinModel.mod`): the same body with no trait, in the game's
+  Puffmin colour (deep purple).
 
 - **Cue:** body colour is the type. The trait backs it up for colour-blind
   players. The folk face +z like the rest of the rig.
+- **Colour:** the game paints the body with the type colour on the model's
+  first material (`ViewPiki::demoDraw`), and with it the idle pastel and the
+  white damage flash. So the body, arms and feet are authored white (shaded by
+  the vertex colours) and the bindings draw them with that material; the eyes
+  and the trait keep their own colours.
 - **Rig:** the stand-in rig keeps every joint at the feet, and the game turns
-  joints 2 to 6 when a folk looks around. So the body, eyes and trait hang
-  from the spine joint (1), the arms from 7 and 8 and the feet from 10 and 11;
-  nothing hangs from the head joints.
+  joints 2 to 6 when a folk looks around. So the body hangs from the root (0),
+  the eyes and trait from the spine joint (1), the arms from 7 and 8 and the
+  feet from 10 and 11; nothing hangs from the head joints.
 - **Differs from Pikmin:** no stem, no leaf, bud or flower on the head, no
   long thin body or limbs, no pointed ears or nose. Squat pebbles instead of
   tall sprouts.

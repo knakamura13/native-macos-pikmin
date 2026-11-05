@@ -6,7 +6,11 @@ See ART_DIRECTION.md (Captain, Pebble folk, Maturity crests, Buried folk).
   hangs from the leaf-tip joint (6); the right mitten is joint 7, on +x where
   the rig's 'rhnd' sphere is.
 - folk_red, folk_yellow, folk_blue (and folk_kin for the Puffmin): one egg body,
-  big white-rimmed eyes, nub arms and round feet, plus one trait per type.
+  big white-rimmed eyes, nub arms and round feet, plus one trait per type. The
+  body (joint 0), arms and feet share one white material: the bindings draw
+  them with material 0, which the game tints with the type colour (and the idle
+  pastel and white damage flash). The eyes and trait hang from joint 1 and keep
+  their own colours.
 - crest_bead, crest_shards, crest_star: the three maturity crests. The game
   draws them at the folk's joint 6, which the stand-in rig keeps at the model
   origin, so each one is authored sitting on the crown (y 5.55).
@@ -37,6 +41,7 @@ FOLK_C, FOLK_RX, FOLK_RY, FOLK_RZ, FOLK_TAPER = 2.45, 2.25, 2.05, 3.1, 0.12
 CROWN = FOLK_C + FOLK_RZ  # 5.55
 
 RIG_HEAD_FREE = 1  # parts that must not turn with the head look sit on the spine joint
+BODY_JOINT = 0     # the root: also free of the head look, and drawn with the tinted material 0
 R_HAND, L_HAND, R_LEG, L_LEG, LEAF_TIP = 7, 8, 10, 11, 6
 
 
@@ -162,10 +167,10 @@ def folk_eyes(coll, white, dark, shine, joint, body, z=3.55, spread=0.8):
         cull_inside(s, p)
 
 
-def folk(name, body_hex, trait, mats):
+def folk(name, trait, mats):
     coll = na.model_collection(name, joints=12, ground=True)
-    body = na.material(f"{name}_body", body_hex, gloss=0.22)
-    shell = egg(coll, "body", body, FOLK_RX, FOLK_RY, FOLK_RZ, FOLK_C, FOLK_TAPER, segments=14, rings=8, joint=RIG_HEAD_FREE)
+    body = mats["folk_body"]
+    shell = egg(coll, "body", body, FOLK_RX, FOLK_RY, FOLK_RZ, FOLK_C, FOLK_TAPER, segments=14, rings=8, joint=BODY_JOINT)
     folk_eyes(coll, mats["eye"], mats["pupil"], mats["shine"], RIG_HEAD_FREE, shell)
     # Nub arms on the sides (joint 7 on +x, like the captain's 'rhnd'), round feet under.
     for side, joint, tag in ((1.0, R_HAND, "r"), (-1.0, L_HAND, "l")):
@@ -387,11 +392,13 @@ def main():
         "eye": na.material("eye_white", "#F6F3EA", gloss=0.3),
         "pupil": na.material("pupil", "#1B1B22", gloss=0.5),
         "shine": na.material("shine", "#FFFFFF", emit=1.0),
+        # White: the game paints the folk body (red, yellow, blue; the Puffmin deep purple).
+        "folk_body": na.material("folk_body", "#F4F4F4", gloss=0.22),
     }
-    folk("folk_red", "#E8412F", trait_red, mats)
-    folk("folk_yellow", "#F5C518", trait_yellow, mats)
-    folk("folk_blue", "#2F6FE0", trait_blue, mats)
-    folk("folk_kin", "#A48CCB", trait_none, mats)
+    folk("folk_red", trait_red, mats)
+    folk("folk_yellow", trait_yellow, mats)
+    folk("folk_blue", trait_blue, mats)
+    folk("folk_kin", trait_none, mats)
     crest_bead()
     crest_shards()
     crest_star()

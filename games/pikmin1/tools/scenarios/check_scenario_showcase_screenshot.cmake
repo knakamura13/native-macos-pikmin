@@ -54,11 +54,13 @@ execute_process(
         # lantern, then a red folk with the tier-1 bead, a yellow one with the tier-2
         # shards and a blue one with the tier-3 star. Each body must show its colour
         # and each crest its own colour, and not the colour of another tier's crest.
+        # The folk bodies are authored white and drawn with material 0, so they show
+        # the game's own type colours (Piki::pikiColors, shaded), not the art's.
         --region-colour 165,285,230,380:1E787D:30:600
         --region-colour 170,295,195,325:FFAA3C:40:30
-        --region-colour 265,325,315,385:E63C2D:40:180
-        --region-colour 340,325,385,385:F0C31E:40:170
-        --region-colour 415,325,465,385:2D69E1:40:190
+        --region-colour 265,325,315,385:DC1400:40:180
+        --region-colour 340,325,385,385:DCBE00:40:170
+        --region-colour 415,325,465,385:0028DC:40:190
         --region-colour 275,320,305,345:D7D2C3:30:25
         --max-region-colour 275,320,305,345:7DE1F0:35:5
         --max-region-colour 275,320,305,345:FFEC9E:20:5

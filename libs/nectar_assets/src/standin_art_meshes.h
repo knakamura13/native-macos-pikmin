@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace nectar {
 
@@ -52,9 +53,10 @@ const ArtModel& artModelAt(int index);
 
 /// Adds `art` to `m` (built by skeletonModel for `spec`), scaled by `scale`
 /// about the model origin: one vertex-coloured mesh per joint on one white
-/// material, so the unlit stand-in draw shows the baked colours. The mesh on
-/// `tintJoint` (if not -1) uses material 0 instead, made white, which the game
-/// tints at run time. false with the reason if the art does not fit the spec's rig.
-bool addArtModel(Model& m, const StandInModelSpec& spec, const ArtModel& art, float scale, std::string& error, int tintJoint = -1);
+/// material, so the unlit stand-in draw shows the baked colours. The meshes on
+/// `tintJoints` use material 0 instead, made white, which the game tints at run
+/// time. false with the reason if the art does not fit the spec's rig.
+bool addArtModel(Model& m, const StandInModelSpec& spec, const ArtModel& art, float scale, std::string& error,
+                 const std::vector<int>& tintJoints = {});
 
 } // namespace nectar
