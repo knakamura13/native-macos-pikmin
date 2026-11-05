@@ -1,8 +1,10 @@
 // The tutorial stand-in stage, stages/practice.ini (see standin_practice_stage.h).
 #include "standin_practice_stage.h"
+#include "standin_map_dressing.h"
 
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/standin_objects.h"
+#include "nectar_assets/standin_terrain.h"
 #include "nectar_mapcore/compile.h"
 #include "nectar_mapcore/map.h"
 
@@ -37,6 +39,7 @@ bool sourceMod(Bytes& out, std::string& error)
 		mat.colour  = i == 0 ? nectar::Rgba8 { 120, 110, 100, 255 } : nectar::Rgba8 { 110, 150, 90, 255 };
 		m.materials.push_back(mat);
 	}
+	nectar::addStandInTerrainTextures(m); // grass floor (14), sandstone walls (0)
 	if (!nectar::writeModTables(m, out, error)) return fail(error, "practice source .mod: " + error);
 	return true;
 }
@@ -107,6 +110,9 @@ std::vector<Spec> day1Gen()
 	return { at(pellet, kPracticePelletX, kPracticePelletZ, "red pellet 1", 0) };
 }
 
+/// Draw-only dressing (standin_map_dressing.h): rock faces along the map edge.
+standin::MapDressing mapDressing() { return {}; }
+
 } // namespace
 
 bool addPracticeStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error)
@@ -156,8 +162,9 @@ bool addPracticeStage(std::map<std::string, std::vector<std::uint8_t>>& tree, st
 		std::fprintf(stderr, "[standin] compileMap asked for %s, which the generator does not serve\n", path.c_str());
 		return false;
 	};
+	const standin::MapDressing dressing = mapDressing();
 	nectar::CompiledMap compiled;
-	if (!nectar::compileMap(data, read, kMapMod, compiled, error)) return fail(error, "practice map: " + error);
+	if (!standin::compileDressedMap(data, read, kMapMod, dressing, compiled, error)) return fail(error, "practice map: " + error);
 
 	tree[std::string("dataDir/") + kMapMod]                       = compiled.mod;
 	tree[std::string("dataDir/") + kPracticeStageIni]             = compiled.ini;

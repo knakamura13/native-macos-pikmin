@@ -72,9 +72,11 @@ def run_self_test() -> None:
     w, h, pixels = read_png_rgb(str(GOLDEN))
     assert w == 640 and h == 480
     n = distinct_color_count(pixels)
-    # Stand-in art (#115) uses more distinct flat-shaded colours than grey cubes (~126).
-    if not (100 <= n <= 400):
-        raise AssertionError(f"golden distinct colours {n}, expected flat-shaded stand-in range (100..400)")
+    # The Blender terrain (#115) textures the ground, so the stand-in frame has about
+    # 28,200-28,400 distinct colours on every OS (flat-shaded art had 100-400, grey cubes ~126).
+    # The band still rejects a blank or flat frame and a decode that scrambles pixels.
+    if not (15000 <= n <= 45000):
+        raise AssertionError(f"golden distinct colours {n}, expected textured stand-in range (15000..45000)")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -134,6 +136,21 @@ def run_self_test() -> None:
             frame[y * sw + x] = (230, 50, 55)
     if edge_object_pixels(sw, sh, frame, y_max=40) != 20:
         raise AssertionError("model on the left border must leave 20 border pixels (2 columns x 10 rows)")
+    # #115 terrain: a sandstone map edge across the top and a soil patch on the right
+    # border are ground, not models; the Onion's mauve-brown leg colour still counts.
+    for y in range(0, 4):
+        for x in range(sw):
+            frame[y * sw + x] = (79, 74, 66) if (x + y) % 2 else (94, 87, 76)
+    for y in range(30, 36):
+        for x in range(sw - 4, sw):
+            frame[y * sw + x] = (124, 94, 62)
+    if edge_object_pixels(sw, sh, frame, y_max=40) != 20:
+        raise AssertionError("sandstone and soil on the border must not count as a clipped model")
+    for y in range(20, 26):
+        for x in range(sw - 3, sw):
+            frame[y * sw + x] = (98, 76, 76)
+    if edge_object_pixels(sw, sh, frame, y_max=40) != 32:
+        raise AssertionError("an Onion leg on the right border must still count (2 columns x 6 rows)")
 
     # Region colour guard (#99): exact colour inside a region, tolerance, and bad specs.
     region, rgb, tol, bound = parse_region_colour("0,0,20,20:E63237:12:100")
