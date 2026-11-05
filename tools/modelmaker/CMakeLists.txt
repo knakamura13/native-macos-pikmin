@@ -81,6 +81,11 @@ add_executable(nectar_modelmaker
     src/export_nhm.cpp
     src/simplify.cpp
     src/view.cpp
+    src/paint.cpp
+    src/paint_ui.cpp
+    # UV automáticas para pintar: xatlas (MIT, third_party/xatlas/LICENSE),
+    # commit f700c7790aaa030e794b52ba7791a05c085faf0c de github.com/jpcy/xatlas.
+    third_party/xatlas/xatlas.cpp
     src/stb_impl.cpp
     # Del editor de mapas, tal cual: OpenGL, ajustes (carpeta del juego) y OBJ.
     "${MM_MAPMAKER}/gl.cpp"
@@ -93,6 +98,7 @@ set_property(TARGET nectar_modelmaker PROPERTY INCLUDE_DIRECTORIES "")
 target_include_directories(nectar_modelmaker PRIVATE
     src
     third_party/ufbx
+    third_party/xatlas
     "${MM_MAPMAKER}"
     "${MM_GEN}"
     "${MM_P1}/pc_port/launcher"
@@ -108,7 +114,7 @@ if(WIN32)
 endif()
 if(NOT MSVC)
     target_compile_options(nectar_modelmaker PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
-    set_source_files_properties(src/stb_impl.cpp third_party/ufbx/ufbx.c PROPERTIES COMPILE_OPTIONS "-w")
+    set_source_files_properties(src/stb_impl.cpp third_party/ufbx/ufbx.c third_party/xatlas/xatlas.cpp PROPERTIES COMPILE_OPTIONS "-w")
 endif()
 set_target_properties(nectar_modelmaker PROPERTIES
     OUTPUT_NAME "nectar-modelmaker"

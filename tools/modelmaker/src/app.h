@@ -8,6 +8,7 @@
 #include "export_nhm.h"
 #include "import.h"
 #include "olimar.h"
+#include "paint.h"
 #include "rig.h"
 #include "view.h"
 
@@ -59,9 +60,15 @@ private:
 	ExportResult export_;
 	bool rigDirty_ = false, exportDirty_ = false;
 	bool looksDirty_ = false; ///< retoques de color: volver a subir las texturas al soltar el ratón
-	// Deshacer los retoques de color: copias de exportOpt_.looks. Un cambio
-	// cuenta al soltar el ratón (un arrastre entero es un solo paso).
-	std::vector<std::vector<MaterialLook>> lookUndo_, lookRedo_;
+	// Deshacer los retoques de color y la pintura: cada paso es una copia de
+	// exportOpt_.looks o, si es un trazo o un relleno, los trozos de capa que
+	// cambió. Un cambio cuenta al soltar el ratón (un arrastre entero es un
+	// solo paso).
+	struct LookStep {
+		std::vector<MaterialLook> looks;
+		std::vector<PaintPatch> paint;
+	};
+	std::vector<LookStep> lookUndo_, lookRedo_;
 	std::vector<MaterialLook> lookCommitted_;
 	double lastRebuild_ = 0;
 	std::vector<std::size_t> order_; ///< triángulos ordenados por material
@@ -140,6 +147,27 @@ private:
 	void commitLooks();
 	void undoLooks(bool redo);
 	void resetLookHistory();
+	void pushLookStep(LookStep step);
+
+	// Pintar sobre el modelo (paint_ui.cpp).
+	PaintState paint_;
+	void drawPaint();
+	bool paintMouse(bool hovered);
+	bool paintable(int material);
+	bool needsPaintSetup(int material);
+	bool fillable(int material);
+	void preparePaint(int material);
+	void finishPreparePaint(int material);
+	void fillPaint(int material, bool erase);
+	void endStroke();
+	void updatePaintTextures();
+	GLuint paintedTexture(std::size_t material);
+	void resetPaint();
+	void readPaintSetups(bool restoreProject);
+	void applyPaintSetups(ImpModel& model);
+	void restorePaint(const nlohmann::json& j);
+	void paintJson(nlohmann::json& j, const std::string& dir) const;
+	void paintFiles(const std::string& dir, std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& out) const;
 	void drawView(float x, float y, float width, float height);
 	void drawOverlay(const std::vector<Mat34>& skin);
 	bool project(const Vec3& p, ImVec2& out) const;
@@ -148,7 +176,7 @@ private:
 	std::string customDir() const;
 	std::string projectPath() const;
 	void saveProject() const;
-	nlohmann::json projectJson(const std::string& source) const;
+	nlohmann::json projectJson(const std::string& source, const std::string& paintDir) const;
 	/// El proyecto para guardarlo con el personaje: project.json y una copia
 	/// del modelo original con todo lo que abrió (texturas, .bin, .mtl).
 	void projectFiles(std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& out) const;

@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <utility>
 
 namespace mm {
 
@@ -212,6 +213,7 @@ void App::ensureStemMaterial()
 	}
 	exportOpt_.noTint.resize(model_.materials.size(), 0);
 	exportOpt_.looks.resize(model_.materials.size());
+	exportOpt_.paint.resize(model_.materials.size());
 	resetLookHistory();
 	exportOpt_.pikmin = isPikmin();
 }
@@ -272,10 +274,12 @@ void App::loadModel(const std::string& path, bool restoreProject)
 	workDone_          = false;
 	const std::size_t target = std::size_t(targetTris_);
 	const std::size_t limit  = isPikmin() ? 3000 : kAutoSimplify;
+	readPaintSetups(restoreProject);
 	worker_ = std::thread([this, path, target, limit] {
 		ImpModel m;
 		std::string error;
 		if (importModel(path, m, error)) {
+			applyPaintSetups(m); // UV y texturas hechas para pintar, antes de simplificar
 			pendingSource_ = m;
 			if (m.triangles() > limit) simplifyModel(m, target);
 		}
@@ -307,8 +311,9 @@ void App::finishLoad()
 {
 	if (worker_.joinable()) worker_.join();
 	working_ = false;
+	const int prepared = std::exchange(paint_.preparing, -1);
 	if (!pendingError_.empty()) {
-		say(std::string(L("No se pudo abrir: ", "Could not open: ")) + pendingError_, true);
+		say(std::string(prepared >= 0 ? L("No se pudo preparar: ", "Could not prepare: ") : L("No se pudo abrir: ", "Could not open: ")) + pendingError_, true);
 		return;
 	}
 	if (pendingResimplify_) {
@@ -318,6 +323,7 @@ void App::finishLoad()
 		uploadTextures();
 		rebuild();
 		say(std::to_string(model_.triangles()) + L(" triángulos.", " triangles."));
+		if (prepared >= 0) finishPreparePaint(prepared);
 		return;
 	}
 	const std::string path     = pendingPath_;
@@ -333,6 +339,7 @@ void App::finishLoad()
 	fit_.keepPlacement   = model_.format == "NHM";
 	exportOpt_.noTint.assign(model_.materials.size(), 0);
 	exportOpt_.looks.assign(model_.materials.size(), MaterialLook());
+	resetPaint();
 	ensureStemMaterial();
 	autoFit(model_, olimar_, fit_);
 	exportOpt_.textureMax = 1024;
@@ -383,6 +390,7 @@ void App::finishLoad()
 					lk.hidden     = o.value("hidden", false);
 				}
 			}
+			restorePaint(j);
 		} catch (const std::exception&) {
 		}
 		if (editingId_.empty() && !editingOlimar_) say(L("Seguimos con tu modelo de la última vez.", "Picking up your model from last time."));
@@ -420,6 +428,12 @@ void App::uploadTextures()
 	modelTex_.clear();
 	modelTexBaked_.assign(model_.materials.size(), 0);
 	for (std::size_t i = 0; i < model_.materials.size(); ++i) {
+		// Pintado: con su color y la pintura encima, como en el pack.
+		if (const GLuint painted = paintedTexture(i)) {
+			modelTex_.push_back(painted);
+			modelTexBaked_[i] = 2;
+			continue;
+		}
 		const ImpMaterial& m = model_.materials[i];
 		bool repeat          = true;
 		if (m.texture.empty()) {
@@ -465,7 +479,8 @@ void App::resetCamera()
 void App::fillMeshes()
 {
 	std::vector<Mat34> world, skin, olimarSkin(kJoints);
-	const bool animated = anim_ >= 0 && std::size_t(anim_) < anims_.size();
+	// Pintando, en reposo: es la malla en la que se buscan los trazos.
+	const bool animated = !paint_.on && anim_ >= 0 && std::size_t(anim_) < anims_.size();
 	if (animated) anims_[std::size_t(anim_)].pose(frame_, olimar_.parent, world);
 	else world = olimar_.bind;
 	for (int j = 0; j < kJoints; ++j) olimarSkin[std::size_t(j)] = world[std::size_t(j)] * inverse(olimar_.bind[std::size_t(j)]);
@@ -530,7 +545,7 @@ void App::fillMeshes()
 		return;
 	}
 	if (animated) retargetSkin(olimar_, rig_.pivots, world, skin);
-	fillModelMesh(modelMesh_, animated ? &skin : nullptr, !animated, showWeights_);
+	fillModelMesh(modelMesh_, animated ? &skin : nullptr, !animated && !paint_.on, showWeights_ && !paint_.on);
 	if (isPikmin()) {
 		Mat34 tip = olimar_.bind[J_ANT3];
 		setTranslation(tip, rig_.pivots[J_ANT3]);
@@ -697,8 +712,10 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 				if (im.alpha == ImpMaterial::Opaque) g.c[3] = 1;
 				// Sin textura, el retoque va en el color (al momento); con ella, en
 				// la textura (uploadTextures).
-				if (im.texture.empty()) applyLook(look, g.c);
-				else if (std::size_t(mat) < modelTexBaked_.size() && modelTexBaked_[std::size_t(mat)]) g.c[0] = g.c[1] = g.c[2] = 1;
+				const char baked = std::size_t(mat) < modelTexBaked_.size() ? modelTexBaked_[std::size_t(mat)] : 0;
+				if (baked == 2) g.c[0] = g.c[1] = g.c[2] = g.c[3] = 1; // pintado: todo va en la textura
+				else if (im.texture.empty()) applyLook(look, g.c);
+				else if (baked) g.c[0] = g.c[1] = g.c[2] = 1;
 			}
 			mesh.data.push_back(g);
 		}
@@ -746,7 +763,10 @@ void App::frame()
 	}
 	if (ImGui::BeginPopupModal("##working", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar)) {
 		static const char* dots[] = { "", ".", "..", "..." };
-		ImGui::Text("%s%s", L("Abriendo y simplificando el modelo", "Opening and simplifying the model"), dots[int(ImGui::GetTime() * 3) % 4]);
+		ImGui::Text("%s%s",
+		            paint_.preparing >= 0 ? L("Preparando la parte para pintar", "Getting the part ready for painting")
+		                                  : L("Abriendo y simplificando el modelo", "Opening and simplifying the model"),
+		            dots[int(ImGui::GetTime() * 3) % 4]);
 		hint(L("Los modelos muy detallados tardan un poco.", "Very detailed models take a moment."));
 		if (!working_) ImGui::CloseCurrentPopup();
 		ImGui::EndPopup();
@@ -957,10 +977,23 @@ void App::commitLooks()
 		return;
 	}
 	if (exportOpt_.looks == lookCommitted_) return;
-	lookUndo_.push_back(lookCommitted_);
-	if (lookUndo_.size() > 100) lookUndo_.erase(lookUndo_.begin());
-	lookRedo_.clear();
+	pushLookStep({ lookCommitted_, {} });
 	lookCommitted_ = exportOpt_.looks;
+}
+
+// Un paso nuevo: borra lo que se podía rehacer. Hasta 100 pasos y 128 MB de
+// trozos de pintura (un relleno de 1024x1024 son 4 MB).
+void App::pushLookStep(LookStep step)
+{
+	lookUndo_.push_back(std::move(step));
+	lookRedo_.clear();
+	std::size_t bytes = 0;
+	for (const LookStep& s : lookUndo_)
+		for (const PaintPatch& p : s.paint) bytes += p.rgba.size();
+	while (lookUndo_.size() > 1 && (lookUndo_.size() > 100 || bytes > (128u << 20))) {
+		for (const PaintPatch& p : lookUndo_.front().paint) bytes -= p.rgba.size();
+		lookUndo_.erase(lookUndo_.begin());
+	}
 }
 
 void App::undoLooks(bool redo)
@@ -968,13 +1001,20 @@ void App::undoLooks(bool redo)
 	commitLooks();
 	auto& from = redo ? lookRedo_ : lookUndo_;
 	auto& to   = redo ? lookUndo_ : lookRedo_;
-	if (from.empty() || from.back().size() != exportOpt_.looks.size()) return;
-	to.push_back(exportOpt_.looks);
-	exportOpt_.looks = from.back();
+	if (from.empty() || (from.back().paint.empty() && from.back().looks.size() != exportOpt_.looks.size())) return;
+	LookStep step = std::move(from.back());
 	from.pop_back();
-	lookCommitted_ = exportOpt_.looks;
-	looksDirty_    = true;
-	exportDirty_   = true;
+	if (!step.paint.empty()) {
+		// Un trazo: sus trozos se cambian por lo que hay ahora (y así se rehace).
+		for (PaintPatch& p : step.paint)
+			if (std::size_t(p.material) < exportOpt_.paint.size()) p.swap(exportOpt_.paint[std::size_t(p.material)]);
+	} else {
+		std::swap(step.looks, exportOpt_.looks);
+		lookCommitted_ = exportOpt_.looks;
+	}
+	to.push_back(std::move(step));
+	looksDirty_  = true;
+	exportDirty_ = true;
 }
 
 // Retoques de color por material: se ven en la vista y salen en el pack.
@@ -1077,6 +1117,7 @@ void App::drawPanel(float x, float y, float width, float height)
 	ImGui::SetNextWindowPos(ImVec2(x, y));
 	ImGui::SetNextWindowSize(ImVec2(width, height));
 	ImGui::Begin("##panel", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	paint_.on = false; // drawPaint lo enciende si su sección está abierta
 	const char* panelTitles[6] = { L("Modelo de origen", "Source model"), L("Colocación", "Placement"), L("Esqueleto y pesos", "Skeleton & weights"),
 	                               L("Vista de animación", "Animation preview"), L("Comprobación", "Validation"), L("Publicar en el juego", "Publish to game") };
 	ImGui::SetWindowFontScale(1.35f);
@@ -1117,6 +1158,7 @@ void App::drawPanel(float x, float y, float width, float height)
 			if (ImGui::Button(L("Aplicar", "Apply"), ImVec2(-1, 0))) resimplify();
 		}
 		drawColours();
+		drawPaint();
 	}
 	if (target_ == T_ALL)
 		hint(L("El juego teñirá este modelo de rojo, amarillo y azul. Usa colores claros o neutros.",
@@ -1399,14 +1441,16 @@ void App::drawView(float x, float y, float width, float height)
 		anims_[std::size_t(anim_)].pose(frame_, olimar_.parent, world);
 		retargetSkin(olimar_, rig_.pivots, world, skin);
 	}
-	if (hasModel_) drawOverlay(skin);
+	if (hasModel_ && !paint_.on) drawOverlay(skin);
 
 	// Ratón: arrastrar un punto, girar (izquierdo/derecho), desplazar (medio
 	// o Mayús), rueda para acercar.
 	ImGuiIO& io = ImGui::GetIO();
 	if (hovered && io.MouseWheel != 0) cam_.distance = std::clamp(cam_.distance * std::pow(0.88f, io.MouseWheel), 5.0f, 400.0f);
-	if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-		if (hoverMarker_ >= 0) dragMarker_ = hoverMarker_;
+	// Pintando, el botón izquierdo pinta (sobre el modelo) y el resto igual.
+	const bool painting = (paint_.on || paint_.stroking) && paintMouse(hovered);
+	if (!painting && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+		if (hoverMarker_ >= 0 && !paint_.on) dragMarker_ = hoverMarker_;
 		else if (io.KeyShift) panning_ = true;
 		else orbiting_ = true;
 	}
@@ -1449,7 +1493,11 @@ void App::drawView(float x, float y, float width, float height)
 		                                    IM_COL32(240, 230, 190, 230), msg);
 	} else {
 		ImGui::SetCursorScreenPos(ImVec2(viewOrigin_.x + 12, viewOrigin_.y + viewSize_.y - 30));
-		hint(L("Izq./der.: girar · Mayús o rueda pulsada: mover · Rueda: acercar", "Left/right drag: orbit · Shift or middle: pan · Wheel: zoom"));
+		if (paint_.on)
+			hint(L("Izq.: pintar · Der. u Opción: girar · Mayús o rueda pulsada: mover · Rueda: acercar",
+			       "Left: paint · Right or Alt drag: orbit · Shift or middle: pan · Wheel: zoom"));
+		else
+			hint(L("Izq./der.: girar · Mayús o rueda pulsada: mover · Rueda: acercar", "Left/right drag: orbit · Shift or middle: pan · Wheel: zoom"));
 	}
 	ImGui::End();
 }
@@ -1538,7 +1586,7 @@ void App::dropFile(const std::string& path)
 	loadModel(path, false);
 }
 
-json App::projectJson(const std::string& source) const
+json App::projectJson(const std::string& source, const std::string& paintDir) const
 {
 	json j;
 	j["source"]         = source;
@@ -1568,6 +1616,7 @@ json App::projectJson(const std::string& source) const
 	for (const MaterialLook& lk : exportOpt_.looks)
 		looks.push_back({ { "colour", { lk.colour[0], lk.colour[1], lk.colour[2] } }, { "hue", lk.hue }, { "brightness", lk.brightness }, { "hidden", lk.hidden } });
 	j["looks"] = looks;
+	paintJson(j, paintDir);
 	return j;
 }
 
@@ -1576,8 +1625,19 @@ void App::saveProject() const
 {
 	std::error_code ec;
 	fs::create_directories(fs::u8path(customDir()), ec);
+	// La pintura, al lado (olimar_project_paint/), como en el proyecto de un personaje.
+	const std::string paintDir = "olimar_project_paint";
+	fs::remove_all(fs::u8path(customDir()) / paintDir, ec);
+	std::vector<std::pair<std::string, std::vector<std::uint8_t>>> files;
+	paintFiles(paintDir, files);
+	for (const auto& [rel, data] : files) {
+		const fs::path p = fs::u8path(customDir()) / fs::u8path(rel);
+		fs::create_directories(p.parent_path(), ec);
+		std::ofstream o(p, std::ios::binary);
+		o.write(reinterpret_cast<const char*>(data.data()), std::streamsize(data.size()));
+	}
 	std::ofstream f(fs::u8path(projectPath()));
-	f << projectJson(model_.path).dump(1);
+	f << projectJson(model_.path, paintDir).dump(1);
 }
 
 void App::projectFiles(std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& out) const
@@ -1605,7 +1665,8 @@ void App::projectFiles(std::vector<std::pair<std::string, std::vector<std::uint8
 		seen.push_back(rel);
 		out.push_back({ rel, std::move(data) });
 	}
-	const std::string text = projectJson(mainRel).dump(1);
+	paintFiles("paint", out);
+	const std::string text = projectJson(mainRel, "paint").dump(1);
 	out.push_back({ "project.json", std::vector<std::uint8_t>(text.begin(), text.end()) });
 }
 
@@ -1643,7 +1704,8 @@ void App::editCreation(const std::string& dir, const nectar::CharacterInfo& info
 				editingName_ = info.name;
 				hasModel_    = false;
 				setTarget(T_CAPTAIN);
-				restoreJson_ = oldText;
+				restoreJson_      = oldText;
+				paint_.restoreDir = customDir();
 				loadModel(abs, true);
 				return;
 			}
@@ -1662,7 +1724,8 @@ void App::editCreation(const std::string& dir, const nectar::CharacterInfo& info
 	} catch (const std::exception&) {
 	}
 	if (!source.empty() && nectar::safeProjectPath(source) && fs::is_regular_file(sourcePath, ec)) {
-		restoreJson_ = text;
+		restoreJson_      = text;
+		paint_.restoreDir = (root / "project").u8string();
 		loadModel(sourcePath.u8string(), true);
 	} else {
 		restoreJson_.clear();
