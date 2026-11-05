@@ -47,7 +47,7 @@
 // path from these per-pad slots only: whether the pad's cursor follows the
 // mouse this tick, the cursor delta, the wheel's colour-pick notches and
 // whether First Person pins the cursor, plus the Gyro Recenter press and
-// (pad 0) the photo mode toggle (kLocal* bits). The physical D-pad Down bit
+// (pad 0) the photo mode toggle and offline settings clock hold (kLocal* bits). The physical D-pad Down bit
 // is recorded only. Lie down reads the pad's Down button, and the sim does
 // not branch on that flag. A live tick fills the slots through the local
 // capture hook (the engine takes what the window gathered since the last
@@ -74,7 +74,7 @@
 //     reproduces the replay file byte for byte.
 //   Covered: PADStatus, yaw, (v3+) the ext slots and (v4) the local slots,
 //     which offline also carry the touch colour taps (as wheel notches), the
-//     gamepad's D-pad Down, the gyro recenter and the photo mode toggle.
+//     gamepad's D-pad Down, gyro recenter, photo toggle and offline F1 clock hold.
 //     Inputs outside them (the absolute-mode virtual cursor) are neutralised
 //     in deterministic mode rather than recorded. A netplay session carries
 //     only the pads, the yaw and the ext slots.
@@ -155,7 +155,8 @@ constexpr uint8_t kLocalFirstPerson = 0x02; // First Person is on: the cursor is
 constexpr uint8_t kLocalPadDpadDown = 0x04; // physical D-pad Down held on this player's gamepad. Recorded only: lie down uses the pad's Down button, and this is not the swarm button (issue #138).
 constexpr uint8_t kLocalGyroRecenter = 0x08; // Gyro Recenter pressed: the cursor goes back in front of the captain
 constexpr uint8_t kLocalPhotoToggle = 0x10; // photo mode toggled (pad 0 only): it freezes the sim
-constexpr uint8_t kLocalKnown       = 0x1F;
+constexpr uint8_t kLocalSettingsClockHold = 0x20; // offline F1 clock hold (pad 0); absent on network ticks
+constexpr uint8_t kLocalKnown       = 0x3F;
 } // namespace pc_input_log
 
 // Pure encode/decode API (no globals, no files).

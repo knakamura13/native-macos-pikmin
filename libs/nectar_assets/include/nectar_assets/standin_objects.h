@@ -114,6 +114,10 @@ struct ObjectGenSpec {
 	int carryOver   = 0;
 	std::string name;
 	int itemParam   = 0;
+	/// Item only, for the gates (BuildingItem): 'p01' (days) and 'p02' (hours), which GenObjectItem::birth turns into the
+	/// gate's health, hours + days * 24 (genItem.cpp:241). -1 leaves the parameter out (the game then reads 0).
+	int itemDays    = -1;
+	int itemHours   = -1;
 	int pikiState   = 0;
 	int pikiColour  = 0;
 	int tekiType    = 3;
