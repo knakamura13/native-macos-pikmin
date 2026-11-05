@@ -31,11 +31,13 @@
 #include "nectar_assets/standin_models.h"
 #include "nectar_assets/standin_objects.h"
 #include "nectar_assets/standin_sandbox.h"
+#include "nectar_assets/standin_terrain.h"
 #include "nectar_assets/standin_textures.h"
 #include "nectar_assets/standin_ui.h"
 #include "nectar_mapcore/compile.h"
 #include "nectar_mapcore/map.h"
 #include "standin_all_objects_stage.h"
+#include "standin_map_dressing.h"
 #include "standin_objects_stage.h"
 #include "standin_showcase_stage.h"
 #include "standin_practice_stage.h"
@@ -88,7 +90,8 @@ bool fail(std::string& error, const std::string& what)
 
 Bytes textBytes(const std::string& s) { return Bytes(s.begin(), s.end()); }
 
-/// The map-source .mod: tables only, flat colour materials, no textures.
+/// The map-source .mod: tables only. The floor (14) and the walls (0) carry the
+/// stand-in grass and sandstone textures (standin_terrain.h); the rest are flat colours.
 bool sandboxSourceMod(Bytes& out, std::string& error)
 {
 	nectar::Model m;
@@ -98,9 +101,9 @@ bool sandboxSourceMod(Bytes& out, std::string& error)
 		mat.texAttr = -1;
 		mat.colour  = { 110, 150, 90, 255 }; // grass green
 		if (i == 1) mat.colour = { 90, 130, 70, 255 }; // darker grass
-		if (i == 14) mat.colour = { 105, 145, 85, 255 }; // floor grass (compileMap floor material)
 		m.materials.push_back(mat);
 	}
+	nectar::addStandInTerrainTextures(m);
 	if (!nectar::writeModTables(m, out, error)) return fail(error, "sandbox source .mod: " + error);
 	return true;
 }
@@ -154,8 +157,14 @@ bool sandboxMap(Tree& tree, std::string& error)
 		std::fprintf(stderr, "[standin] compileMap asked for %s, which the generator does not serve\n", path.c_str());
 		return false;
 	};
+	// Draw-only dressing (standin_map_dressing.h): rock faces along the four walls
+	// and a soil path from the captain's start through the gate.
+	standin::MapDressing dressing;
+	standin::DressPath path;
+	path.points = { { 60.0f, 260.0f }, { 20.0f, 120.0f }, { -10.0f, 0.0f }, { -25.0f, -120.0f }, { -31.5f, -207.0f }, { -55.0f, -330.0f }, { -20.0f, -470.0f }, { 50.0f, -600.0f } };
+	dressing.paths.push_back(path);
 	nectar::CompiledMap compiled;
-	if (!nectar::compileMap(data, read, kSandboxMod, compiled, error)) return fail(error, "sandbox map: " + error);
+	if (!standin::compileDressedMap(data, read, kSandboxMod, dressing, compiled, error)) return fail(error, "sandbox map: " + error);
 
 	tree[std::string("dataDir/") + kSandboxMod] = compiled.mod;
 	tree[std::string("dataDir/") + kSandboxIni] = compiled.ini;

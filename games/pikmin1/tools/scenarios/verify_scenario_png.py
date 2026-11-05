@@ -138,6 +138,17 @@ def is_grass_pixel(r: int, g: int, b: int) -> bool:
     return g > 70 and g > r + 8 and g > b + 8 and r < 130
 
 
+def is_terrain_pixel(r: int, g: int, b: int) -> bool:
+    """Stand-in terrain: warm grey sandstone (map edge, cliffs) and brown soil.
+
+    ART_DIRECTION.md's stone (#8C8577, #5E574C) and soil (#8A6A45, #6B4F33):
+    r >= g with g clearly above b. Model greys and browns either have g close to
+    b (the Onion's mauve-brown legs, the darkest material (15, 15, 20)) or are
+    brighter and more saturated (pellet gold, ship silver), so they still count.
+    """
+    return r >= g and g >= b + 4 and r - b <= 75 and 40 <= r <= 185
+
+
 def is_saturated_red(r: int, g: int, b: int) -> bool:
     return r >= 200 and r > g + 35 and r > b + 35
 
@@ -324,16 +335,17 @@ def edge_object_pixels(
     y_max: int = 390,
     band: int = 2,
 ) -> int:
-    """Non-grass pixels on the top, left and right borders (above the HUD rows).
+    """Model pixels on the top, left and right borders (above the HUD rows).
 
-    The ground and the dark horizon are both greenish; a model running off the
-    frame leaves its own colours on the border. Pure black is the clear colour
-    showing through gaps in the far horizon (seen on macOS), not a model: the
-    darkest stand-in material is (15, 15, 20).
+    The ground is grass with soil patches, and the map edge is a sandstone rock
+    face (#115 terrain); neither is a model, so grass and terrain colours do not
+    count. A model running off the frame leaves its own colours on the border.
+    Pure black is the clear colour showing through gaps in the far horizon (seen
+    on macOS), not a model: the darkest stand-in material is (15, 15, 20).
     """
 
     def is_object(px: tuple[int, int, int]) -> bool:
-        return not is_grass_pixel(*px) and max(px) > 4
+        return not is_grass_pixel(*px) and not is_terrain_pixel(*px) and max(px) > 4
 
     n = 0
     for y in range(min(band, height)):
@@ -450,7 +462,7 @@ def main() -> int:
         "--max-edge-object-pixels",
         type=int,
         default=-1,
-        help="fail if more non-grass pixels than this sit on the top/left/right borders (a model clipped by the frame)",
+        help="fail if more model pixels (not grass, not terrain) than this sit on the top/left/right borders (a model clipped by the frame)",
     )
     p.add_argument(
         "--max-center-near-black-ratio",
@@ -553,7 +565,7 @@ def main() -> int:
         n = edge_object_pixels(w, h, pixels)
         if n > args.max_edge_object_pixels:
             print(
-                f"{n} non-grass pixels on the frame border (max {args.max_edge_object_pixels}); a model is clipped",
+                f"{n} model pixels on the frame border (max {args.max_edge_object_pixels}); a model is clipped",
                 file=sys.stderr,
             )
             return 1
