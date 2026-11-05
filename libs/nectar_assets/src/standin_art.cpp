@@ -623,6 +623,18 @@ const std::vector<StandInArtBinding>& standInArtBindings()
 		{ "dataDir/pikis/happas/flower.mod", "crest_star", 1.0f },
 		// The buried folk: its body (joint 0) takes the folk colour the game sets on material 0.
 		{ "dataDir/objects/pikihead/pikihead.mod", "buried_folk", 1.0f, { 0 } },
+		// The home hive is one model for every type; its colour is the crystals in
+		// the Onion effect shape of its type, which the game draws at the hive's
+		// position at 0.1 scale (effectMgr.cpp geometryLoadInfo), hence 10.
+		{ "dataDir/objects/goal/goal.mod", "hive", 1.0f },
+		{ "dataDir/effects/shapes/r_goal.mod", "hive_crystals_red", 10.0f },
+		{ "dataDir/effects/shapes/y_goal.mod", "hive_crystals_yellow", 10.0f },
+		{ "dataDir/effects/shapes/b_goal.mod", "hive_crystals_blue", 10.0f },
+		{ "dataDir/objects/ufo/ufo0705.mod", "ship", 1.0f },
+		// Nectar: the falling drop and the puddle it leaves are the same beads.
+		{ "dataDir/objects/water/water.mod", "nectar", 1.0f },
+		{ "dataDir/objects/fl_water/fl_water.mod", "nectar_drop", 1.0f },
+		{ "dataDir/objects/bomb/bomb.mod", "bomb_rock", 1.0f },
 		// The first enemy (chappy's role), standing on the ground at the stand-in
 		// size, so no scale. Its spec is in standInObjectModelSpecs().
 		{ "dataDir/tekis/chappy/chappy.mod", "chappy", 1.0f },
