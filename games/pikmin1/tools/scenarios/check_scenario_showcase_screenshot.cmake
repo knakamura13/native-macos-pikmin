@@ -46,9 +46,14 @@ execute_process(
         --min-saturated-yellow 350
         --min-saturated-blue 350
         --max-center-near-black-ratio 0.18
-        # Red onion back left, silver ship back right, nothing run off the frame.
-        --onion-region 15,0,205,280 --min-onion-red 6000
-        --ship-region 355,115,610,265 --min-ship-silver 6000
+        # Back left, the red hive: warm grey stone with the red crystals of its
+        # type at the top (the crystals are effects/shapes/r_goal.mod, which the
+        # game draws only while the hive is booted). Back right, the ship: a teal
+        # hull under an amber lamp. Nothing run off the frame.
+        --onion-region 15,0,205,120 --min-onion-red 2200
+        --region-colour 15,0,205,280:807868:24:9000
+        --region-colour 355,115,610,265:208088:36:3000
+        --region-colour 355,40,610,140:F0A028:30:1200
         --max-edge-object-pixels 20
     RESULT_VARIABLE pos_rc)
 if(NOT pos_rc STREQUAL "0")
