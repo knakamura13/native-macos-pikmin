@@ -94,13 +94,18 @@ jobs:
         # See README, "Golden screenshots", for the rates and refresh procedure.
         # Linux is ubuntu-24.04, not ubuntu-latest: the goldens are llvmpipe pictures, so the
         # image (and its Mesa) must not move under them.
+        # macOS is macos-latest, not macos-26: on 2026-11-05 jobs labelled macos-26 waited past
+        # GitHub's acquire timeout and were cancelled while macos-latest jobs started at once.
+        # macos-latest then ran image macos-26-arm64 20261102.0473.1 (macOS 26.7.2); the macOS
+        # goldens come from it (golden/macos/PROVENANCE.txt). When GitHub moves macos-latest to
+        # a new image, a golden mismatch on macOS means: refresh the goldens (refresh_goldens.sh).
         include:
           - shard: 1
             shards: 2
             extras: true
             target:
                 name: macOS (arm64)
-                os: macos-26
+                os: macos-latest
                 shell: bash
                 golden_advisory: "0"
           - shard: 2
@@ -108,7 +113,7 @@ jobs:
             extras: false
             target:
                 name: macOS (arm64)
-                os: macos-26
+                os: macos-latest
                 shell: bash
                 golden_advisory: "0"
           - shard: 1
