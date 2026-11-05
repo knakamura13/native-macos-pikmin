@@ -1,4 +1,4 @@
-runner: Linux X64, image ubuntu24 20261101.360.1
-commit: 6e816230cae43a0540a0eb291cd345e878d65ef4
-date: 2026-11-05T01:25:03Z
+runner: Linux X64, image ubuntu24 20261026.354.1
+commit: 87564905c6236f4066f8172e4f356f13e04c1698
+date: 2026-11-05T03:01:21Z
 mesa: 25.2.8-0ubuntu0.24.04.4
