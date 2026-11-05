@@ -1,5 +1,7 @@
 #include "nectar_assets/standin_art.h"
 
+#include "standin_art_meshes.h"
+
 #include "nectar_assets/mesh_mod.h"
 #include "nectar_assets/piki_rig.h"
 #include "nectar_assets/texture.h"
@@ -594,9 +596,53 @@ std::vector<std::uint8_t> artHudTexture(const std::string& baseName)
 	return artBtiRgb5a3(64, 64, img);
 }
 
+const std::vector<StandInArtBinding>& standInArtBindings()
+{
+	// Pellets: one token per value (white1-4 are the 1, 5, 10 and 20 pellets),
+	// authored at the stand-in size, so no scale.
+	static const std::vector<StandInArtBinding> bindings = {
+		{ "dataDir/objects/pellets/white1.mod", "pellet_1", 1.0f },
+		{ "dataDir/objects/pellets/white2.mod", "pellet_5", 1.0f },
+		{ "dataDir/objects/pellets/white3.mod", "pellet_10", 1.0f },
+		{ "dataDir/objects/pellets/white4.mod", "pellet_20", 1.0f },
+	};
+	return bindings;
+}
+
+bool checkStandInArtBindings(const std::vector<StandInModelSpec>& specs, std::string& error)
+{
+	for (const StandInArtBinding& b : standInArtBindings()) {
+		const StandInModelSpec* spec = nullptr;
+		for (const StandInModelSpec& s : specs) {
+			if (s.path == b.path) spec = &s;
+		}
+		if (!spec) continue; // another spec list (objects, world) owns it
+		const ArtModel* art = findArtModel(b.art);
+		if (!art) {
+			error = std::string(b.path) + ": no exported art named " + b.art;
+			return false;
+		}
+		Model m = skeletonModel(*spec);
+		if (!addArtModel(m, *spec, *art, b.scale, error)) return false;
+	}
+	return true;
+}
+
 Model buildArtStandInModel(const StandInModelSpec& spec)
 {
 	Model m = skeletonModel(spec);
+	for (const StandInArtBinding& b : standInArtBindings()) {
+		if (spec.path != b.path) continue;
+		const ArtModel* art = findArtModel(b.art);
+		std::string err;
+		if (art && addArtModel(m, spec, *art, b.scale, err)) {
+			fillEmptyJointMeshes(m, spec);
+			addPlatformCollision(m, spec);
+			return m;
+		}
+		m = skeletonModel(spec); // checkStandInArtBindings (mod_writer_test) reports why
+		break;
+	}
 	const Kind kind = kindForPath(spec.path);
 	switch (kind) {
 	case Kind::Captain: buildCaptain(m, spec); break;

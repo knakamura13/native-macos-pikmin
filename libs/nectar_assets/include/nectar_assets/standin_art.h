@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace nectar {
 
@@ -31,7 +32,20 @@ std::vector<std::uint8_t> artScreenTexture(const std::string& stem);
 Image artFlatGreyImage(int width, int height);
 
 /// Replace uniform boxes with recognizable coloured shapes while keeping joint
-/// count, parents and collision text from `spec`.
+/// count, parents and collision text from `spec`. A path with Blender art (see
+/// standInArtBindings) is drawn from it; the rest from the shapes in standin_art.cpp.
 Model buildArtStandInModel(const StandInModelSpec& spec);
+
+/// A stand-in .mod drawn from a Blender art model (libs/nectar_assets/art).
+struct StandInArtBinding {
+	const char* path; ///< as in StandInModelSpec::path
+	const char* art;  ///< the art model's name (its collection's nectar_model)
+	float scale;      ///< applied about the model origin
+};
+const std::vector<StandInArtBinding>& standInArtBindings();
+
+/// false with the reason if a binding names art that was not exported, or art
+/// whose rig does not match the spec's joint count.
+bool checkStandInArtBindings(const std::vector<StandInModelSpec>& specs, std::string& error);
 
 } // namespace nectar
