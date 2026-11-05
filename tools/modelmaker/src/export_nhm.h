@@ -47,6 +47,12 @@ struct MaterialLook {
 	float brightness = 1;
 	bool hidden      = false; ///< fuera del pack
 	bool identity() const { return colour[0] == 1 && colour[1] == 1 && colour[2] == 1 && hue == 0 && brightness == 1; }
+	bool operator==(const MaterialLook& o) const
+	{
+		return colour[0] == o.colour[0] && colour[1] == o.colour[1] && colour[2] == o.colour[2] && hue == o.hue && brightness == o.brightness
+		    && hidden == o.hidden;
+	}
+	bool operator!=(const MaterialLook& o) const { return !(*this == o); }
 };
 /// Color 0..1: tono girado y luego por `colour` y `brightness`.
 void applyLook(const MaterialLook& look, float rgb[3]);
