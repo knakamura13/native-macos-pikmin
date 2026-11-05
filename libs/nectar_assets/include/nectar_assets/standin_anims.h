@@ -104,6 +104,18 @@ constexpr int kFueLoopEnd     = 3; ///< frame of KEY_LoopEnd (anim key 2)
 // KEY_Action0 at anim key 1, KEY_Action1 at anim key 2, flags 5, speed 30. No curves.
 constexpr int kAnimInfoKizuku = 66; ///< PIKIANIM_Kizuku (45)
 
+// A Pikmin standing idle plays Wait (info 12), started with the Pikmin as its listener by
+// ActFreeSelect and ActBoreSelect (aiBore.cpp). On the disc it loops and never ends; a
+// one-shot Wait sends KEY_Finished, and one that lands in PikiLookAtState's random delay
+// skips Kizuku and joins at once (whistle_delay at 30 Hz, issue #145: three of six stand-in
+// Pikmin joined in 0.07 to 0.20 s). Measured on the disc (VERSION_GPIE01_01 install, read
+// through the game's own AnimMgr, read-only, 2026-11-04): frame count 20, anim keys
+// [0, 19], KEY_LoopStart at anim key 0 and KEY_LoopEnd at anim key 1, no event keys,
+// flags 5, speed 30. No curves. The captain shares the table: NaviIdleState no longer
+// re-rolls its idle motion every 40 frames once it picks Wait, and a captain leaving Idle
+// ends Wait at frame 19, not 39, as on the disc.
+constexpr int kAnimInfoWait = 12; ///< PIKIANIM_Wait (3)
+
 // A Pikmin shaken off an enemy lies in PikiFlickState playing the Flick motion (info 58)
 // until it ends (bulborb_fight, issue #136: the generic 40 frames kept stand-in Pikmin
 // down for 4.6 s on average where the disc's 10 frames keep them down for 2.9 s, so a
