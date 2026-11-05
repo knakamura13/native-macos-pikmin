@@ -58,6 +58,7 @@ private:
 	ExportOptions exportOpt_;
 	ExportResult export_;
 	bool rigDirty_ = false, exportDirty_ = false;
+	bool looksDirty_ = false; ///< retoques de color: volver a subir las texturas al soltar el ratón
 	double lastRebuild_ = 0;
 	std::vector<std::size_t> order_; ///< triángulos ordenados por material
 
@@ -68,6 +69,7 @@ private:
 	ImVec2 viewOrigin_, viewSize_;
 	DynamicMesh modelMesh_, olimarMesh_;
 	std::vector<GLuint> modelTex_, olimarTex_;
+	std::vector<char> modelTexBaked_; ///< por material: su textura ya lleva el color y el retoque
 	GLuint startPortrait_[4] = {}; ///< Olimar y los tres Pikmin, renderizados desde los assets del juego
 	int anim_      = -1; ///< -1: pose de reposo, con los puntos para editar
 	float frame_   = 0;
@@ -130,6 +132,7 @@ private:
 	void drawTopBar(float width);
 	void drawWorkflow(float x, float y, float width, float height);
 	void drawPanel(float x, float y, float width, float height);
+	void drawColours();
 	void drawView(float x, float y, float width, float height);
 	void drawOverlay(const std::vector<Mat34>& skin);
 	bool project(const Vec3& p, ImVec2& out) const;

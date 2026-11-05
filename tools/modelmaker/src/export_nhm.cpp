@@ -2,6 +2,7 @@
 
 #include "lang.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -65,12 +66,39 @@ void put(std::vector<std::uint8_t>& out, const T& v)
 
 } // namespace
 
+void applyLook(const MaterialLook& look, float c[3])
+{
+	if (look.hue != 0) {
+		// A HSV, girar el tono y volver.
+		const float mx = std::max({ c[0], c[1], c[2] }), mn = std::min({ c[0], c[1], c[2] }), d = mx - mn;
+		if (d > 1e-6f) {
+			float h = mx == c[0] ? (c[1] - c[2]) / d : mx == c[1] ? 2 + (c[2] - c[0]) / d : 4 + (c[0] - c[1]) / d;
+			h       = std::fmod(h + look.hue / 60.0f + 12.0f, 6.0f);
+			const float s = d / mx, v = mx;
+			for (int k = 0; k < 3; ++k) {
+				const float n = std::fmod(float(5 - 2 * k) + h, 6.0f); // r: 5, g: 3, b: 1
+				c[k]          = v - v * s * std::max(0.0f, std::min({ n, 4 - n, 1.0f }));
+			}
+		}
+	}
+	for (int k = 0; k < 3; ++k) c[k] = std::clamp(c[k] * look.colour[k] * look.brightness, 0.0f, 1.0f);
+}
+
+void applyLook(const MaterialLook& look, nectar::Image& img)
+{
+	if (look.identity()) return;
+	for (std::size_t i = 0; i + 3 < img.rgba.size(); i += 4) {
+		float c[3] = { img.rgba[i] / 255.0f, img.rgba[i + 1] / 255.0f, img.rgba[i + 2] / 255.0f };
+		applyLook(look, c);
+		for (int k = 0; k < 3; ++k) img.rgba[i + std::size_t(k)] = std::uint8_t(c[k] * 255.0f + 0.5f);
+	}
+}
+
 ExportResult buildParts(const ImpModel& model, const RigResult& rig, const OlimarRig& olimar, const FitSettings& fit, const ExportOptions& opt)
 {
 	ExportResult res;
-	const std::size_t tris = rig.verts.size() / 3;
-	res.triangles          = tris;
-	if (!tris) {
+	const std::size_t allTris = rig.verts.size() / 3;
+	if (!allTris) {
 		res.checks.push_back({ Check::Bad, L("No hay modelo.", "No model loaded.") });
 		return res;
 	}
@@ -84,11 +112,20 @@ ExportResult buildParts(const ImpModel& model, const RigResult& rig, const Olima
 		bool repeat = false;
 		std::vector<Vec2> paletteUv; ///< por triángulo, si es paleta
 	};
+	auto lookOf = [&](int m) { return std::size_t(m) < opt.looks.size() ? opt.looks[std::size_t(m)] : MaterialLook(); };
 	std::map<int, Group> byMaterial;
-	for (std::size_t t = 0; t < tris; ++t) {
+	std::size_t tris = 0; // los que se ven
+	for (std::size_t t = 0; t < allTris; ++t) {
 		const int m = t < rig.triMaterial.size() ? rig.triMaterial[t] : 0;
+		if (lookOf(m).hidden) continue;
 		byMaterial[m].material = m;
 		byMaterial[m].tris.push_back(t);
+		++tris;
+	}
+	res.triangles = tris;
+	if (!tris) {
+		res.checks.push_back({ Check::Bad, L("Todos los materiales están ocultos.", "Every material is hidden.") });
+		return res;
 	}
 	std::vector<Group> groups;
 	for (auto& [m, g] : byMaterial) {
@@ -115,6 +152,7 @@ ExportResult buildParts(const ImpModel& model, const RigResult& rig, const Olima
 		} else {
 			g.texture = materialImage(mat, opt.textureMax);
 		}
+		applyLook(lookOf(m), g.texture);
 		for (std::size_t t : g.tris)
 			for (int k = 0; k < 3; ++k) {
 				const Vec2& uv = rig.verts[t * 3 + std::size_t(k)].uv;

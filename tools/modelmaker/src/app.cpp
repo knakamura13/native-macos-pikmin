@@ -211,6 +211,7 @@ void App::ensureStemMaterial()
 		model_.materials.push_back(stem);
 	}
 	exportOpt_.noTint.resize(model_.materials.size(), 0);
+	exportOpt_.looks.resize(model_.materials.size());
 	exportOpt_.pikmin = isPikmin();
 }
 
@@ -330,6 +331,7 @@ void App::finishLoad()
 	fit_.pikmin          = isPikmin();
 	fit_.keepPlacement   = model_.format == "NHM";
 	exportOpt_.noTint.assign(model_.materials.size(), 0);
+	exportOpt_.looks.assign(model_.materials.size(), MaterialLook());
 	ensureStemMaterial();
 	autoFit(model_, olimar_, fit_);
 	exportOpt_.textureMax = 1024;
@@ -368,6 +370,18 @@ void App::finishLoad()
 			}
 			const std::vector<int> nt = j.value("noTint", std::vector<int>());
 			for (std::size_t i = 0; i < nt.size() && i < exportOpt_.noTint.size(); ++i) exportOpt_.noTint[i] = char(nt[i] != 0);
+			if (j.contains("looks") && j["looks"].is_array()) {
+				const json& looks = j["looks"];
+				for (std::size_t i = 0; i < looks.size() && i < exportOpt_.looks.size(); ++i) {
+					MaterialLook& lk = exportOpt_.looks[i];
+					const json& o    = looks[i];
+					if (o.contains("colour") && o["colour"].size() == 3)
+						for (int k = 0; k < 3; ++k) lk.colour[k] = o["colour"][std::size_t(k)].get<float>();
+					lk.hue        = o.value("hue", 0.0f);
+					lk.brightness = o.value("brightness", 1.0f);
+					lk.hidden     = o.value("hidden", false);
+				}
+			}
 		} catch (const std::exception&) {
 		}
 		if (editingId_.empty() && !editingOlimar_) say(L("Seguimos con tu modelo de la última vez.", "Picking up your model from last time."));
@@ -402,9 +416,24 @@ void App::uploadTextures()
 	for (GLuint t : modelTex_)
 		if (t) glDeleteTextures(1, &t);
 	modelTex_.clear();
-	for (const ImpMaterial& m : model_.materials) {
-		bool repeat = true;
-		modelTex_.push_back(m.texture.empty() ? 0 : uploadTexture(m.texture, repeat));
+	modelTexBaked_.assign(model_.materials.size(), 0);
+	for (std::size_t i = 0; i < model_.materials.size(); ++i) {
+		const ImpMaterial& m = model_.materials[i];
+		bool repeat          = true;
+		if (m.texture.empty()) {
+			modelTex_.push_back(0);
+		} else if (i < exportOpt_.looks.size() && !exportOpt_.looks[i].identity()) {
+			// Con su retoque de color, en el mismo orden que el pack (color del
+			// material y luego el retoque); fillModelMesh deja el color en blanco.
+			nectar::Image img = m.texture;
+			for (std::size_t p = 0; p + 3 < img.rgba.size(); p += 4)
+				for (int k = 0; k < 3; ++k) img.rgba[p + std::size_t(k)] = std::uint8_t(std::clamp(img.rgba[p + std::size_t(k)] * m.color[k], 0.0f, 255.0f));
+			applyLook(exportOpt_.looks[i], img);
+			modelTex_.push_back(uploadTexture(img, repeat));
+			modelTexBaked_[i] = 1;
+		} else {
+			modelTex_.push_back(uploadTexture(m.texture, repeat));
+		}
 	}
 }
 
@@ -626,6 +655,8 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 		if (t * 3 + 2 >= rig_.verts.size()) continue;
 		const int mat         = rig_.triMaterial[t];
 		const ImpMaterial& im = model_.materials[std::size_t(mat)];
+		const MaterialLook look = std::size_t(mat) < exportOpt_.looks.size() ? exportOpt_.looks[std::size_t(mat)] : MaterialLook();
+		if (look.hidden) continue;
 		if (mat != lastMat) {
 			DynamicMesh::Range r;
 			r.first   = int(mesh.data.size());
@@ -662,6 +693,10 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 				const bool useVertexColour = im.texture.empty() && im.vertexColors;
 				for (int c = 0; c < 4; ++c) g.c[c] = im.color[c] * (useVertexColour ? v.col[c] : 1.0f);
 				if (im.alpha == ImpMaterial::Opaque) g.c[3] = 1;
+				// Sin textura, el retoque va en el color (al momento); con ella, en
+				// la textura (uploadTextures).
+				if (im.texture.empty()) applyLook(look, g.c);
+				else if (std::size_t(mat) < modelTexBaked_.size() && modelTexBaked_[std::size_t(mat)]) g.c[0] = g.c[1] = g.c[2] = 1;
 			}
 			mesh.data.push_back(g);
 		}
@@ -681,6 +716,10 @@ void App::frame()
 	}
 	// Reconstruir cuando se suelta el ratón (o cada poco mientras se arrastra).
 	if (rigDirty_ && (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::GetTime() - lastRebuild_ > 0.2)) rebuild();
+	if (looksDirty_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+		uploadTextures();
+		looksDirty_ = false;
+	}
 	if (exportDirty_ && hasModel_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 		export_      = buildParts(model_, rig_, olimar_, fit_, exportOpt_);
 		exportDirty_ = false;
@@ -900,6 +939,50 @@ void App::drawTopBar(float width)
 	ImGui::End();
 }
 
+// Retoques de color por material: se ven en la vista y salen en el pack.
+void App::drawColours()
+{
+	ImGui::Dummy(ImVec2(0, 4));
+	if (!ImGui::CollapsingHeader(L("Colores", "Colours"))) return;
+	hint(L("Cambia el color de cada parte o escóndela. El juego lo verá igual.",
+	       "Change each part's colour, or hide it. The game shows it the same way."));
+	bool changed = false;
+	for (std::size_t i = 0; i < model_.materials.size() && i < exportOpt_.looks.size(); ++i) {
+		MaterialLook& lk = exportOpt_.looks[i];
+		ImGui::PushID(int(i));
+		bool visible = !lk.hidden;
+		if (ImGui::Checkbox("##visible", &visible)) {
+			lk.hidden = !visible;
+			changed   = true;
+		}
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L("Visible en el juego", "Visible in the game"));
+		ImGui::SameLine();
+		changed |= ImGui::ColorEdit3("##colour", lk.colour, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+		ImGui::SameLine();
+		ImGui::BeginDisabled(lk.hidden);
+		ImGui::TextUnformatted(model_.materials[i].name.empty() ? L("(sin nombre)", "(unnamed)") : model_.materials[i].name.c_str());
+		if (!lk.hidden) {
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70);
+			changed |= ImGui::SliderFloat("##hue", &lk.hue, -180.0f, 180.0f, L("Tono %+.0f°", "Hue %+.0f°"));
+			ImGui::SameLine();
+			ImGui::BeginDisabled(lk.identity());
+			if (ImGui::Button(L("Quitar", "Reset"), ImVec2(-1, 0))) {
+				lk      = MaterialLook();
+				changed = true;
+			}
+			ImGui::EndDisabled();
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70);
+			changed |= ImGui::SliderFloat("##brightness", &lk.brightness, 0.2f, 2.0f, L("Brillo %.2f", "Brightness %.2f"));
+		}
+		ImGui::EndDisabled();
+		ImGui::PopID();
+	}
+	if (changed) {
+		looksDirty_  = true;
+		exportDirty_ = true;
+	}
+}
+
 void App::drawWorkflow(float x, float y, float width, float height)
 {
 	ImGui::SetNextWindowPos(ImVec2(x, y));
@@ -983,6 +1066,7 @@ void App::drawPanel(float x, float y, float width, float height)
 			ImGui::SameLine();
 			if (ImGui::Button(L("Aplicar", "Apply"), ImVec2(-1, 0))) resimplify();
 		}
+		drawColours();
 	}
 	if (target_ == T_ALL)
 		hint(L("El juego teñirá este modelo de rojo, amarillo y azul. Usa colores claros o neutros.",
@@ -1430,6 +1514,10 @@ json App::projectJson(const std::string& source) const
 	std::vector<int> nt;
 	for (char c : exportOpt_.noTint) nt.push_back(c ? 1 : 0);
 	j["noTint"] = nt;
+	json looks = json::array();
+	for (const MaterialLook& lk : exportOpt_.looks)
+		looks.push_back({ { "colour", { lk.colour[0], lk.colour[1], lk.colour[2] } }, { "hue", lk.hue }, { "brightness", lk.brightness }, { "hidden", lk.hidden } });
+	j["looks"] = looks;
 	return j;
 }
 
