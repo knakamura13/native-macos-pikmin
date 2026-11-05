@@ -617,6 +617,9 @@ const std::vector<StandInArtBinding>& standInArtBindings()
 		{ "dataDir/objects/water/water.mod", "nectar", 1.0f },
 		{ "dataDir/objects/fl_water/fl_water.mod", "nectar_drop", 1.0f },
 		{ "dataDir/objects/bomb/bomb.mod", "bomb_rock", 1.0f },
+		// The first enemy (chappy's role), standing on the ground at the stand-in
+		// size, so no scale. Its spec is in standInObjectModelSpecs().
+		{ "dataDir/tekis/chappy/chappy.mod", "chappy", 1.0f },
 	};
 	return bindings;
 }

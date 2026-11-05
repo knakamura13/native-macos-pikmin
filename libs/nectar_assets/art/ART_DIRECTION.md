@@ -46,7 +46,8 @@ as they mature. Their homes are geode hives cracked open at the top.
 | Moss and grass | `#6E9E3A`, `#4F7A2A` | |
 | Soil and paths | `#8A6A45`, `#6B4F33` | |
 | Enemy shell | `#5B3C7A` dusk violet | threat colour, not red/yellow/blue |
-| Enemy belly and eyes | `#F2A65A` amber | |
+| Enemy belly and eyes | `#F2A65A` amber | eyes glow |
+| Enemy claw tips | `#E8D6BC` bone | marks the biting end |
 | Pellet body | `#F2D06B` honey gold | number embossed in dark brown |
 
 Red, yellow and blue are reserved for the three folk types and their hives.
@@ -152,11 +153,21 @@ brown numerals on both faces. Larger values are larger tokens.
 ### First enemy (Bulborb's role, `chappy`)
 
 A dusk-violet shelled stilt-beetle: a high domed shell with three lighter ridge
-plates, four short thick legs, an amber underside, and a wide jaw of two
-crab-like pincers in front with two amber eyes on short stalks above them.
+plates, four thick legs bent at the knee, an amber underside, and a wide jaw of
+two crab-like pincers with bone-pale tips in front, with two glowing amber eyes
+on short stalks above them.
 
 - **Cue:** the threat colour (violet) appears nowhere else; the pincers show
-  which end bites.
+  which end bites, and the eye stalks show it from behind.
+- **Rig:** each part hangs from the joint that means it: shell and belly on the
+  body (1), tail plate on 2, neck on 3, head and pincers on the head (4, where
+  the 'head' and 'slot' parts sit), one eye stalk on each of 5 and 6, the right
+  legs on 7-9 and the left legs on 10-12 (the shins 8 and 11 are 'rleg' and
+  'lleg'). Joints 13-16 carry nothing.
+- **Size:** about 30 wide, 39 long (pincer tips to tail) and 20 tall, standing
+  on the ground; the shell fits the 20-unit body sphere. The legs are bent
+  stilts rather than short stumps, so the body rides high and the amber
+  underside shows below the shell.
 - **Differs from Bulborb:** no red spotted bulbous body, no huge mouth with
   small eyes. A shelled beetle with pincers and stalk eyes.
 

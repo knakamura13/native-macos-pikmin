@@ -1,5 +1,6 @@
 // Every stand-in art model. Written by art/export_standins.py; do not edit.
 #include "bomb_rock.inc"
+#include "chappy.inc"
 #include "hive.inc"
 #include "hive_crystals_blue.inc"
 #include "hive_crystals_red.inc"
@@ -13,6 +14,7 @@
 #include "ship.inc"
 static const ArtModel* const kArtModels[] = {
 	&kArt_bomb_rock,
+	&kArt_chappy,
 	&kArt_hive,
 	&kArt_hive_crystals_blue,
 	&kArt_hive_crystals_red,
