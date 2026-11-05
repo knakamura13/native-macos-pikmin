@@ -30,6 +30,7 @@
 #include "nectar_assets/mod.h"
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/standin_anims.h"
+#include "nectar_assets/standin_art.h"
 #include "nectar_assets/standin_models.h"
 #include "nectar_assets/standin_objects.h"
 #include "nectar_assets/standin_sandbox.h"
@@ -41,6 +42,7 @@
 #include "Parameters.h"
 #include "Stream.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -441,6 +443,15 @@ void testModels()
 	std::string err;
 	check(nectar::writeStandInObjectModels(files, err), "write models: " + err);
 	check(files.size() == specs.size(), "one file per spec");
+	// Blender art (#115): every binding to this list names exported art made for the spec's rig,
+	// and the model is then drawn from it (vertex colours), as mod_writer_test checks for the 45.
+	check(nectar::checkStandInArtBindings(specs, err), "Blender art bindings: " + err);
+	for (const nectar::StandInArtBinding& b : nectar::standInArtBindings()) {
+		for (const nectar::StandInModelSpec& spec : specs) {
+			if (spec.path != b.path) continue;
+			check(!parsedModel(spec).colours.empty(), spec.path + ": drawn from its Blender art (vertex colours)");
+		}
+	}
 	for (const nectar::StandInModelSpec& spec : specs) {
 		check(nectar::findStandInModel(spec.path) == nullptr, spec.path + ": not also one of the 45 models");
 		nectar::Model m = parsedModel(spec);
@@ -480,6 +491,20 @@ void testModels()
 			check(byId.count("head") && byId["head"]->code == "stik" && byId["head"]->joint == 4, spec.path + ": head sticks, joint 4");
 			check(byId.count("cent") && byId["cent"]->depth == 1, spec.path + ": 'cent' is a child of the body part");
 			check(parts.size() == 8, spec.path + ": eight parts, two of them without an id");
+			// The art hangs each part from the joint that means it, so real animations would move
+			// the right part: the shell on the body (1), head and pincers on the head (4, 'head' and
+			// 'slot'), the eye stalks on 5 and 6, the legs on the shins (8 'rleg', 11 'lleg'). The
+			// skeleton's placeholder is a 12-triangle box. The stand-in poses are identity, so the
+			// art must also stand on the ground: nothing below the model origin.
+			const nectar::Model built = nectar::buildStandInModel(spec);
+			for (int j : { 1, 4, 5, 6, 8, 11 }) {
+				std::size_t tris = 0;
+				for (const nectar::ModMtxGroup& g : built.meshes[std::size_t(j)].groups) tris += g.tris.size();
+				check(tris > 12, spec.path + ": joint " + std::to_string(j) + " carries its part of the art");
+			}
+			float lowest = 0.0f;
+			for (const nectar::Vec3& p : built.positions) lowest = std::min(lowest, p.y);
+			check(lowest > -0.05f, spec.path + ": stands on the ground (lowest point " + std::to_string(lowest) + ")");
 		}
 	}
 }

@@ -26,6 +26,7 @@
 #include "nectar_assets/mod.h"
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/piki_rig.h"
+#include "nectar_assets/standin_art.h"
 #include "nectar_assets/standin_models.h"
 
 #include "CmdStream.h"
@@ -174,6 +175,11 @@ void compareModels(const nectar::Model& a, const nectar::Model& b, const std::st
 	for (std::size_t i = 0; i < a.positions.size() && i < b.positions.size(); i++) check(same(a.positions[i], b.positions[i]), who + ": position");
 	check(a.normals.size() == b.normals.size(), who + ": normal count");
 	for (std::size_t i = 0; i < a.normals.size() && i < b.normals.size(); i++) check(same(a.normals[i], b.normals[i]), who + ": normal");
+	check(a.colours.size() == b.colours.size(), who + ": colour count");
+	for (std::size_t i = 0; i < a.colours.size() && i < b.colours.size(); i++) {
+		const nectar::Rgba8 &x = a.colours[i], &y = b.colours[i];
+		check(x.r == y.r && x.g == y.g && x.b == y.b && x.a == y.a, who + ": vertex colour");
+	}
 	for (int k = 0; k < 8; k++) {
 		check(a.uvs[k].size() == b.uvs[k].size(), who + ": uv count");
 		for (std::size_t i = 0; i < a.uvs[k].size() && i < b.uvs[k].size(); i++) check(a.uvs[k][i].x == b.uvs[k][i].x && a.uvs[k][i].y == b.uvs[k][i].y, who + ": uv");
@@ -200,7 +206,8 @@ void compareModels(const nectar::Model& a, const nectar::Model& b, const std::st
 			for (std::size_t t = 0; t < x.groups[g].tris.size() && t < y.groups[g].tris.size(); t++) {
 				for (int k = 0; k < 3; k++) {
 					const nectar::ModVertex &p = x.groups[g].tris[t].v[k], &q = y.groups[g].tris[t].v[k];
-					if (p.pos != q.pos || p.nrm != q.nrm || p.uv[0] != q.uv[0] || p.mtxSlot != q.mtxSlot) {
+					const bool colourDiffers = (x.flags & (1u << 2)) && p.col != q.col;
+					if (p.pos != q.pos || p.nrm != q.nrm || p.uv[0] != q.uv[0] || p.mtxSlot != q.mtxSlot || colourDiffers) {
 						check(false, who + ": vertex");
 						t = x.groups[g].tris.size();
 						break;
@@ -242,6 +249,7 @@ nectar::Model handModel()
 	m.shapeFlags = 0x0102;
 	m.positions  = { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
 	m.normals    = { { 0, 0, 1 }, { 0, 1, 0 } };
+	m.colours    = { { 255, 0, 0, 255 }, { 0, 128, 255, 200 }, { 9, 8, 7, 6 } };
 	m.uvs[0]     = { { 0.0f, 0.0f }, { 0.5f, 0.25f } };
 	m.materials.resize(2);
 	m.materials[0].colour = { 10, 20, 30, 255 };
@@ -251,10 +259,13 @@ nectar::Model handModel()
 
 	nectar::ModMesh a;
 	a.parentJoint = 0;
-	a.flags       = 1u | (1u << 3);
+	a.flags       = 1u | (1u << 2) | (1u << 3); // with vertex colours (#115)
 	a.groups.resize(1);
 	a.groups[0].deps = { 0 };
 	a.groups[0].tris = { tri(0, 1, 2, 0, 0), tri(0, 2, 3, 1, 0) };
+	for (int t = 0; t < 2; t++) {
+		for (int k = 0; k < 3; k++) a.groups[0].tris[std::size_t(t)].v[k].col = (t + k) % 3;
+	}
 	// More triangles than fit one GX primitive (0xFFFF / 3 = 21845): two primitives in one list.
 	nectar::ModMesh big;
 	big.parentJoint = 1;
@@ -304,8 +315,8 @@ void testHandModelRoundTrip()
 	check(walk(bytes, chunks, end, "hand model"), "hand model chunk walk");
 	std::vector<std::uint32_t> order;
 	for (const ChunkInfo& c : chunks) order.push_back(c.type);
-	const std::vector<std::uint32_t> want = { 0x00, 0x10, 0x11, 0x18, 0x30, 0x40, 0x50, 0x60, 0x61, 0xFFFF };
-	check(order == want, "hand model chunk order is header, vertex, normal, uv0, material, vtxmatrix, mesh, joint, jointname, end");
+	const std::vector<std::uint32_t> want = { 0x00, 0x10, 0x11, 0x13, 0x18, 0x30, 0x40, 0x50, 0x60, 0x61, 0xFFFF };
+	check(order == want, "hand model chunk order is header, vertex, normal, colour, uv0, material, vtxmatrix, mesh, joint, jointname, end");
 	check(end + m.trailingIni.size() == bytes.size(), "trailing text starts right after the end chunk and ends the file");
 	check(std::string(bytes.begin() + long(end), bytes.end()) == m.trailingIni, "trailing text is written verbatim");
 	for (std::size_t i = 0; i + 1 < chunks.size(); i++) {
@@ -345,7 +356,8 @@ void testRejects()
 	m = good; m.materials[0].flags |= 0x500u; rejects(m, "a material with two render pass bits");
 	m = good; m.materials[0].texAttr = 0; rejects(m, "a textured material");
 	m = good; m.envelopes.resize(1); rejects(m, "envelopes");
-	m = good; m.colours.resize(1); rejects(m, "vertex colours");
+	m = good; m.meshes[0].groups[0].tris[0].v[0].col = 3; rejects(m, "a vertex colour index out of range");
+	m = good; m.meshes[0].groups[0].tris[0].v[0].col = -1; rejects(m, "a missing vertex colour on a coloured mesh");
 	m = good; m.collRooms = 1; rejects(m, "map collision");
 	m = good; m.meshes[0].groups[0].tris[0].v[0].pos = 99; rejects(m, "a vertex position out of range");
 	m = good; m.meshes[0].groups[0].tris[0].v[0].nrm = 99; rejects(m, "a normal out of range");
@@ -356,7 +368,7 @@ void testRejects()
 	m = good; m.meshes[0].parentJoint = 9; rejects(m, "a mesh on a missing joint");
 	m = good; m.joints[0].matPolys = { { 5, 0 } }; rejects(m, "a matPoly on a missing material");
 	m = good; m.joints[0].matPolys = { { 0, 9 } }; rejects(m, "a matPoly on a missing mesh");
-	m = good; m.meshes[0].flags |= 1u << 2; rejects(m, "the vertex-colour mesh flag");
+	m = good; m.meshes[2].flags |= 1u << 2; rejects(m, "the vertex-colour mesh flag on a mesh whose vertices name no colour");
 }
 
 // --- stand-in models ----------------------------------------------------------
@@ -379,6 +391,14 @@ void testStandIns(const std::string& manifestPath)
 
 	std::vector<nectar::StandInModelFile> files;
 	std::string err;
+	// Blender art (#115): every binding names exported art made for the spec's rig.
+	check(nectar::checkStandInArtBindings(specs, err), "Blender art bindings: " + err);
+	for (const nectar::StandInArtBinding& b : nectar::standInArtBindings()) {
+		const nectar::StandInModelSpec* spec = nectar::findStandInModel(b.path);
+		if (!spec) continue;
+		const nectar::Model m = nectar::buildStandInModel(*spec);
+		check(!m.colours.empty(), std::string(b.path) + ": drawn from its Blender art (vertex colours)");
+	}
 	check(nectar::writeStandInModels(files, err), "writeStandInModels: " + err);
 	check(files.size() == specs.size(), "one file per spec");
 

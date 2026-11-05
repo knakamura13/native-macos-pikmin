@@ -125,6 +125,28 @@ constexpr int kAnimInfoWait = 12; ///< PIKIANIM_Wait (3)
 // anim key 1, flags 6 (not 5), speed 30. No curves.
 constexpr int kAnimInfoFlick = 58; ///< the Flick motion, shaking a Pikmin off an enemy
 
+// The rest of a fight (bulborb_fight, issue #154). ActJumpAttack's ground attack plays
+// PIKIANIM_Attack (info 18) and hits on its KEY_Action0 (mAttackState 1, cleared on KEY_Action1),
+// so the generic 40 frames with no info keys never hit at all; its jump onto the enemy plays
+// StillJump (info 13). PikiFlickState follows the Flick motion with JKoke (info 57, lying down
+// until the knock-down timer) and GetUp (info 59). The generic infos also had flags 2
+// (ANIMFLAG_UseDynamicSpeed), so PaniPikiAnimMgr::updateAnimation ran them at the Pikmin's
+// motion speed instead of the info's 30 frames a second; the disc's Attack, JKoke and GetUp
+// have flags 5 (constant speed). Measured on the disc (VERSION_GPIE01_01 install, files equal
+// to Pikmin-USA-Rev1.iso's, read through the game's own AnimMgr, read-only, 2026-11-04), speed
+// 30 for all four, no curves:
+//   Attack    info 18: frame count 20, anim keys [0, 3, 5, 19], KEY_Action0 at anim key 1,
+//                      KEY_Action1 at anim key 2, effect (action) event at frame 5, flags 5;
+//   StillJump info 13: frame count 35, anim keys [0, 6, 26, 34], KEY_Action0 at anim key 1,
+//                      KEY_Action1 at anim key 2, flags 6;
+//   JKoke     info 57: frame count 16, anim keys [0, 15], no info keys, flags 5;
+//   GetUp     info 59: frame count 11, anim keys [0, 10], no info keys, flags 5.
+// The disc's sound (notify) event keys are left out, as on the other measured infos.
+constexpr int kAnimInfoStillJump = 13; ///< PIKIANIM_StillJump (22)
+constexpr int kAnimInfoAttack    = 18; ///< PIKIANIM_Attack (23)
+constexpr int kAnimInfoJKoke     = 57; ///< PIKIANIM_JKoke (30)
+constexpr int kAnimInfoGetUp     = 59; ///< PIKIANIM_GetUp (32)
+
 /// One info: its AnimMgr record and the frame count of its payload.
 struct StandInAnim {
 	AnimInfoSpec info;
