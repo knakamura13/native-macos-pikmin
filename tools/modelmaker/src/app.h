@@ -173,7 +173,7 @@ private:
 	void undoShortcuts();
 	void drawUndoButtons();
 
-	// Piezas (app_parts.cpp): elegir un material y moverlo con el gizmo.
+	// Piezas (part_edit_ui.cpp): elegir un material y moverlo con el gizmo.
 	int selectedPart_ = -1;
 	int gizmoOp_      = 0; ///< 0 mover, 1 girar, 2 escalar
 	int partAnimBefore_ = -1; ///< la animación que había al elegir una pieza

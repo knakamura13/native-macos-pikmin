@@ -7,7 +7,7 @@
 
 #include "import.h"
 #include "olimar.h"
-#include "parts.h"
+#include "part_edit.h"
 
 #include <array>
 #include <string>
@@ -51,7 +51,7 @@ struct FitSettings {
 	int stemMaterial    = -1;    ///< material (del modelo) con la textura del tallo original
 	std::array<Vec3, M_COUNT> markers {}; ///< en el espacio de Olimar, antes de enderezar
 	int textureMax = 1024;
-	std::vector<PartEdit> parts; ///< por material: piezas movidas o reflejadas (parts.h)
+	std::vector<PartEdit> parts; ///< por material: piezas movidas o reflejadas (part_edit.h)
 };
 
 /// Qué es cada hueso del modelo importado.
@@ -90,7 +90,7 @@ struct RigResult {
 	int stemTriangles   = 0; ///< del tallo original añadido
 	std::vector<BoneInfo> bones;
 	std::string skeletonNote;
-	// Piezas (parts.h): con qué se montó, el centro de cada una sin mover y
+	// Piezas (part_edit.h): con qué se montó, el centro de cada una sin mover y
 	// qué triángulos son copias reflejadas.
 	std::vector<PartEdit> parts;
 	std::vector<Vec3> partCentre;
