@@ -225,6 +225,33 @@ int main()
 		check(dayDocument(flags, 1).length == 0, "day 1 stays empty when the flag was never set");
 	}
 
+	// No Day Limit: plain day ends past the 27 Misc pages. The original found
+	// no entry on the 28th and halted ("cannot happen !", then "zero pages!").
+	// The pool starts over at Misc1, and an earned entry still comes first.
+	{
+		ResultFlags flags;
+		flags.initGame();
+		gCurrDay = 1;
+		for (int n = 0; n < 27; n++) {
+			int pages = 0;
+			check(flags.getDocument(pages, 1) == zen::RESFLAG_Misc1 + n && pages == 1, "a plain day end shows the next Misc page");
+		}
+		int pages = 0;
+		check(flags.getDocument(pages, 1) == zen::RESFLAG_Misc1 && pages == 1, "the 28th plain day end starts the Misc pages over");
+		pages = 0;
+		check(flags.getDocument(pages, 1) == zen::RESFLAG_Misc2, "and continues in order");
+		flags.setOn(zen::RESFLAG_FirstVisitForest);
+		pages = 0;
+		check(flags.getDocument(pages, 1) == zen::RESFLAG_FirstVisitForest, "an earned entry still comes first");
+		for (int n = 0; n < 200; n++) {
+			pages = 0;
+			if (flags.getDocument(pages, 1) < 0 || pages <= 0) {
+				check(false, "No Day Limit never runs out of diary pages");
+				break;
+			}
+		}
+	}
+
 	if (gFailures != 0) {
 		std::printf("pc_voyage_log_test: %d check(s) failed\n", gFailures);
 		return 1;

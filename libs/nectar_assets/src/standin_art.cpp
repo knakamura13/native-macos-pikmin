@@ -618,6 +618,9 @@ const std::vector<StandInArtBinding>& standInArtBindings()
 		{ "dataDir/pikis/happas/flower.mod", "crest_star", 1.0f },
 		// The buried folk: its body (joint 0) takes the folk colour the game sets on material 0.
 		{ "dataDir/objects/pikihead/pikihead.mod", "buried_folk", 1.0f, 0 },
+		// The first enemy (chappy's role), standing on the ground at the stand-in
+		// size, so no scale. Its spec is in standInObjectModelSpecs().
+		{ "dataDir/tekis/chappy/chappy.mod", "chappy", 1.0f },
 	};
 	return bindings;
 }

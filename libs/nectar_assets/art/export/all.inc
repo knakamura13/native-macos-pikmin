@@ -1,6 +1,7 @@
 // Every stand-in art model. Written by art/export_standins.py; do not edit.
 #include "buried_folk.inc"
 #include "captain.inc"
+#include "chappy.inc"
 #include "crest_bead.inc"
 #include "crest_shards.inc"
 #include "crest_star.inc"
@@ -15,6 +16,7 @@
 static const ArtModel* const kArtModels[] = {
 	&kArt_buried_folk,
 	&kArt_captain,
+	&kArt_chappy,
 	&kArt_crest_bead,
 	&kArt_crest_shards,
 	&kArt_crest_star,
