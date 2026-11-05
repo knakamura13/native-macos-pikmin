@@ -59,9 +59,10 @@ bool validate(const Model& m, std::string& error)
 		return fail(error, "el escritor no admite texturas ni TEV: los materiales son de solo color");
 	}
 	if (!m.envelopes.empty()) return fail(error, "el escritor es rígido: no admite envolventes");
-	if (!m.colours.empty()) return fail(error, "el escritor no admite colores de vértice");
 	if (!m.collision.empty() || m.hasGrid || m.collRooms) return fail(error, "el escritor no admite colisión de mapa");
-	if (m.positions.size() > kMaxIndex || m.normals.size() > kMaxIndex) return fail(error, "demasiados vértices para índices de 16 bits");
+	if (m.positions.size() > kMaxIndex || m.normals.size() > kMaxIndex || m.colours.size() > kMaxIndex) {
+		return fail(error, "demasiados vértices para índices de 16 bits");
+	}
 
 	for (std::size_t i = 0; i < m.joints.size(); i++) {
 		const ModJoint& j = m.joints[i];
@@ -96,7 +97,6 @@ bool validate(const Model& m, std::string& error)
 		const ModMesh& mesh = m.meshes[i];
 		const std::string at = "malla " + std::to_string(i) + ": ";
 		if (mesh.parentJoint < -1 || mesh.parentJoint >= int(m.joints.size())) return fail(error, at + "articulación padre fuera de rango");
-		if (mesh.flags & kFeatColour) return fail(error, at + "el escritor no admite colores de vértice");
 		for (const ModMtxGroup& g : mesh.groups) {
 			for (int dep : g.deps) {
 				if (dep < 0 || std::size_t(dep) >= m.vtxMatrices.size()) return fail(error, at + "una dependencia apunta a una matriz que no existe");
@@ -105,6 +105,9 @@ bool validate(const Model& m, std::string& error)
 				for (const ModVertex& v : t.v) {
 					if (v.pos < 0 || std::size_t(v.pos) >= m.positions.size()) return fail(error, at + "un vértice usa una posición que no existe");
 					if (m.normals.empty() || v.nrm >= int(m.normals.size())) return fail(error, at + "un vértice usa una normal que no existe");
+					if ((mesh.flags & kFeatColour) && (v.col < 0 || std::size_t(v.col) >= m.colours.size())) {
+						return fail(error, at + "a vertex uses a colour that does not exist");
+					}
 					if (v.mtxSlot < 0 || (v.mtxSlot + 1) * 3 > 0xFF || std::size_t(v.mtxSlot) >= std::max<std::size_t>(1, g.deps.size())) {
 						return fail(error, at + "un vértice usa un hueco de matriz que no existe");
 					}
@@ -135,6 +138,7 @@ std::vector<std::uint8_t> displayList(const ModMesh& mesh, const ModMtxGroup& g)
 				if (mesh.flags & kFeatTexMtx) dl.u8(0);
 				dl.u16(std::uint16_t(v.pos));
 				dl.u16(std::uint16_t(std::max(v.nrm, 0)));
+				if (mesh.flags & kFeatColour) dl.u16(std::uint16_t(v.col));
 				for (int k = 0; k < 8; k++) {
 					if (mesh.flags & (1u << (3 + k))) dl.u16(std::uint16_t(v.uv[k]));
 				}
@@ -171,6 +175,17 @@ bool writeMod(const Model& m, std::vector<std::uint8_t>& out, std::string& error
 		w.u32(std::uint32_t(m.normals.size()));
 		pad32(w);
 		for (const Vec3& n : m.normals) vec3(w, n);
+	}
+	if (!m.colours.empty()) { // 0x13: RGBA8 per entry (BaseShapeChunk::VertexColour)
+		Chunk c(w, 0x13);
+		w.u32(std::uint32_t(m.colours.size()));
+		pad32(w);
+		for (const Rgba8& col : m.colours) {
+			w.u8(col.r);
+			w.u8(col.g);
+			w.u8(col.b);
+			w.u8(col.a);
+		}
 	}
 	for (int k = 0; k < 8; k++) {
 		if (m.uvs[k].empty()) continue;
