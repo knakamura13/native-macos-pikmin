@@ -212,6 +212,7 @@ void App::ensureStemMaterial()
 	}
 	exportOpt_.noTint.resize(model_.materials.size(), 0);
 	exportOpt_.looks.resize(model_.materials.size());
+	resetLookHistory();
 	exportOpt_.pikmin = isPikmin();
 }
 
@@ -405,6 +406,7 @@ void App::finishLoad()
 		if (anims_[i].name == "walk") anim_ = int(i);
 	frame_ = 0;
 	uploadTextures();
+	resetLookHistory();
 	rebuild();
 	resetCamera();
 	// Tras importar, el siguiente trabajo útil es revisar escala y orientación.
@@ -717,6 +719,7 @@ void App::frame()
 	// Reconstruir cuando se suelta el ratón (o cada poco mientras se arrastra).
 	if (rigDirty_ && (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::GetTime() - lastRebuild_ > 0.2)) rebuild();
 	if (looksDirty_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+		commitLooks();
 		uploadTextures();
 		looksDirty_ = false;
 	}
@@ -939,13 +942,60 @@ void App::drawTopBar(float width)
 	ImGui::End();
 }
 
+void App::resetLookHistory()
+{
+	lookUndo_.clear();
+	lookRedo_.clear();
+	lookCommitted_ = exportOpt_.looks;
+}
+
+// Guarda el estado anterior si los retoques cambiaron desde el último paso.
+void App::commitLooks()
+{
+	if (exportOpt_.looks.size() != lookCommitted_.size()) {
+		resetLookHistory();
+		return;
+	}
+	if (exportOpt_.looks == lookCommitted_) return;
+	lookUndo_.push_back(lookCommitted_);
+	if (lookUndo_.size() > 100) lookUndo_.erase(lookUndo_.begin());
+	lookRedo_.clear();
+	lookCommitted_ = exportOpt_.looks;
+}
+
+void App::undoLooks(bool redo)
+{
+	commitLooks();
+	auto& from = redo ? lookRedo_ : lookUndo_;
+	auto& to   = redo ? lookUndo_ : lookRedo_;
+	if (from.empty() || from.back().size() != exportOpt_.looks.size()) return;
+	to.push_back(exportOpt_.looks);
+	exportOpt_.looks = from.back();
+	from.pop_back();
+	lookCommitted_ = exportOpt_.looks;
+	looksDirty_    = true;
+	exportDirty_   = true;
+}
+
 // Retoques de color por material: se ven en la vista y salen en el pack.
 void App::drawColours()
 {
+	// Ctrl+Z / Ctrl+Mayús+Z / Ctrl+Y (Cmd en macOS), como en el editor de mapas;
+	// solo en este paso, donde se ven los colores.
+	const ImGuiIO& io = ImGui::GetIO();
+	if (!io.WantTextInput && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) undoLooks(io.KeyShift);
+	if (!io.WantTextInput && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) undoLooks(true);
 	ImGui::Dummy(ImVec2(0, 4));
 	if (!ImGui::CollapsingHeader(L("Colores", "Colours"))) return;
 	hint(L("Cambia el color de cada parte o escóndela. El juego lo verá igual.",
 	       "Change each part's colour, or hide it. The game shows it the same way."));
+	ImGui::BeginDisabled(lookUndo_.empty() && (exportOpt_.looks == lookCommitted_));
+	if (ImGui::Button(L("Deshacer", "Undo"))) undoLooks(false);
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+	ImGui::BeginDisabled(lookRedo_.empty());
+	if (ImGui::Button(L("Rehacer", "Redo"))) undoLooks(true);
+	ImGui::EndDisabled();
 	bool changed = false;
 	for (std::size_t i = 0; i < model_.materials.size() && i < exportOpt_.looks.size(); ++i) {
 		MaterialLook& lk = exportOpt_.looks[i];

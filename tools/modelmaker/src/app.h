@@ -59,6 +59,10 @@ private:
 	ExportResult export_;
 	bool rigDirty_ = false, exportDirty_ = false;
 	bool looksDirty_ = false; ///< retoques de color: volver a subir las texturas al soltar el ratón
+	// Deshacer los retoques de color: copias de exportOpt_.looks. Un cambio
+	// cuenta al soltar el ratón (un arrastre entero es un solo paso).
+	std::vector<std::vector<MaterialLook>> lookUndo_, lookRedo_;
+	std::vector<MaterialLook> lookCommitted_;
 	double lastRebuild_ = 0;
 	std::vector<std::size_t> order_; ///< triángulos ordenados por material
 
@@ -133,6 +137,9 @@ private:
 	void drawWorkflow(float x, float y, float width, float height);
 	void drawPanel(float x, float y, float width, float height);
 	void drawColours();
+	void commitLooks();
+	void undoLooks(bool redo);
+	void resetLookHistory();
 	void drawView(float x, float y, float width, float height);
 	void drawOverlay(const std::vector<Mat34>& skin);
 	bool project(const Vec3& p, ImVec2& out) const;
