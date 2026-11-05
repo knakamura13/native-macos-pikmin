@@ -98,6 +98,8 @@ App::~App()
 		if (t) glDeleteTextures(1, &t);
 	for (GLuint t : olimarTex_)
 		if (t) glDeleteTextures(1, &t);
+	for (GLuint t : exportTex_)
+		if (t) glDeleteTextures(1, &t);
 	for (GLuint& t : startPortrait_)
 		if (t) glDeleteTextures(1, &t);
 }
@@ -424,7 +426,7 @@ void App::rebuild()
 void App::resetCamera()
 {
 	const float h = hasModel_ ? std::max(rig_.max.y - rig_.min.y, olimar_.bodyTop) : olimar_.max.y - olimar_.min.y;
-	cam_.target   = { olimarMode_ == 1 && hasModel_ ? -(olimar_.max.x - olimar_.min.x) * 0.6f : 0.0f, h * 0.5f, 0 };
+	cam_.target   = { olimarMode_ == 1 && hasModel_ && !gameLookActive() ? -(olimar_.max.x - olimar_.min.x) * 0.6f : 0.0f, h * 0.5f, 0 };
 	cam_.distance = h * 2.4f + 10.0f;
 	cam_.yaw      = 0.35f;
 	cam_.pitch    = 0.15f;
@@ -499,7 +501,8 @@ void App::fillMeshes()
 		return;
 	}
 	if (animated) retargetSkin(olimar_, rig_.pivots, world, skin);
-	fillModelMesh(modelMesh_, animated ? &skin : nullptr, !animated, showWeights_);
+	if (gameLookActive()) fillExportMesh(animated ? &skin : nullptr);
+	else fillModelMesh(modelMesh_, animated ? &skin : nullptr, !animated, showWeights_);
 	if (isPikmin()) {
 		Mat34 tip = olimar_.bind[J_ANT3];
 		setTranslation(tip, rig_.pivots[J_ANT3]);
@@ -616,6 +619,73 @@ bool App::buildStartPortraits(std::string& error)
 	return startPortrait_[0] && startPortrait_[1] && startPortrait_[2] && startPortrait_[3];
 }
 
+namespace {
+
+// Posición y normal de un vértice con la piel (o en reposo, sin ella).
+void skinVertex(const SkinVertex& v, const std::vector<Mat34>* skin, Vec3& p, Vec3& n)
+{
+	p = v.p, n = v.n;
+	if (!skin) return;
+	p = n = Vec3 {};
+	for (int i = 0; i < 4; ++i) {
+		if (v.weight[i] <= 0) continue;
+		p += (*skin)[std::size_t(v.joint[i])].point(v.p) * v.weight[i];
+		n += (*skin)[std::size_t(v.joint[i])].dir(v.n) * v.weight[i];
+	}
+	n = normalize(n);
+}
+
+// Como partIsTranslucent en pc_hd_models.cpp: más del 5 % de la textura con
+// alfa parcial (el visor). Se dibuja después y sin escribir profundidad.
+bool partTranslucent(const nectar::Image& img)
+{
+	std::size_t partial = 0;
+	const std::size_t total = img.rgba.size() / 4;
+	for (std::size_t i = 3; i < img.rgba.size(); i += 4)
+		if (img.rgba[i] < 240) ++partial;
+	return total > 0 && partial * 20 > total;
+}
+
+} // namespace
+
+// Las piezas del pack (export_) como las dibuja el juego: su textura ya lleva
+// el color de los materiales, y sus marcas dicen si se quitan las caras de
+// atrás y si las tiñe el juego.
+void App::fillExportMesh(const std::vector<Mat34>* skin)
+{
+	if (exportTexDirty_) {
+		for (GLuint t : exportTex_)
+			if (t) glDeleteTextures(1, &t);
+		exportTex_.clear();
+		for (const NhmPart& part : export_.parts) exportTex_.push_back(uploadTexture(part.texture, (part.flags & 1) != 0));
+		exportTexDirty_ = false;
+	}
+	exportMesh_.data.clear();
+	exportMesh_.ranges.clear();
+	for (std::size_t i = 0; i < export_.parts.size(); ++i) {
+		const NhmPart& part = export_.parts[i];
+		DynamicMesh::Range r;
+		r.first   = int(exportMesh_.data.size());
+		r.texture = exportTex_[i];
+		r.blend   = partTranslucent(part.texture);
+		r.cull    = (part.flags & 2) == 0;
+		r.tint    = (part.flags & 4) == 0;
+		for (const SkinVertex& v : part.verts) {
+			Vec3 p, n;
+			skinVertex(v, skin, p, n);
+			GpuVertex g {};
+			g.p[0] = p.x, g.p[1] = p.y, g.p[2] = p.z;
+			g.n[0] = n.x, g.n[1] = n.y, g.n[2] = n.z;
+			g.uv[0] = v.uv.x, g.uv[1] = v.uv.y;
+			g.c[0] = g.c[1] = g.c[2] = g.c[3] = 1;
+			exportMesh_.data.push_back(g);
+		}
+		r.count = int(exportMesh_.data.size()) - r.first;
+		exportMesh_.ranges.push_back(r);
+	}
+	exportMesh_.upload();
+}
+
 // `skin` nulo: en reposo (enderezado o, con `unbent`, como se importó).
 void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool unbent, bool weights)
 {
@@ -636,16 +706,9 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 		}
 		for (int k = 0; k < 3; ++k) {
 			const SkinVertex& v = rig_.verts[t * 3 + std::size_t(k)];
-			Vec3 p = v.p, n = v.n;
-			if (skin) {
-				p = n = Vec3 {};
-				for (int i = 0; i < 4; ++i) {
-					if (v.weight[i] <= 0) continue;
-					p += (*skin)[std::size_t(v.joint[i])].point(v.p) * v.weight[i];
-					n += (*skin)[std::size_t(v.joint[i])].dir(v.n) * v.weight[i];
-				}
-				n = normalize(n);
-			} else if (unbent && t * 3 + std::size_t(k) < rig_.unbent.size()) {
+			Vec3 p, n;
+			skinVertex(v, skin, p, n);
+			if (!skin && unbent && t * 3 + std::size_t(k) < rig_.unbent.size()) {
 				p = rig_.unbent[t * 3 + std::size_t(k)];
 			}
 			GpuVertex g {};
@@ -682,8 +745,9 @@ void App::frame()
 	// Reconstruir cuando se suelta el ratón (o cada poco mientras se arrastra).
 	if (rigDirty_ && (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::GetTime() - lastRebuild_ > 0.2)) rebuild();
 	if (exportDirty_ && hasModel_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-		export_      = buildParts(model_, rig_, olimar_, fit_, exportOpt_);
-		exportDirty_ = false;
+		export_         = buildParts(model_, rig_, olimar_, fit_, exportOpt_);
+		exportDirty_    = false;
+		exportTexDirty_ = true;
 	}
 
 	const ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -1126,9 +1190,35 @@ void App::drawPanel(float x, float y, float width, float height)
 	const char* modes[] = { isPikmin() ? L("Pikmin original: oculto", "Original Pikmin: hidden") : L("Olimar: oculto", "Olimar: hidden"),
 		                    isPikmin() ? L("Pikmin original: al lado", "Original Pikmin: beside") : L("Olimar: al lado", "Olimar: beside"),
 		                    isPikmin() ? L("Pikmin original: encima", "Original Pikmin: overlaid") : L("Olimar: encima", "Olimar: overlaid") };
+	// Con el aspecto del juego no se ven el original ni el esqueleto: el
+	// original lleva sus materiales del juego, que esta luz no reproduce.
+	ImGui::BeginDisabled(gameLook_);
 	ImGui::SetNextItemWidth(-1);
 	if (ImGui::Combo("##olimar", &olimarMode_, modes, 3)) resetCamera();
 	ImGui::Checkbox(L("Ver esqueleto", "Show skeleton"), &showSkeleton_);
+	ImGui::EndDisabled();
+	ImGui::Dummy(ImVec2(0, 4));
+	ImGui::Separator();
+	if (ImGui::Checkbox(L("Aspecto del juego", "In-game look"), &gameLook_)) {
+		std::string why;
+		if (gameLook_ && !gameLookLoaded_) gameLookLoaded_ = loadImpactSiteMidday(assetsDir_ + "/dataDir", gameLookData_, why);
+		if (gameLook_ && gameLookLoaded_) {
+			// En el juego, quieto: esperar, en bucle.
+			for (std::size_t i = 0; i < anims_.size(); ++i)
+				if (anims_[i].name == "wait") anim_ = int(i);
+			frame_   = 0;
+			playing_ = true;
+		} else if (gameLook_) {
+			gameLook_ = false;
+			say(std::string(L("No se pudo leer la luz del juego: ", "Couldn't read the game's lighting: ")) + why, true);
+		}
+		resetCamera();
+	}
+	if (gameLook_) {
+		hint(L("Impact Site a mediodía, con la luz del juego y el modelo tal como se instala.",
+		       "Impact Site at midday, with the game's lighting and the model exactly as it will be installed."));
+		ImGui::Checkbox(L("Luz suave (opción Smooth del juego)", "Smooth lighting (the game's Smooth option)"), &smoothLighting_);
+	}
 	}
 
 	// 5 · Guardar.
@@ -1237,7 +1327,15 @@ void App::drawView(float x, float y, float width, float height)
 	if (gameReady_) {
 		fillMeshes();
 		viewProj_ = cam_.projection(viewSize_.x / viewSize_.y) * cam_.view();
-		view_.begin(viewProj_);
+		const bool game = gameLookActive();
+		GameLook look;
+		if (game) {
+			look          = gameLookData_;
+			look.perPixel = smoothLighting_;
+			// Los Pikmin de los tres colores los tiñe el juego con el de su especie.
+			if (target_ == T_ALL) speciesColour(look.tint);
+		}
+		view_.begin(viewProj_, game ? &look : nullptr);
 		// Suelo: rejilla.
 		std::vector<Vec3> grid;
 		const float step = 2.5f, ext = 25.0f;
@@ -1249,10 +1347,11 @@ void App::drawView(float x, float y, float width, float height)
 		}
 		const float gridColour[4] = { 0.25f, 0.30f, 0.28f, 1 };
 		view_.drawLines(grid, gridColour);
-		if (olimarMode_ == 1 || (olimarMode_ == 2 && !hasModel_)) view_.drawMesh(olimarMesh_, true);
-		view_.drawMesh(modelMesh_, !showWeights_);
+		if (!game && (olimarMode_ == 1 || (olimarMode_ == 2 && !hasModel_))) view_.drawMesh(olimarMesh_, true);
+		if (game) view_.drawMesh(exportMesh_, true);
+		else view_.drawMesh(modelMesh_, !showWeights_);
 		if (isPikmin()) view_.drawMesh(leafMesh_, true);
-		if (olimarMode_ == 2 && hasModel_) view_.drawMesh(olimarMesh_, true, 0.35f);
+		if (!game && olimarMode_ == 2 && hasModel_) view_.drawMesh(olimarMesh_, true, 0.35f);
 		view_.end();
 	}
 	ImGui::Image(ImTextureID(std::intptr_t(view_.colorTexture())), viewSize_, ImVec2(0, 1), ImVec2(1, 0));
@@ -1265,7 +1364,8 @@ void App::drawView(float x, float y, float width, float height)
 		anims_[std::size_t(anim_)].pose(frame_, olimar_.parent, world);
 		retargetSkin(olimar_, rig_.pivots, world, skin);
 	}
-	if (hasModel_) drawOverlay(skin);
+	if (hasModel_ && !gameLookActive()) drawOverlay(skin);
+	else hoverMarker_ = -1;
 
 	// Ratón: arrastrar un punto, girar (izquierdo/derecho), desplazar (medio
 	// o Mayús), rueda para acercar.
@@ -1687,8 +1787,9 @@ bool App::renderPortrait(std::vector<std::uint8_t>& png)
 bool App::characterFiles(nectar::CharacterFiles& files, std::string& error)
 {
 	if (exportDirty_) {
-		export_      = buildParts(model_, rig_, olimar_, fit_, exportOpt_);
-		exportDirty_ = false;
+		export_         = buildParts(model_, rig_, olimar_, fit_, exportOpt_);
+		exportDirty_    = false;
+		exportTexDirty_ = true;
 	}
 	if (!buildNhm(export_, rig_, olimar_, files.nhm, error)) return false;
 	files.info          = nectar::CharacterInfo();

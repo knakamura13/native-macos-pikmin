@@ -81,6 +81,7 @@ add_executable(nectar_modelmaker
     src/export_nhm.cpp
     src/simplify.cpp
     src/view.cpp
+    src/game_look.cpp
     src/stb_impl.cpp
     # Del editor de mapas, tal cual: OpenGL, ajustes (carpeta del juego) y OBJ.
     "${MM_MAPMAKER}/gl.cpp"
