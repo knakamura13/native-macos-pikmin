@@ -67,6 +67,7 @@ PcLocalInput scriptedLocal(int t, int pad)
 		in.flags      = pc_input_log::kLocalMouseCursor;
 		if (t % 13 == 6) in.flags |= pc_input_log::kLocalGyroRecenter;
 		if (t == 20 || t == 41) in.flags |= pc_input_log::kLocalPhotoToggle;
+		if (t >= 15 && t < 25) in.flags |= pc_input_log::kLocalSettingsClockHold; // preserved by record/replay
 		in.cursorDx   = floatOf(dx[t % 6]);
 		in.cursorDy   = (float)t * -0.1f + 0.3f;
 		in.wheelSteps = (int8_t)((t % 5 == 0) ? (t % 10 == 0 ? 1 : -2) : 0);

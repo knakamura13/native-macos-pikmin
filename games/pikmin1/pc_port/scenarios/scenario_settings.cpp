@@ -417,11 +417,21 @@ public:
 		if (!pc_settings_menu_is_open()) scenarioFailf(0, "F1 settings menu open", "closed");
 	}
 
-	void providePads(unsigned, PcInputPad& pad) override { pad.stickY = 100; }
+	void providePads(unsigned, PcInputPad& pad) override
+	{
+		pad.stickY = 100;
+		if (pc_settings_menu_is_open()) pad.local |= pc_input_log::kLocalSettingsClockHold;
+	}
 
 	void onTick(unsigned t) override
 	{
-		if (t == 0) return;
+		if (t == 0) {
+			// onStageReady opens the menu after this tick's input was sampled.
+			mStartClock = gameflow.mWorldClock.mTimeOfDay;
+			mStartVisualClock = gPcVisualTimeOfDay;
+			mStartWorkMinute = gPcWorkMinute;
+			return;
+		}
 		if (t < 60 && !pc_settings_menu_is_open()) {
 			scenarioFailf(t, "settings menu stays open until tick 60", "closed");
 			return;
@@ -435,7 +445,12 @@ public:
 			}
 			const f32 clockDelta = gameflow.mWorldClock.mTimeOfDay - mStartClock;
 			if (std::fabs(clockDelta) > 0.0001f) {
-				std::printf("[scenario] settings_menu_pause: world clock advanced %.4f h while F1 is open (port bug, issue #100)\n", clockDelta);
+				scenarioFailf(t, "world clock paused while F1 is open", "advanced %.4f h", clockDelta);
+				return;
+			}
+			if (std::fabs(gPcVisualTimeOfDay - mStartVisualClock) > 0.0001f || gPcWorkMinute != mStartWorkMinute) {
+				scenarioFailf(t, "visual and work clocks paused during F1", "visual delta %.4f, work minute %d -> %d", gPcVisualTimeOfDay - mStartVisualClock, mStartWorkMinute, gPcWorkMinute);
+				return;
 			}
 			pc_settings_scenario_close_menu();
 			mMenuClosed = t;
@@ -444,6 +459,8 @@ public:
 		if (mMenuClosed != 0 && t == mMenuClosed + 90) {
 			const Vector3f d = navi->mSRT.t - mStartPos;
 			if (d.length() < 5.0f) scenarioFailf(t, "captain moves after the menu closes", "moved %.2f", d.length());
+			else if (gameflow.mWorldClock.mTimeOfDay - mStartClock <= 0.0001f)
+				scenarioFailf(t, "world clock resumes after F1 closes", "clock is still held");
 			else scenarioPass();
 		}
 		if (t > 200) scenarioFailf(t, "settings menu test finishes", "timeout");
@@ -452,6 +469,8 @@ public:
 private:
 	Vector3f mStartPos {};
 	f32 mStartClock = 0.0f;
+	f32 mStartVisualClock = 0.0f;
+	int mStartWorkMinute = 0;
 	unsigned mMenuClosed = 0;
 };
 

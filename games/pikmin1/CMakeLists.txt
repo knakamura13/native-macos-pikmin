@@ -2314,7 +2314,7 @@ if(PIKMIN_BUILD_SCENARIOS)
             hardmode_boss_life:sandbox_all_objects:30 hardmode_boss_life_off:sandbox_all_objects:30
             hardmode_cheats:sandbox:30 settings_health_pct:sandbox:30 settings_health_pct_off:sandbox:30
             settings_invincible:sandbox:30 settings_invincible_off:sandbox:30 speedrun_cheats:sandbox:30
-            unlock_zones:sandbox:30 settings_menu_pause:sandbox:30
+            unlock_zones:sandbox:30 settings_menu_pause:sandbox:30,60
             throw_release_quick_grab:sandbox:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
@@ -2598,6 +2598,21 @@ if(PIKMIN_BUILD_SCENARIOS)
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
+
+    # F1 clock holds must survive Quick Save-style input record/replay.
+    foreach(rate 30 60)
+        add_test(NAME scenario_input_replay_settings_menu_pause_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=settings_menu_pause -DRATE=${rate}
+                -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-input-replay
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_input_replay.cmake)
+        set_tests_properties(scenario_input_replay_settings_menu_pause_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+            ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+            TIMEOUT 120)
+    endforeach()
 
     # Hand-off (issue #76) and co-op scenarios (tools/scenarios/README.md).
     # first_yellow's scripted part, headless: its hand-off point is a pass.
