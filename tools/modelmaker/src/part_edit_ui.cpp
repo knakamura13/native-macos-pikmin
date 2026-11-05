@@ -1,6 +1,7 @@
-// Piezas del modelo en el paso de colocación: elegir un material (en la lista
-// o pinchando en la vista), moverlo, girarlo o escalarlo con el gizmo y
-// pasarlo o copiarlo al otro lado. Las cuentas están en part_edit.cpp.
+// Piezas del modelo en el paso de colocación: elegir un material o un
+// accesorio (en la lista o pinchando en la vista), moverlo, girarlo o
+// escalarlo con el gizmo y pasarlo o copiarlo al otro lado. Las cuentas están
+// en part_edit.cpp.
 
 #include "app.h"
 
@@ -26,18 +27,56 @@ void partHint(const char* text)
 
 } // namespace
 
-void App::selectPart(int material)
+void App::selectPart(int material, int accessory)
 {
-	if (material == selectedPart_) return;
+	if (material == selectedPart_ && accessory == selectedAccessory_) return;
 	// Con una pieza elegida se edita en la pose de reposo (la del gizmo); al
 	// soltarla vuelve la animación que había.
-	if (material >= 0 && selectedPart_ < 0) {
+	const bool had = partSelected(), has = material >= 0 || accessory != 0;
+	if (has && !had) {
 		partAnimBefore_ = anim_;
 		anim_           = -1;
-	} else if (material < 0 && anim_ < 0) {
+	} else if (!has && had && anim_ < 0) {
 		anim_ = partAnimBefore_;
 	}
-	selectedPart_ = material;
+	selectedPart_      = material;
+	selectedAccessory_ = accessory;
+}
+
+// Un material de la vista: el del modelo o el accesorio entero al que
+// pertenece (el tallo añadido no se mueve).
+void App::selectMaterial(int material)
+{
+	if (material >= 0 && std::size_t(material) < fit_.parts.size() && material != fit_.stemMaterial) {
+		selectPart(material, 0);
+		return;
+	}
+	for (const Attachment& a : attachments_) {
+		int first = 0, end = 0;
+		if (accessoryMaterials(a.uid, first, end) && material >= first && material < end) {
+			selectPart(-1, a.uid);
+			return;
+		}
+	}
+	selectPart(-1, 0);
+}
+
+PartEdit* App::selectedEdit()
+{
+	if (selectedPart_ >= 0) return std::size_t(selectedPart_) < fit_.parts.size() ? &fit_.parts[std::size_t(selectedPart_)] : nullptr;
+	for (Attachment& a : attachments_)
+		if (selectedAccessory_ && a.uid == selectedAccessory_) return &a.edit;
+	return nullptr;
+}
+
+// Los materiales de lo elegido, [first, end).
+bool App::selectedMaterials(int& first, int& end) const
+{
+	if (selectedPart_ >= 0) {
+		first = selectedPart_, end = selectedPart_ + 1;
+		return true;
+	}
+	return selectedAccessory_ && accessoryMaterials(selectedAccessory_, first, end);
 }
 
 void App::drawParts()
@@ -45,7 +84,7 @@ void App::drawParts()
 	undoShortcuts();
 	ImGui::Dummy(ImVec2(0, 4));
 	if (!ImGui::CollapsingHeader(L("Piezas", "Parts"), ImGuiTreeNodeFlags_DefaultOpen)) {
-		selectPart(-1);
+		selectPart(-1, 0);
 		return;
 	}
 	partHint(L("Elige una pieza (aquí o pinchando en el modelo) para moverla, girarla o cambiarle el tamaño.",
@@ -56,9 +95,11 @@ void App::drawParts()
 	std::vector<int> tris(model_.materials.size(), 0);
 	for (int m : model_.triMaterial)
 		if (m >= 0 && std::size_t(m) < tris.size()) ++tris[std::size_t(m)];
-	int rows = 0;
+	int rows = int(attachments_.size());
 	for (std::size_t i = 0; i < tris.size() && i < fit_.parts.size(); ++i) rows += tris[i] > 0;
-	if (selectedPart_ >= 0 && (std::size_t(selectedPart_) >= fit_.parts.size() || !tris[std::size_t(selectedPart_)])) selectPart(-1);
+	// Lo elegido puede haber desaparecido (deshacer, quitar un accesorio).
+	if (selectedPart_ >= 0 && (std::size_t(selectedPart_) >= fit_.parts.size() || !tris[std::size_t(selectedPart_)])) selectPart(-1, 0);
+	if (selectedAccessory_ && !selectedEdit()) selectPart(-1, 0);
 	const float rowH = ImGui::GetTextLineHeightWithSpacing();
 	if (ImGui::BeginListBox("##parts", ImVec2(-1, float(std::min(std::max(rows, 1), 6)) * rowH + 8))) {
 		for (std::size_t i = 0; i < tris.size() && i < fit_.parts.size(); ++i) {
@@ -67,15 +108,25 @@ void App::drawParts()
 			if (!fit_.parts[i].identity()) label += L("  · cambiada", "  · edited");
 			if (i < exportOpt_.looks.size() && exportOpt_.looks[i].hidden) label += L("  (oculta)", "  (hidden)");
 			ImGui::PushID(int(i));
-			if (ImGui::Selectable(label.c_str(), selectedPart_ == int(i))) selectPart(selectedPart_ == int(i) ? -1 : int(i));
+			if (ImGui::Selectable(label.c_str(), selectedPart_ == int(i))) selectPart(selectedPart_ == int(i) ? -1 : int(i), 0);
+			ImGui::PopID();
+		}
+		// Los accesorios, enteros.
+		for (const Attachment& a : attachments_) {
+			std::string label = partLabel(a.part) + L("  (accesorio)", "  (accessory)");
+			if (!a.edit.identity()) label += L("  · cambiado", "  · edited");
+			ImGui::PushID(-a.uid);
+			if (ImGui::Selectable(label.c_str(), selectedAccessory_ == a.uid)) selectPart(-1, selectedAccessory_ == a.uid ? 0 : a.uid);
 			ImGui::PopID();
 		}
 		ImGui::EndListBox();
 	}
-	if (selectedPart_ < 0) return;
+	PartEdit* edit = selectedEdit();
+	int first = 0, end = 0;
+	if (!edit || !selectedMaterials(first, end)) return;
 
 	anim_                  = -1;
-	PartEdit& e            = fit_.parts[std::size_t(selectedPart_)];
+	PartEdit& e            = *edit;
 	bool changed           = false;
 	const ImGuiIO& io      = ImGui::GetIO();
 	if (!io.WantTextInput && !io.KeyCtrl && !io.KeySuper) {
@@ -100,8 +151,8 @@ void App::drawParts()
 		ImGui::SetTooltip("%s", L("Para una oreja, un guante o un adorno que solo está en un lado. La copia sigue a la pieza.",
 		                          "For an ear, glove or accessory that is only on one side. The copy follows the part."));
 	// Si la pieza ya cruza el centro, la copia caería encima.
-	if (e.mirrorCopy && std::size_t(selectedPart_) < rig_.partCentre.size()) {
-		const Vec3 c = rig_.partCentre[std::size_t(selectedPart_)] + translationOf(e.local);
+	if (e.mirrorCopy && std::size_t(first) < rig_.partCentre.size()) {
+		const Vec3 c = rig_.partCentre[std::size_t(first)] + translationOf(e.local);
 		if (std::fabs(c.x) < 0.05f * std::max(rig_.max.x - rig_.min.x, 1e-3f))
 			partHint(L("Esta pieza está en el centro: la copia queda encima. Muévela a un lado.",
 			           "This part sits in the middle, so the copy overlaps it. Move it to one side."));
@@ -130,9 +181,10 @@ bool App::drawPartGizmo(bool hovered)
 	if (editorStep_ != 1 || !hasModel_) return false;
 	ImGuiIO& io    = ImGui::GetIO();
 	bool overGizmo = false;
-	const int sel  = selectedPart_;
-	if (sel >= 0 && anim_ < 0 && std::size_t(sel) < fit_.parts.size() && std::size_t(sel) < rig_.partCentre.size()) {
-		PartEdit& e = fit_.parts[std::size_t(sel)];
+	PartEdit* edit = selectedEdit();
+	int sel = 0, end = 0;
+	if (edit && selectedMaterials(sel, end) && anim_ < 0 && std::size_t(sel) < rig_.partCentre.size()) {
+		PartEdit& e = *edit;
 		const Vec3 c = rig_.partCentre[std::size_t(sel)];
 		ImGuizmo::BeginFrame();
 		ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
@@ -157,7 +209,7 @@ bool App::drawPartGizmo(bool hovered)
 	// elige la pieza de debajo; en el vacío, la suelta.
 	if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) pressOnGizmo_ = overGizmo;
 	if (hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !pressOnGizmo_ && !ImGui::IsAnyItemHovered() && io.MouseDragMaxDistanceSqr[0] < 16.0f)
-		selectPart(pickPart(io.MousePos));
+		selectMaterial(pickPart(io.MousePos));
 	return overGizmo;
 }
 
@@ -198,59 +250,57 @@ int App::pickPart(const ImVec2& mouse) const
 			bestMat = mat;
 		}
 	}
-	if (bestMat == fit_.stemMaterial || std::size_t(bestMat) >= fit_.parts.size()) return -1;
 	return bestMat;
 }
 
 // Mientras se arrastra, la malla montada va un poco por detrás: lo que falta
 // para llegar a fit_.parts, alrededor del centro de la pieza.
-bool App::partPreview(Mat34 move[2], Mat34 normal[2]) const
+bool App::partPreview(Mat34 move[2], Mat34 normal[2], int& first, int& end)
 {
-	const int sel = selectedPart_;
-	if (sel < 0 || std::size_t(sel) >= fit_.parts.size() || std::size_t(sel) >= rig_.parts.size() || std::size_t(sel) >= rig_.partCentre.size())
-		return false;
-	const PartEdit& now   = fit_.parts[std::size_t(sel)];
-	const PartEdit& built = rig_.parts[std::size_t(sel)];
+	const PartEdit* edit = selectedEdit();
+	if (!edit || !selectedMaterials(first, end) || std::size_t(first) >= rig_.parts.size() || std::size_t(first) >= rig_.partCentre.size()) return false;
+	const std::size_t sel = std::size_t(first);
+	const PartEdit& now   = *edit;
+	const PartEdit& built = rig_.parts[sel];
 	if (now == built || now.flipped != built.flipped || now.mirrorCopy != built.mirrorCopy) return false;
 	const Mat34 delta = now.local * inverse(built.local);
-	move[0]           = about(rig_.partCentre[std::size_t(sel)], delta);
+	move[0]           = about(rig_.partCentre[sel], delta);
 	normal[0]         = normalMatrix(delta);
 	move[1]           = mirrorLocal(move[0]);
 	normal[1]         = mirrorLocal(normal[0]);
 	return true;
 }
 
-json App::partsJson() const
+json partEditJson(const PartEdit& e)
+{
+	json m = json::array();
+	for (int row = 0; row < 3; ++row)
+		for (int col = 0; col < 4; ++col) m.push_back(e.local.m[row][col]);
+	return { { "local", m }, { "flipped", e.flipped }, { "mirrorCopy", e.mirrorCopy } };
+}
+
+PartEdit partEditFromJson(const json& o)
+{
+	PartEdit e;
+	if (!o.is_object()) return e;
+	if (o.contains("local") && o["local"].is_array() && o["local"].size() == 12)
+		for (std::size_t k = 0; k < 12; ++k) e.local.m[k / 4][k % 4] = o["local"][k].get<float>();
+	e.flipped    = o.value("flipped", false);
+	e.mirrorCopy = o.value("mirrorCopy", false);
+	return e;
+}
+
+json App::partEditsJson() const
 {
 	json out = json::array();
-	for (const PartEdit& e : fit_.parts) {
-		json o = json::object();
-		if (!e.identity()) {
-			json m = json::array();
-			for (int row = 0; row < 3; ++row)
-				for (int col = 0; col < 4; ++col) m.push_back(e.local.m[row][col]);
-			o["local"]      = m;
-			o["flipped"]    = e.flipped;
-			o["mirrorCopy"] = e.mirrorCopy;
-		}
-		out.push_back(o);
-	}
+	for (const PartEdit& e : fit_.parts) out.push_back(e.identity() ? json::object() : partEditJson(e));
 	return out;
 }
 
-void App::restoreParts(const json& j)
+void App::restorePartEdits(const json& j)
 {
 	if (!j.is_array()) return;
-	for (std::size_t i = 0; i < j.size() && i < fit_.parts.size(); ++i) {
-		const json& o = j[i];
-		if (!o.is_object()) continue;
-		PartEdit e;
-		if (o.contains("local") && o["local"].is_array() && o["local"].size() == 12)
-			for (std::size_t k = 0; k < 12; ++k) e.local.m[k / 4][k % 4] = o["local"][k].get<float>();
-		e.flipped      = o.value("flipped", false);
-		e.mirrorCopy   = o.value("mirrorCopy", false);
-		fit_.parts[i]  = e;
-	}
+	for (std::size_t i = 0; i < j.size() && i < fit_.parts.size(); ++i) fit_.parts[i] = partEditFromJson(j[i]);
 }
 
 } // namespace mm

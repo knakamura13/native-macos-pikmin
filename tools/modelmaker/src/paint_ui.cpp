@@ -38,11 +38,19 @@ std::vector<std::uint8_t> readFile(const fs::path& p)
 
 std::string paintName(const std::string& dir, std::size_t m, const char* suffix) { return dir + "/" + std::to_string(m) + suffix; }
 
+// Los accesorios son formas de un color o modelos sin UV propias en el
+// original (xatlas va sobre el modelo, no sobre ellos): se recolorean.
+const char* noPaintNote()
+{
+	return L("Los accesorios y el tallo no se pintan: cambia su color en Colores.", "Accessories and the stem aren't painted: change their colour in Colours.");
+}
+
 } // namespace
 
 bool App::needsPaintSetup(int m)
 {
-	if (m < 0 || std::size_t(m) >= model_.materials.size()) return false;
+	// Solo los del modelo original: el tallo y los accesorios no se pintan.
+	if (m < 0 || std::size_t(m) >= source_.materials.size() || std::size_t(m) >= model_.materials.size()) return false;
 	// Las UV se miran una vez por malla (cambia al abrir, simplificar o preparar).
 	if (paint_.uvKey != model_.verts.data() || paint_.uvKeySize != model_.verts.size() || paint_.uvUse.size() != model_.materials.size()) {
 		paint_.uvUse.assign(model_.materials.size(), UvUse::Good);
@@ -244,6 +252,8 @@ bool App::paintMouse(bool hovered)
 			dl->AddCircle(mp, 8, IM_COL32(240, 200, 70, 255), 0, 2);
 			if (needsPaintSetup(paint_.hoverMaterial))
 				ImGui::SetTooltip("%s", L("Esta parte no tiene UV para pintar: haz clic para prepararla.", "This part has no UVs to paint on: click to get it ready."));
+			else if (std::size_t(paint_.hoverMaterial) >= source_.materials.size())
+				ImGui::SetTooltip("%s", noPaintNote());
 		} else if (paint_.tool == 2) {
 			dl->AddCircleFilled(mp, 7, ImGui::ColorConvertFloat4ToU32(ImVec4(paint_.brush.colour[0], paint_.brush.colour[1], paint_.brush.colour[2], 1)));
 			dl->AddCircle(mp, 8, IM_COL32(255, 255, 255, 230), 0, 1.5f);
@@ -362,6 +372,7 @@ void App::drawPaint()
 		ImGui::EndDisabled();
 		ImGui::PopID();
 	}
+	if (!attachments_.empty()) hintText(noPaintNote());
 }
 
 // Un modelo nuevo: sin pintura; las UV y texturas que el hilo aplicó desde el
@@ -390,17 +401,13 @@ void App::readPaintSetups(bool restoreProject)
 {
 	paint_.setups.clear();
 	paint_.applied.clear();
-	paint_.loadDir.clear();
-	const std::string restoreDir = std::exchange(paint_.restoreDir, std::string());
 	if (!restoreProject) return;
 	std::string text = restoreJson_;
-	std::string dir  = restoreDir;
 	if (text.empty()) {
 		std::ifstream f(fs::u8path(projectPath()));
 		text.assign(std::istreambuf_iterator<char>(f), {});
-		dir = customDir();
 	}
-	paint_.loadDir = dir;
+	const std::string& dir = restoreDir_;
 	try {
 		const json j = json::parse(text);
 		if (!j.contains("paint") || !j["paint"].is_array()) return;
@@ -438,7 +445,7 @@ void App::restorePaint(const json& j)
 		const std::string layer = e.value("layer", std::string());
 		if (m < 0 || std::size_t(m) >= exportOpt_.paint.size() || layer.empty() || !nectar::safeProjectPath(layer)) continue;
 		nectar::Image img;
-		if (decodePng(readFile(fs::u8path(paint_.loadDir) / fs::u8path(layer)), img)) exportOpt_.paint[std::size_t(m)] = std::move(img);
+		if (decodePng(readFile(fs::u8path(restoreDir_) / fs::u8path(layer)), img)) exportOpt_.paint[std::size_t(m)] = std::move(img);
 	}
 }
 

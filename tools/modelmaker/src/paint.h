@@ -145,8 +145,6 @@ struct PaintState {
 	};
 	std::vector<Setup> setups;
 	std::vector<int> applied; ///< materiales a los que se aplicó su Setup
-	std::string loadDir;      ///< carpeta del proyecto que se abre
-	std::string restoreDir;   ///< la del personaje que se va a editar
 	int preparing = -1;       ///< material al que se le hacen UV (en otro hilo)
 	nectar::Image preparedLayer; ///< su pintura, pasada a las UV nuevas por ese hilo
 	/// Vista mientras se pinta: la base de cada material al tamaño de su capa,

@@ -197,26 +197,21 @@ void App::speciesColour(float out[3]) const
 }
 
 // Material liso para el tallo original (el del juego no tiene textura: se tiñe
-// del color del Pikmin). Va el último, detrás de los del modelo.
-static const char* const kStemMaterial = "stem (Pikmin)";
+// del color del Pikmin). Va detrás de los del modelo (layoutMaterials).
+bool App::stemMaterial(ImpMaterial& stem) const
+{
+	if (!isPikmin()) return false;
+	stem.name = "stem (Pikmin)";
+	float c[3];
+	speciesColour(c);
+	// Para los tres colores, blanco: el juego lo tiñe.
+	for (int i = 0; i < 3; ++i) stem.color[i] = target_ == T_ALL ? 1.0f : c[i];
+	return true;
+}
+
 void App::ensureStemMaterial()
 {
-	if (!model_.materials.empty() && model_.materials.back().name == kStemMaterial) model_.materials.pop_back();
-	fit_.stemMaterial = -1;
-	if (isPikmin()) {
-		ImpMaterial stem;
-		stem.name = kStemMaterial;
-		float c[3];
-		speciesColour(c);
-		// Para los tres colores, blanco: el juego lo tiñe.
-		for (int i = 0; i < 3; ++i) stem.color[i] = target_ == T_ALL ? 1.0f : c[i];
-		fit_.stemMaterial = int(model_.materials.size());
-		model_.materials.push_back(stem);
-	}
-	exportOpt_.noTint.resize(model_.materials.size(), 0);
-	exportOpt_.looks.resize(model_.materials.size());
-	fit_.parts.resize(model_.materials.size());
-	exportOpt_.paint.resize(model_.materials.size());
+	layoutMaterials();
 	resetEditHistory();
 	exportOpt_.pikmin = isPikmin();
 }
@@ -241,12 +236,12 @@ void App::setTarget(int target)
 	}
 	ensureStemMaterial();
 	autoFit(model_, olimar_, fit_);
-	if (std::size_t(targetTris_) < model_.triangles() || source_.triangles() > model_.triangles()) {
+	// Ya, aunque luego se simplifique: los materiales han cambiado (el tallo,
+	// las piezas detrás) y la vista no puede seguir con los triángulos de antes.
+	uploadTextures();
+	rebuild();
+	if (std::size_t(targetTris_) < model_.triangles() || source_.triangles() > model_.triangles())
 		resimplify(); // termina en finishLoad, que vuelve a montar todo
-	} else {
-		uploadTextures();
-		rebuild();
-	}
 	resetCamera();
 }
 
@@ -277,6 +272,10 @@ void App::loadModel(const std::string& path, bool restoreProject)
 	workDone_          = false;
 	const std::size_t target = std::size_t(targetTris_);
 	const std::size_t limit  = isPikmin() ? 3000 : kAutoSimplify;
+	// Las rutas relativas del proyecto (pintura, accesorios) van desde la
+	// carpeta del personaje que se edita o, si no, desde la de la sesión.
+	if (!restoreProject) restoreDir_.clear();
+	else if (restoreJson_.empty()) restoreDir_ = customDir();
 	readPaintSetups(restoreProject);
 	worker_ = std::thread([this, path, target, limit] {
 		ImpModel m;
@@ -322,6 +321,7 @@ void App::finishLoad()
 	if (pendingResimplify_) {
 		// Misma colocación y puntos: solo cambia la malla.
 		model_ = std::move(pending_);
+		modelReplaced(true);
 		ensureStemMaterial();
 		uploadTextures();
 		rebuild();
@@ -334,6 +334,7 @@ void App::finishLoad()
 	model_    = std::move(pending_);
 	source_   = std::move(pendingSource_);
 	hasModel_ = true;
+	modelReplaced(false);
 	// Nombre del personaje: el del archivo, hasta que el usuario ponga otro.
 	std::snprintf(charName_, sizeof(charName_), "%s", fs::u8path(path).stem().u8string().c_str());
 	fit_                 = FitSettings();
@@ -381,7 +382,7 @@ void App::finishLoad()
 			}
 			const std::vector<int> nt = j.value("noTint", std::vector<int>());
 			for (std::size_t i = 0; i < nt.size() && i < exportOpt_.noTint.size(); ++i) exportOpt_.noTint[i] = char(nt[i] != 0);
-			if (j.contains("parts")) restoreParts(j["parts"]);
+			if (j.contains("partEdits")) restorePartEdits(j["partEdits"]);
 			if (j.contains("looks") && j["looks"].is_array()) {
 				const json& looks = j["looks"];
 				for (std::size_t i = 0; i < looks.size() && i < exportOpt_.looks.size(); ++i) {
@@ -395,6 +396,7 @@ void App::finishLoad()
 				}
 			}
 			restorePaint(j);
+			restoreAccessories(j);
 		} catch (const std::exception&) {
 		}
 		if (editingId_.empty() && !editingOlimar_) say(L("Seguimos con tu modelo de la última vez.", "Picking up your model from last time."));
@@ -417,7 +419,8 @@ void App::finishLoad()
 	for (std::size_t i = 0; i < anims_.size(); ++i)
 		if (anims_[i].name == "walk") anim_ = int(i);
 	frame_ = 0;
-	selectedPart_ = -1;
+	selectedPart_      = -1;
+	selectedAccessory_ = 0;
 	uploadTextures();
 	resetEditHistory();
 	rebuild();
@@ -462,6 +465,7 @@ void App::rebuild()
 {
 	if (!hasModel_) return;
 	rig_          = buildRig(model_, olimar_, fit_);
+	appendAttachments();
 	// Triángulos por material (los del modelo y, en un Pikmin, el tallo añadido).
 	order_.clear();
 	for (std::size_t t = 0; t < rig_.triMaterial.size(); ++t) order_.push_back(t);
@@ -742,7 +746,8 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 	mesh.ranges.clear();
 	// La pieza que se arrastra, al momento (la malla se rehace cada poco).
 	Mat34 preview[2], previewNormal[2];
-	const bool previewing = !skin && unbent && partPreview(preview, previewNormal);
+	int previewFirst = 0, previewEnd = 0;
+	const bool previewing = !skin && unbent && partPreview(preview, previewNormal, previewFirst, previewEnd);
 	int lastMat = -2;
 	for (std::size_t t : order_) {
 		if (t * 3 + 2 >= rig_.verts.size()) continue;
@@ -765,7 +770,7 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 			if (!skin && unbent && t * 3 + std::size_t(k) < rig_.unbent.size()) {
 				p = rig_.unbent[t * 3 + std::size_t(k)];
 			}
-			if (previewing && mat == selectedPart_) {
+			if (previewing && mat >= previewFirst && mat < previewEnd) {
 				const int c = t < rig_.triCopy.size() && rig_.triCopy[t] ? 1 : 0;
 				p           = preview[c].point(p);
 				n           = normalize(previewNormal[c].dir(n));
@@ -809,14 +814,10 @@ void App::frame()
 	}
 	// Reconstruir cuando se suelta el ratón (o cada poco mientras se arrastra).
 	if (rigDirty_ && (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::GetTime() - lastRebuild_ > 0.2)) rebuild();
-	if (looksDirty_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+	if ((looksDirty_ || partsDirty_) && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 		commitEdits();
-		uploadTextures();
-		looksDirty_ = false;
-	}
-	if (partsDirty_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-		commitEdits();
-		partsDirty_ = false;
+		if (looksDirty_) uploadTextures();
+		looksDirty_ = partsDirty_ = false;
 	}
 	if (exportDirty_ && hasModel_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 		export_         = buildParts(model_, rig_, olimar_, fit_, exportOpt_);
@@ -1048,19 +1049,19 @@ void App::resetEditHistory()
 	editCommitted_ = edits();
 }
 
-static bool sameShape(const EditSnapshot& a, const EditSnapshot& b) { return a.looks.size() == b.looks.size() && a.parts.size() == b.parts.size(); }
-
 // Guarda el estado anterior si los retoques cambiaron desde el último paso.
+// Las piezas van por material del modelo: si cambian de número (otro
+// modelo), la historia empieza otra vez.
 void App::commitEdits()
 {
-	const EditSnapshot now = edits();
-	if (!sameShape(now, editCommitted_)) {
+	EditSnapshot now = edits();
+	if (now.parts.size() != editCommitted_.parts.size()) {
 		resetEditHistory();
 		return;
 	}
 	if (now == editCommitted_) return;
-	pushEditStep({ editCommitted_, {} });
-	editCommitted_ = now;
+	pushEditStep({ std::move(editCommitted_), {} });
+	editCommitted_ = std::move(now);
 }
 
 // Un paso nuevo: borra lo que se podía rehacer. Hasta 100 pasos y 128 MB de
@@ -1087,15 +1088,27 @@ void App::undoEdits(bool redo)
 	auto& from = redo ? editRedo_ : editUndo_;
 	auto& to   = redo ? editUndo_ : editRedo_;
 	EditSnapshot now = edits();
-	if (from.empty() || !sameShape(from.back().edits, now)) return;
+	if (from.empty() || from.back().edits.parts.size() != now.parts.size()) return;
 	EditStep step = std::move(from.back());
 	from.pop_back();
-	if (step.edits.looks != now.looks || !step.paint.empty()) looksDirty_ = true; // texturas otra vez
-	if (step.edits.parts != now.parts) rigDirty_ = true;                           // la malla otra vez
-	exportOpt_.looks = step.edits.looks;
-	fit_.parts       = step.edits.parts;
+	const bool layout = step.edits.accessories != now.accessories;
+	fit_.parts        = step.edits.parts;
+	if (layout) {
+		attachments_ = step.edits.accessories;
+		layoutMaterials();
+	}
+	// Los colores se guardaron con esos mismos accesorios: los mismos materiales.
+	if (step.edits.looks.size() == exportOpt_.looks.size()) exportOpt_.looks = step.edits.looks;
 	for (PaintPatch& p : step.paint)
 		if (std::size_t(p.material) < exportOpt_.paint.size()) p.swap(exportOpt_.paint[std::size_t(p.material)]);
+	if (layout) {
+		// Otros materiales: la malla y las texturas ya, antes de dibujar.
+		uploadTextures();
+		rebuild();
+	} else {
+		if (step.edits.parts != now.parts) rigDirty_ = true;                           // la malla otra vez
+		if (step.edits.looks != now.looks || !step.paint.empty()) looksDirty_ = true; // texturas otra vez
+	}
 	step.edits = std::move(now);
 	to.push_back(std::move(step));
 	editCommitted_ = edits();
@@ -1127,10 +1140,11 @@ void App::drawColours()
 {
 	undoShortcuts();
 	ImGui::Dummy(ImVec2(0, 4));
+	// Fuera de la sección: deshace también los accesorios y la pintura.
+	drawUndoButtons();
 	if (!ImGui::CollapsingHeader(L("Colores", "Colours"))) return;
 	hint(L("Cambia el color de cada parte o escóndela. El juego lo verá igual.",
 	       "Change each part's colour, or hide it. The game shows it the same way."));
-	drawUndoButtons();
 	bool changed = false;
 	for (std::size_t i = 0; i < model_.materials.size() && i < exportOpt_.looks.size(); ++i) {
 		MaterialLook& lk = exportOpt_.looks[i];
@@ -1253,6 +1267,7 @@ void App::drawPanel(float x, float y, float width, float height)
 			if (ImGui::Button(L("Aplicar", "Apply"), ImVec2(-1, 0))) resimplify();
 		}
 		drawColours();
+		drawAccessories();
 		drawPaint();
 	}
 	if (target_ == T_ALL)
@@ -1573,7 +1588,7 @@ void App::drawView(float x, float y, float width, float height)
 		retargetSkin(olimar_, rig_.pivots, world, skin);
 	}
 	// Con una pieza elegida, su gizmo en lugar de los puntos del esqueleto.
-	if (hasModel_ && !gameLookActive() && !paint_.on && !(editorStep_ == 1 && selectedPart_ >= 0)) drawOverlay(skin);
+	if (hasModel_ && !gameLookActive() && !paint_.on && !(editorStep_ == 1 && partSelected())) drawOverlay(skin);
 	else hoverMarker_ = -1;
 	const bool gizmoMouse = drawPartGizmo(hovered);
 
@@ -1749,8 +1764,9 @@ json App::projectJson(const std::string& source, const std::string& paintDir) co
 	json looks = json::array();
 	for (const MaterialLook& lk : exportOpt_.looks)
 		looks.push_back({ { "colour", { lk.colour[0], lk.colour[1], lk.colour[2] } }, { "hue", lk.hue }, { "brightness", lk.brightness }, { "hidden", lk.hidden } });
-	j["looks"] = looks;
-	j["parts"] = partsJson();
+	j["looks"]       = looks;
+	j["partEdits"]   = partEditsJson();
+	j["accessories"] = accessoriesJson();
 	paintJson(j, paintDir);
 	return j;
 }
@@ -1801,7 +1817,9 @@ void App::projectFiles(std::vector<std::pair<std::string, std::vector<std::uint8
 		out.push_back({ rel, std::move(data) });
 	}
 	paintFiles("paint", out);
-	const std::string text = projectJson(mainRel, "paint").dump(1);
+	json project = projectJson(mainRel, "paint");
+	bundleAccessoryFiles(project, out);
+	const std::string text = project.dump(1);
 	out.push_back({ "project.json", std::vector<std::uint8_t>(text.begin(), text.end()) });
 }
 
@@ -1839,8 +1857,8 @@ void App::editCreation(const std::string& dir, const nectar::CharacterInfo& info
 				editingName_ = info.name;
 				hasModel_    = false;
 				setTarget(T_CAPTAIN);
-				restoreJson_      = oldText;
-				paint_.restoreDir = customDir();
+				restoreJson_ = oldText;
+				restoreDir_  = customDir();
 				loadModel(abs, true);
 				return;
 			}
@@ -1859,8 +1877,8 @@ void App::editCreation(const std::string& dir, const nectar::CharacterInfo& info
 	} catch (const std::exception&) {
 	}
 	if (!source.empty() && nectar::safeProjectPath(source) && fs::is_regular_file(sourcePath, ec)) {
-		restoreJson_      = text;
-		paint_.restoreDir = (root / "project").u8string();
+		restoreJson_ = text;
+		restoreDir_  = (root / "project").u8string();
 		loadModel(sourcePath.u8string(), true);
 	} else {
 		restoreJson_.clear();
