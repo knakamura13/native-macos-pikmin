@@ -39,10 +39,24 @@ struct ExportResult {
 	}
 };
 
+/// Retoque de color de un material: se aplica al hornear su textura (y en la
+/// vista), sin tocar el modelo importado.
+struct MaterialLook {
+	float colour[3]  = { 1, 1, 1 }; ///< multiplica
+	float hue        = 0;           ///< grados, -180..180
+	float brightness = 1;
+	bool hidden      = false; ///< fuera del pack
+	bool identity() const { return colour[0] == 1 && colour[1] == 1 && colour[2] == 1 && hue == 0 && brightness == 1; }
+};
+/// Color 0..1: tono girado y luego por `colour` y `brightness`.
+void applyLook(const MaterialLook& look, float rgb[3]);
+void applyLook(const MaterialLook& look, nectar::Image& img);
+
 struct ExportOptions {
 	int textureMax = 1024;
 	bool pikmin    = false; ///< hasta 100 en pantalla: presupuesto de triángulos mucho menor
 	std::vector<char> noTint; ///< por material: no lo tiñe el color del J2 en cooperativo
+	std::vector<MaterialLook> looks; ///< por material
 };
 
 ExportResult buildParts(const ImpModel& model, const RigResult& rig, const OlimarRig& olimar, const FitSettings& fit, const ExportOptions& opt);
