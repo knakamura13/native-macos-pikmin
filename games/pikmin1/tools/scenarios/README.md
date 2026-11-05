@@ -490,9 +490,11 @@ Other jobs of the workflow:
   `ctest -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -E _disc` (the
   generator plus six scenarios, as in `standin-audio.md`). Same dependencies,
   `-UWIN32`, Mesa DLLs and environment as the main job. Nothing is skipped on any OS.
-- **`gl-probe`** (each OS): the GL context probe described under [GL probe](#gl-probe).
-- **`scenarios-merge`** (one per OS): the main job runs each OS in 3 shards
-  (`ctest -I <shard>,,3`); this job joins them with `merge_scenario_shards.py`, which fails
+- **`gl-probe`** (Linux, Windows): the GL context probe described under [GL probe](#gl-probe).
+  On macOS the probe and the `jaudio-scenarios` steps run inside macOS scenario shard 1, to stay
+  under the free plan's limit of about 5 concurrent hosted macOS jobs.
+- **`scenarios-merge`** (one per OS, on Linux): the main job runs macOS in 2 shards and Linux
+  and Windows in 3 (`ctest -I <shard>,,<shards>`); this job joins them with `merge_scenario_shards.py`, which fails
   unless every scenario test ran in exactly one shard, then runs `ci_k_summary.sh` and
   `check_throw_flight.py` on the merged logs and uploads `scenario-hash-logs-<OS>`.
   Golden refresh: `golden-update-<OS>` comes from the shard that ran `scenario_screenshot_goldens`.
