@@ -133,6 +133,16 @@ time.
 - Drown, press, panic and bomb values (`p62` 10 frames, code 30; `p14`/`p15`;
   `p55`; `p59`, `p75`, `p66`-`p71`): `piki_drown`, `piki_hazard_deaths`.
 
+Golden shots: `world_map_idle` and `world_map_confirm` (`world_map_day_end` on
+`sandbox_objects`) change through `p51` alone. With the code's 4 s the stage's
+sprouts grow up every few seconds and each grow-up casts the PikiGrowup
+particles (PikiHeadAI, `itemAI.cpp`), which draw from the cosmetic random
+stream. With 120 s they do not, so that stream is at another point when the map
+opens, and the bob and scale timer of the red Onion icon beside the cursor
+(`WorldMapCursorOnyon`, `drawWorldMap.cpp`, `pc_cosmetic_randf`) starts
+elsewhere: a few pixels around that icon differ. The goldens were refreshed from
+CI for all three OSes.
+
 99 of the 176 logs changed and 77 are byte-identical. With the old file the
 suite gives the old logs except `tutorial_firsts_60`, whose driver changed (below).
 
