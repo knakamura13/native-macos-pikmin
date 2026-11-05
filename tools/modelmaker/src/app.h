@@ -23,6 +23,15 @@
 
 namespace mm {
 
+/// Lo que se puede deshacer: los retoques de color y las piezas movidas, por
+/// material.
+struct EditSnapshot {
+	std::vector<MaterialLook> looks;
+	std::vector<PartEdit> parts;
+	bool operator==(const EditSnapshot& o) const { return looks == o.looks && parts == o.parts; }
+	bool operator!=(const EditSnapshot& o) const { return !(*this == o); }
+};
+
 class App {
 public:
 	bool init(const std::string& openPath, std::string& error);
@@ -59,10 +68,12 @@ private:
 	ExportResult export_;
 	bool rigDirty_ = false, exportDirty_ = false;
 	bool looksDirty_ = false; ///< retoques de color: volver a subir las texturas al soltar el ratón
-	// Deshacer los retoques de color: copias de exportOpt_.looks. Un cambio
-	// cuenta al soltar el ratón (un arrastre entero es un solo paso).
-	std::vector<std::vector<MaterialLook>> lookUndo_, lookRedo_;
-	std::vector<MaterialLook> lookCommitted_;
+	bool partsDirty_ = false; ///< piezas movidas: guardar el paso al soltar el ratón
+	// Deshacer los retoques de color y las piezas (exportOpt_.looks y
+	// fit_.parts). Un cambio cuenta al soltar el ratón (un arrastre entero es
+	// un solo paso).
+	std::vector<EditSnapshot> editUndo_, editRedo_;
+	EditSnapshot editCommitted_;
 	double lastRebuild_ = 0;
 	std::vector<std::size_t> order_; ///< triángulos ordenados por material
 
@@ -137,9 +148,25 @@ private:
 	void drawWorkflow(float x, float y, float width, float height);
 	void drawPanel(float x, float y, float width, float height);
 	void drawColours();
-	void commitLooks();
-	void undoLooks(bool redo);
-	void resetLookHistory();
+	EditSnapshot edits() const { return { exportOpt_.looks, fit_.parts }; }
+	void commitEdits();
+	void undoEdits(bool redo);
+	void resetEditHistory();
+	void undoShortcuts();
+	void drawUndoButtons();
+
+	// Piezas (app_parts.cpp): elegir un material y moverlo con el gizmo.
+	int selectedPart_ = -1;
+	int gizmoOp_      = 0; ///< 0 mover, 1 girar, 2 escalar
+	int partAnimBefore_ = -1; ///< la animación que había al elegir una pieza
+	void drawParts();
+	void selectPart(int material);
+	bool pressOnGizmo_ = false;
+	bool drawPartGizmo(bool hovered); ///< true si el ratón es del gizmo; un clic en la vista elige pieza
+	int pickPart(const ImVec2& mouse) const;
+	bool partPreview(Mat34 move[2], Mat34 normal[2]) const; ///< [1]: para las copias reflejadas
+	nlohmann::json partsJson() const;
+	void restoreParts(const nlohmann::json& j);
 	void drawView(float x, float y, float width, float height);
 	void drawOverlay(const std::vector<Mat34>& skin);
 	bool project(const Vec3& p, ImVec2& out) const;

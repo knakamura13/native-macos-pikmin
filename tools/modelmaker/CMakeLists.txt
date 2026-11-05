@@ -77,6 +77,11 @@ add_executable(nectar_modelmaker
     src/import_nhm.cpp
     # FBX: ufbx (MIT, third_party/ufbx/LICENSE).
     third_party/ufbx/ufbx.c
+    # Mover piezas: ImGuizmo (MIT, third_party/imguizmo/LICENSE), commit
+    # 105e4fde45e4e74aae8973d98750820ef7aca7e2 de CedricGuillemet/ImGuizmo.
+    third_party/imguizmo/ImGuizmo.cpp
+    src/parts.cpp
+    src/app_parts.cpp
     src/rig.cpp
     src/export_nhm.cpp
     src/simplify.cpp
@@ -93,6 +98,7 @@ set_property(TARGET nectar_modelmaker PROPERTY INCLUDE_DIRECTORIES "")
 target_include_directories(nectar_modelmaker PRIVATE
     src
     third_party/ufbx
+    third_party/imguizmo
     "${MM_MAPMAKER}"
     "${MM_GEN}"
     "${MM_P1}/pc_port/launcher"
@@ -108,7 +114,7 @@ if(WIN32)
 endif()
 if(NOT MSVC)
     target_compile_options(nectar_modelmaker PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
-    set_source_files_properties(src/stb_impl.cpp third_party/ufbx/ufbx.c PROPERTIES COMPILE_OPTIONS "-w")
+    set_source_files_properties(src/stb_impl.cpp third_party/ufbx/ufbx.c third_party/imguizmo/ImGuizmo.cpp PROPERTIES COMPILE_OPTIONS "-w")
 endif()
 set_target_properties(nectar_modelmaker PROPERTIES
     OUTPUT_NAME "nectar-modelmaker"

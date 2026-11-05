@@ -497,6 +497,12 @@ RigResult buildRig(const ImpModel& model, const OlimarRig& olimar, const FitSett
 		r.verts.push_back(o);
 	}
 	r.triMaterial = model.triMaterial;
+	// Piezas movidas o reflejadas, antes de los pesos (que salen de dónde quedan).
+	PartEditResult edited;
+	applyPartEdits(fit.parts, r.verts, r.triMaterial, edited);
+	r.parts      = fit.parts;
+	r.partCentre = edited.centre;
+	r.triCopy    = edited.triCopy;
 	if (r.verts.empty()) return r;
 	Vec3 mn = r.verts[0].p, mx = mn;
 	for (const SkinVertex& v : r.verts) {
@@ -514,13 +520,14 @@ RigResult buildRig(const ImpModel& model, const OlimarRig& olimar, const FitSett
 		r.fromSkeleton = true;
 		float mapped = 0, total = 0;
 		for (std::size_t i = 0; i < n; ++i) {
-			const SkinVertex& v = model.verts[i];
+			// Las copias reflejadas llevan los huesos de su original, del otro lado.
+			const SkinVertex& v = model.verts[edited.source[i]];
 			float sum           = 0;
 			w[i].fill(0);
 			for (int k = 0; k < 4; ++k) {
 				if (v.weight[k] <= 0 || v.joint[k] < 0 || std::size_t(v.joint[k]) >= r.bones.size()) continue;
 				const BoneInfo& b = r.bones[std::size_t(v.joint[k])];
-				w[i][std::size_t(b.joint)] += v.weight[k];
+				w[i][std::size_t(edited.mirrored[i] ? mirrorJoint(b.joint) : b.joint)] += v.weight[k];
 				sum += v.weight[k];
 				if (!b.guessed) mapped += v.weight[k];
 			}
@@ -791,6 +798,7 @@ RigResult buildRig(const ImpModel& model, const OlimarRig& olimar, const FitSett
 		}
 	}
 
+	r.triCopy.resize(r.triMaterial.size(), 0); // el tallo añadido no es copia
 	r.min = r.max = r.verts[0].p;
 	for (const SkinVertex& v : r.verts) {
 		r.min = vmin(r.min, v.p);

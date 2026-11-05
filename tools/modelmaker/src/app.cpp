@@ -212,7 +212,8 @@ void App::ensureStemMaterial()
 	}
 	exportOpt_.noTint.resize(model_.materials.size(), 0);
 	exportOpt_.looks.resize(model_.materials.size());
-	resetLookHistory();
+	fit_.parts.resize(model_.materials.size());
+	resetEditHistory();
 	exportOpt_.pikmin = isPikmin();
 }
 
@@ -371,6 +372,7 @@ void App::finishLoad()
 			}
 			const std::vector<int> nt = j.value("noTint", std::vector<int>());
 			for (std::size_t i = 0; i < nt.size() && i < exportOpt_.noTint.size(); ++i) exportOpt_.noTint[i] = char(nt[i] != 0);
+			if (j.contains("parts")) restoreParts(j["parts"]);
 			if (j.contains("looks") && j["looks"].is_array()) {
 				const json& looks = j["looks"];
 				for (std::size_t i = 0; i < looks.size() && i < exportOpt_.looks.size(); ++i) {
@@ -405,8 +407,9 @@ void App::finishLoad()
 	for (std::size_t i = 0; i < anims_.size(); ++i)
 		if (anims_[i].name == "walk") anim_ = int(i);
 	frame_ = 0;
+	selectedPart_ = -1;
 	uploadTextures();
-	resetLookHistory();
+	resetEditHistory();
 	rebuild();
 	resetCamera();
 	// Tras importar, el siguiente trabajo útil es revisar escala y orientación.
@@ -652,6 +655,9 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 {
 	mesh.data.clear();
 	mesh.ranges.clear();
+	// La pieza que se arrastra, al momento (la malla se rehace cada poco).
+	Mat34 preview[2], previewNormal[2];
+	const bool previewing = !skin && unbent && partPreview(preview, previewNormal);
 	int lastMat = -2;
 	for (std::size_t t : order_) {
 		if (t * 3 + 2 >= rig_.verts.size()) continue;
@@ -680,6 +686,11 @@ void App::fillModelMesh(DynamicMesh& mesh, const std::vector<Mat34>* skin, bool 
 				n = normalize(n);
 			} else if (unbent && t * 3 + std::size_t(k) < rig_.unbent.size()) {
 				p = rig_.unbent[t * 3 + std::size_t(k)];
+			}
+			if (previewing && mat == selectedPart_) {
+				const int c = t < rig_.triCopy.size() && rig_.triCopy[t] ? 1 : 0;
+				p           = preview[c].point(p);
+				n           = normalize(previewNormal[c].dir(n));
 			}
 			GpuVertex g {};
 			g.p[0] = p.x, g.p[1] = p.y, g.p[2] = p.z;
@@ -719,9 +730,13 @@ void App::frame()
 	// Reconstruir cuando se suelta el ratón (o cada poco mientras se arrastra).
 	if (rigDirty_ && (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::GetTime() - lastRebuild_ > 0.2)) rebuild();
 	if (looksDirty_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-		commitLooks();
+		commitEdits();
 		uploadTextures();
 		looksDirty_ = false;
+	}
+	if (partsDirty_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+		commitEdits();
+		partsDirty_ = false;
 	}
 	if (exportDirty_ && hasModel_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 		export_      = buildParts(model_, rig_, olimar_, fit_, exportOpt_);
@@ -942,60 +957,77 @@ void App::drawTopBar(float width)
 	ImGui::End();
 }
 
-void App::resetLookHistory()
+void App::resetEditHistory()
 {
-	lookUndo_.clear();
-	lookRedo_.clear();
-	lookCommitted_ = exportOpt_.looks;
+	editUndo_.clear();
+	editRedo_.clear();
+	editCommitted_ = edits();
 }
+
+static bool sameShape(const EditSnapshot& a, const EditSnapshot& b) { return a.looks.size() == b.looks.size() && a.parts.size() == b.parts.size(); }
 
 // Guarda el estado anterior si los retoques cambiaron desde el último paso.
-void App::commitLooks()
+void App::commitEdits()
 {
-	if (exportOpt_.looks.size() != lookCommitted_.size()) {
-		resetLookHistory();
+	const EditSnapshot now = edits();
+	if (!sameShape(now, editCommitted_)) {
+		resetEditHistory();
 		return;
 	}
-	if (exportOpt_.looks == lookCommitted_) return;
-	lookUndo_.push_back(lookCommitted_);
-	if (lookUndo_.size() > 100) lookUndo_.erase(lookUndo_.begin());
-	lookRedo_.clear();
-	lookCommitted_ = exportOpt_.looks;
+	if (now == editCommitted_) return;
+	editUndo_.push_back(editCommitted_);
+	if (editUndo_.size() > 100) editUndo_.erase(editUndo_.begin());
+	editRedo_.clear();
+	editCommitted_ = now;
 }
 
-void App::undoLooks(bool redo)
+void App::undoEdits(bool redo)
 {
-	commitLooks();
-	auto& from = redo ? lookRedo_ : lookUndo_;
-	auto& to   = redo ? lookUndo_ : lookRedo_;
-	if (from.empty() || from.back().size() != exportOpt_.looks.size()) return;
-	to.push_back(exportOpt_.looks);
-	exportOpt_.looks = from.back();
+	commitEdits();
+	auto& from = redo ? editRedo_ : editUndo_;
+	auto& to   = redo ? editUndo_ : editRedo_;
+	const EditSnapshot now = edits();
+	if (from.empty() || !sameShape(from.back(), now)) return;
+	to.push_back(now);
+	const EditSnapshot& prev = from.back();
+	if (prev.looks != now.looks) looksDirty_ = true; // texturas otra vez
+	if (prev.parts != now.parts) rigDirty_ = true;   // la malla otra vez
+	exportOpt_.looks = prev.looks;
+	fit_.parts       = prev.parts;
 	from.pop_back();
-	lookCommitted_ = exportOpt_.looks;
-	looksDirty_    = true;
+	editCommitted_ = edits();
 	exportDirty_   = true;
+}
+
+// Ctrl+Z / Ctrl+Mayús+Z / Ctrl+Y (Cmd en macOS), como en el editor de mapas;
+// en los pasos donde se ven los colores y las piezas.
+void App::undoShortcuts()
+{
+	const ImGuiIO& io = ImGui::GetIO();
+	if (!io.WantTextInput && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) undoEdits(io.KeyShift);
+	if (!io.WantTextInput && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) undoEdits(true);
+}
+
+void App::drawUndoButtons()
+{
+	ImGui::BeginDisabled(editUndo_.empty() && edits() == editCommitted_);
+	if (ImGui::Button(L("Deshacer", "Undo"))) undoEdits(false);
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+	ImGui::BeginDisabled(editRedo_.empty());
+	if (ImGui::Button(L("Rehacer", "Redo"))) undoEdits(true);
+	ImGui::EndDisabled();
 }
 
 // Retoques de color por material: se ven en la vista y salen en el pack.
 void App::drawColours()
 {
-	// Ctrl+Z / Ctrl+Mayús+Z / Ctrl+Y (Cmd en macOS), como en el editor de mapas;
-	// solo en este paso, donde se ven los colores.
-	const ImGuiIO& io = ImGui::GetIO();
-	if (!io.WantTextInput && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) undoLooks(io.KeyShift);
-	if (!io.WantTextInput && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) undoLooks(true);
+	undoShortcuts();
 	ImGui::Dummy(ImVec2(0, 4));
 	if (!ImGui::CollapsingHeader(L("Colores", "Colours"))) return;
 	hint(L("Cambia el color de cada parte o escóndela. El juego lo verá igual.",
 	       "Change each part's colour, or hide it. The game shows it the same way."));
-	ImGui::BeginDisabled(lookUndo_.empty() && (exportOpt_.looks == lookCommitted_));
-	if (ImGui::Button(L("Deshacer", "Undo"))) undoLooks(false);
-	ImGui::EndDisabled();
-	ImGui::SameLine();
-	ImGui::BeginDisabled(lookRedo_.empty());
-	if (ImGui::Button(L("Rehacer", "Redo"))) undoLooks(true);
-	ImGui::EndDisabled();
+	drawUndoButtons();
 	bool changed = false;
 	for (std::size_t i = 0; i < model_.materials.size() && i < exportOpt_.looks.size(); ++i) {
 		MaterialLook& lk = exportOpt_.looks[i];
@@ -1181,6 +1213,7 @@ void App::drawPanel(float x, float y, float width, float height)
 		fit_.offsetZ = oz;
 		rigDirty_    = true;
 	}
+	drawParts();
 	}
 
 	// 3 · Esqueleto.
@@ -1399,13 +1432,15 @@ void App::drawView(float x, float y, float width, float height)
 		anims_[std::size_t(anim_)].pose(frame_, olimar_.parent, world);
 		retargetSkin(olimar_, rig_.pivots, world, skin);
 	}
-	if (hasModel_) drawOverlay(skin);
+	// Con una pieza elegida, su gizmo en lugar de los puntos del esqueleto.
+	if (hasModel_ && !(editorStep_ == 1 && selectedPart_ >= 0)) drawOverlay(skin);
+	const bool gizmoMouse = drawPartGizmo(hovered);
 
 	// Ratón: arrastrar un punto, girar (izquierdo/derecho), desplazar (medio
 	// o Mayús), rueda para acercar.
 	ImGuiIO& io = ImGui::GetIO();
 	if (hovered && io.MouseWheel != 0) cam_.distance = std::clamp(cam_.distance * std::pow(0.88f, io.MouseWheel), 5.0f, 400.0f);
-	if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+	if (hovered && !gizmoMouse && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 		if (hoverMarker_ >= 0) dragMarker_ = hoverMarker_;
 		else if (io.KeyShift) panning_ = true;
 		else orbiting_ = true;
@@ -1568,6 +1603,7 @@ json App::projectJson(const std::string& source) const
 	for (const MaterialLook& lk : exportOpt_.looks)
 		looks.push_back({ { "colour", { lk.colour[0], lk.colour[1], lk.colour[2] } }, { "hue", lk.hue }, { "brightness", lk.brightness }, { "hidden", lk.hidden } });
 	j["looks"] = looks;
+	j["parts"] = partsJson();
 	return j;
 }
 
