@@ -1,6 +1,6 @@
 // Piezas del modelo en el paso de colocación: elegir un material (en la lista
 // o pinchando en la vista), moverlo, girarlo o escalarlo con el gizmo y
-// pasarlo o copiarlo al otro lado. Las cuentas están en parts.cpp.
+// pasarlo o copiarlo al otro lado. Las cuentas están en part_edit.cpp.
 
 #include "app.h"
 

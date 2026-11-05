@@ -80,8 +80,8 @@ add_executable(nectar_modelmaker
     # Mover piezas: ImGuizmo (MIT, third_party/imguizmo/LICENSE), commit
     # 105e4fde45e4e74aae8973d98750820ef7aca7e2 de CedricGuillemet/ImGuizmo.
     third_party/imguizmo/ImGuizmo.cpp
-    src/parts.cpp
-    src/app_parts.cpp
+    src/part_edit.cpp
+    src/part_edit_ui.cpp
     src/rig.cpp
     src/export_nhm.cpp
     src/simplify.cpp
