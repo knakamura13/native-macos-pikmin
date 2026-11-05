@@ -13,6 +13,13 @@
 // average; the stand-ins (before the Flick motion, info 58, carried the disc's timing, #136) took 14 s with
 // 2 lost, 9 flicks and a Flick of 4.6 s, and now take 5 s with 0 lost, 5 flicks and 3.6 s. Everything else is
 // printed.
+//
+// Issue #154 (2026-11-04): Attack, StillJump, JKoke and GetUp carry the disc's timing as well
+// (standin_anims.h). Disc on this branch: dead at 3.4 s (30 Hz) and 2.5 s (60 Hz), Flick 2.9 s and 2.8 s.
+// Stand-ins before: 4.3 s and 4.5 s, Flick 3.6 s (5 flicks at 30 Hz, 1 at 60 Hz). After: 2.2 s and 1.5 s,
+// Flick 1.8 s (5 flicks at 30 Hz, none at 60 Hz). The stand-ins now win sooner than the disc: their Pikmin
+// parameters are the code defaults (knock-down 0.7 s where the disc's parms give 1 to 3 s), and the
+// stand-in Bulborb's collision spheres sit lower than the disc's.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
