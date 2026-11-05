@@ -33,6 +33,7 @@
 #include "Common/String.h"
 #include "Stream.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -398,6 +399,46 @@ void testStandIns(const std::string& manifestPath)
 		if (!spec) continue;
 		const nectar::Model m = nectar::buildStandInModel(*spec);
 		check(!m.colours.empty(), std::string(b.path) + ": drawn from its Blender art (vertex colours)");
+		// A tinted joint draws with material 0 (the one the game recolours), made
+		// white, and its art is authored white: grey vertex colours (the baked
+		// shading), so the runtime colour is the colour.
+		for (int tj : b.tintJoints) {
+			const std::string where = std::string(b.path) + " joint " + std::to_string(tj);
+			const auto& mp = m.joints[std::size_t(tj)].matPolys;
+			check(mp.size() == 1 && mp[0].first == 0, where + ": the tinted joint uses material 0");
+			const nectar::Rgba8 c = m.materials[0].colour;
+			check(c.r == 255 && c.g == 255 && c.b == 255, std::string(b.path) + ": material 0 is white under the tint");
+			int spread = 0;
+			std::size_t corners = 0;
+			for (const nectar::ModTriangle& t : m.meshes[std::size_t(tj)].groups[0].tris) {
+				for (const auto& v : t.v) {
+					const nectar::Rgba8 vc = m.colours[std::size_t(v.col)];
+					spread = std::max(spread, std::max({ int(vc.r), int(vc.g), int(vc.b) }) - std::min({ int(vc.r), int(vc.g), int(vc.b) }));
+					corners++;
+				}
+			}
+			check(corners > 0, where + ": the tinted joint has art");
+			check(spread <= 16, where + ": the tinted art is authored white (vertex colour spread " + std::to_string(spread) + ")");
+		}
+	}
+	// The walking folk (review of #160): ViewPiki::demoDraw sets the type colour,
+	// the idle pastel and the white damage flash on material 0, so the body
+	// (joint 0), arms (7, 8) and feet (10, 11) draw with it; the eyes and the
+	// trait (joint 1) keep their own material.
+	for (const char* path : { "dataDir/pikis/redModel.mod", "dataDir/pikis/yelModel.mod", "dataDir/pikis/bluModel.mod", "dataDir/pikis/kinModel.mod" }) {
+		const nectar::StandInArtBinding* folk = nullptr;
+		for (const nectar::StandInArtBinding& b : nectar::standInArtBindings()) {
+			if (std::string(b.path) == path) folk = &b;
+		}
+		check(folk != nullptr, std::string(path) + ": has Blender art");
+		if (!folk) continue;
+		for (int j : { 0, nectar::kPikiRigRightHandJoint, nectar::kPikiRigLeftHandJoint, 10, 11 }) {
+			check(std::find(folk->tintJoints.begin(), folk->tintJoints.end(), j) != folk->tintJoints.end(),
+			      std::string(path) + ": joint " + std::to_string(j) + " takes the game's folk colour");
+		}
+		const nectar::Model m = nectar::buildStandInModel(*nectar::findStandInModel(path));
+		const auto& eyes = m.joints[1].matPolys;
+		check(eyes.size() == 1 && eyes[0].first != 0, std::string(path) + ": the eyes and trait (joint 1) keep their own colours");
 	}
 	check(nectar::writeStandInModels(files, err), "writeStandInModels: " + err);
 	check(files.size() == specs.size(), "one file per spec");

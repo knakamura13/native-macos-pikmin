@@ -4231,6 +4231,10 @@ bool Navi::pcDrawAsPikmin(Graphics& gfx)
 	gfx.mCamera->mLookAtMtx.multiplyTo(world, view);
 	obj->mShape->updateAnim(gfx, view, nullptr, this);
 
+#if PIKI_SCENARIOS
+	// Disc-free stand-ins: vertex-coloured, drawn unlit like the folk (#115).
+	pc_scenario_push_creature_unlit_draw();
+#endif
 	// Puffmin: su modelo ya lleva la seta y no hay versión HD; sin hoja.
 	if (color == PIKI_Kinoko) {
 		obj->mShape->mMaterialList->setColour(Piki::kinokoColors[Red]);
@@ -4260,6 +4264,9 @@ bool Navi::pcDrawAsPikmin(Graphics& gfx)
 			pikiMgr->mLeafModel[Leaf]->drawshape(gfx, *gfx.mCamera, nullptr);
 		}
 	}
+#if PIKI_SCENARIOS
+	pc_scenario_pop_creature_unlit_draw();
+#endif
 
 	Vector3f tip(6.0f, 0.0f, 0.0f);
 	obj->mShape->calcJointWorldPos(gfx, 6, tip);

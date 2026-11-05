@@ -1,5 +1,7 @@
 #include "standin_art_meshes.h"
 
+#include <algorithm>
+
 namespace nectar {
 
 namespace {
@@ -24,7 +26,7 @@ const ArtModel* findArtModel(const std::string& name)
 	return nullptr;
 }
 
-bool addArtModel(Model& m, const StandInModelSpec& spec, const ArtModel& art, float scale, std::string& error)
+bool addArtModel(Model& m, const StandInModelSpec& spec, const ArtModel& art, float scale, std::string& error, const std::vector<int>& tintJoints)
 {
 	if (art.joints != spec.jointCount()) {
 		error = std::string(art.name) + " is made for " + std::to_string(art.joints) + " joints, " + spec.path + " has " + std::to_string(spec.jointCount());
@@ -47,7 +49,14 @@ bool addArtModel(Model& m, const StandInModelSpec& spec, const ArtModel& art, fl
 		mesh.flags |= kMeshFeatColour;
 		ModMtxGroup& group = mesh.groups[0];
 		group.tris.clear();
-		m.joints[std::size_t(am.joint)].matPolys = { { material, am.joint } };
+		// Material 0 is the one the game tints (Shape::mMaterialList->setColour);
+		// white, so the tint is the colour and the vertex colours the shading.
+		int jointMaterial = material;
+		if (std::find(tintJoints.begin(), tintJoints.end(), am.joint) != tintJoints.end() && !m.materials.empty()) {
+			m.materials[0].colour = { 255, 255, 255, 255 };
+			jointMaterial         = 0;
+		}
+		m.joints[std::size_t(am.joint)].matPolys = { { jointMaterial, am.joint } };
 
 		const int base = int(m.positions.size()), nbase = int(m.normals.size()), cbase = int(m.colours.size());
 		for (std::uint32_t v = 0; v < am.vertexCount; v++) {

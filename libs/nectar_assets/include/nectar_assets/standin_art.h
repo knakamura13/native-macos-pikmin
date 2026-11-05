@@ -41,6 +41,10 @@ struct StandInArtBinding {
 	const char* path; ///< as in StandInModelSpec::path
 	const char* art;  ///< the art model's name (its collection's nectar_model)
 	float scale;      ///< applied about the model origin
+	/// The art on these joints is drawn with material 0, the one the game tints at
+	/// run time (ViewPiki::demoDraw and pikiheadItem.cpp set it to the folk colour,
+	/// and to white for the damage flash), so it is authored white.
+	std::vector<int> tintJoints = {};
 };
 const std::vector<StandInArtBinding>& standInArtBindings();
 

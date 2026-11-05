@@ -187,8 +187,8 @@ dataDir/screen/eng_tex/image012.bti
 # ship_part_carry: delivering the Whimsical Radar unlocks the achievement "With This, I'll Be
 # Able to See All Nearby Ship Parts" (pc_achievements.cpp); its toast icon is the part's list
 # image (pc_achievement_icon, kPartImage[5] = image014) from screen.bun on the disc, and the
-# toast asks for it on every frame it is up. A missing icon draws nothing; the scenario asserts
-# the delivery, not the toast.
+# toast asks for it on every frame it is up. A missing icon draws nothing and is opened once
+# (uiTexture in pc_settings.cpp remembers it); the scenario asserts the delivery, not the toast.
 dataDir/screen/eng_tex/image014.bti
 # bomb_firsts: the first bomb a Pikmin brings back (DEMOFLAG_GrabFirstBomb, DEMOID_YellowWithBomb)
 # plays as a zero-length movie, as above. The scenario asserts the flag, not the movie.

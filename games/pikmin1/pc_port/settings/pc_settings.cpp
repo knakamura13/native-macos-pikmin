@@ -3906,12 +3906,26 @@ int f1TextWrapped(int x, int y, int w, const char* text, Colour c, int fw, int f
 
 int achievementAtRow(int row); // logro de esa fila de la pestaña, o -1
 
-// Textura del icono de un logro (del juego), cargada una vez.
+// Textura de la interfaz por ruta (screen/tex/...). Sin caché propia de
+// texturas: el registro de gsys ya la hace y se invalida cuando el heap del
+// nivel se resetea (un Texture* guardado aquí quedaba con la textura GL
+// liberada y los píxeles reutilizados). Pero un archivo que falta no entra en
+// el registro, así que loadTexture lo reabría (y DVDOpen lo anotaba en el log)
+// en cada dibujo: en datos sin disco faltan los iconos de logros. Se recuerdan
+// las rutas que faltan, junto con la carpeta de texturas del idioma (mTexDir):
+// cambiar de idioma cambia la carpeta y el icono puede existir en la nueva.
+static Texture* uiTexture(const char* path) {
+    static std::vector<std::string> sMissing;
+    const std::string key = std::string(gsys->mTexDir ? gsys->mTexDir : "") + '|' + path;
+    if (std::find(sMissing.begin(), sMissing.end(), key) != sMissing.end()) return nullptr;
+    Texture* tex = zen::loadTexExp(path, true, true);
+    if (!tex) sMissing.push_back(key);
+    return tex;
+}
+
+// Textura del icono de un logro (del juego).
 Texture* achievementIcon(int id) {
-    // Sin caché propia: el registro de gsys ya la hace y se invalida cuando el
-    // heap del nivel se resetea (un Texture* guardado aquí quedaba con la textura
-    // GL liberada y los píxeles reutilizados).
-    return zen::loadTexExp(pc_achievement_icon(id), true, true);
+    return uiTexture(pc_achievement_icon(id));
 }
 
 void drawAchievementIcon(DGXGraphics* gfx, Texture* icon, int x, int y, int maxW, int maxH, const Colour& tint) {
@@ -6835,12 +6849,9 @@ void vsFitText(const char* s, char* out, size_t n, int maxW, int fw)
 
 Texture* vsIcon(const char* name)
 {
-    // Sin caché propia: el registro de gsys ya la hace y se invalida cuando el
-    // heap del nivel se resetea (un Texture* guardado aquí quedaba con la textura
-    // GL liberada y los píxeles reutilizados).
     char path[64];
     snprintf(path, sizeof(path), "screen/tex/%s.bti", name);
-    return zen::loadTexExp(path, true, true);
+    return uiTexture(path);
 }
 void vsDrawIcon(const char* name, int x, int y, int w, int h)
 {
