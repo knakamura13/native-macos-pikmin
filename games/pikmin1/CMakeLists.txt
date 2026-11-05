@@ -2836,4 +2836,35 @@ if(PIKMIN_BUILD_SCENARIOS)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
     set_tests_properties(scenario_exit_handoff_unsupported PROPERTIES
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}")
+
+    # CTest starts the costliest tests first (COST), so a long scenario does not start last and
+    # hold up the end of a parallel run (disc-free-scenarios.yml runs each OS in 3 shards).
+    # Seconds: the slowest of the macOS, Linux and Windows CI runs of 2026-11-05 (run 41963880068),
+    # rounded. Only the order changes; a stale or missing entry costs time, never a result.
+    # A build directory that has run ctest before orders by its own measured times instead.
+    set(_scenario_costs
+        scenario_pikmin_cap_999_60 245
+        scenario_screenshot_goldens 145
+        scenario_carry_blocked_60 140
+        scenario_pikmin_cap_999_30 140
+        scenario_carry_blocked_30 130
+        scenario_screenshot_boot_smoke_30 116
+        scenario_tutorial_day1_60 85
+        scenario_day_end_handoff_cancel_fail_60 82
+        scenario_day_end_handoff_cancel_fail_30 75
+        scenario_pikmin_cap_250_60 73
+        scenario_handoff_day_end_handoff_30 68
+        scenario_throw_flight_leaf_60 66
+        scenario_handoff_day_end_handoff_60 65
+        scenario_screenshot_goldens_self 65
+        scenario_demo_timers_60 56
+        scenario_tutorial_firsts_60 51
+        scenario_ufo_part_discovery_60 50
+        scenario_pikmin_cap_250_30 49)
+    while(_scenario_costs)
+        list(POP_FRONT _scenario_costs _name _cost)
+        if(TEST ${_name})
+            set_tests_properties(${_name} PROPERTIES COST ${_cost})
+        endif()
+    endwhile()
 endif()
