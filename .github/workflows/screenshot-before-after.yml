@@ -1,0 +1,156 @@
+# PR before/after screenshots (#87 P3): build the PR's base and head, capture the same
+# stand-in scenario ticks on both (tools/scenarios/golden_shots.py's SHOTS) and upload
+# before | after | difference pictures. On a PR it also posts the summary table with the
+# artifact link as a comment. Stand-in art only: disc-quality shots need the disc, so they come
+# from a Mac with the disc or the self-hosted runner (#47), never from this job.
+name: Screenshot before-after
+
+on:
+  pull_request:
+    paths:
+      - 'games/pikmin1/pc_port/gl/**'
+      - 'games/pikmin1/pc_port/pc_art*'
+      - 'games/pikmin1/pc_port/pc_postprocess*'
+      - 'games/pikmin1/pc_port/scenarios/pc_scenario_screenshot*'
+      - 'libs/nectar_assets/**'
+      - 'games/pikmin1/tools/scenarios/standin_*'
+      - 'games/pikmin1/tools/scenarios/boot-manifest.txt'
+      - 'games/pikmin1/tools/scenarios/golden_shots.py'
+      - 'games/pikmin1/tools/scenarios/make_before_after.py'
+      - '.github/workflows/screenshot-before-after.yml'
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Branch, tag or SHA to use as "before". The dispatched ref is "after".
+        type: string
+        default: knakamura/disc-free-gameplay-develop
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 500M
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  CCACHE_NOHASHDIR: "true"
+
+jobs:
+  before-after:
+    name: Before and after (Linux, stand-in art)
+    # ubuntu-24.04 with the pinned Mesa, as the golden check uses, so both builds draw on the
+    # same software renderer.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the head ("after")
+        uses: actions/checkout@v7
+        with:
+          path: head
+
+      - name: Check out the base ("before")
+        uses: actions/checkout@v7
+        with:
+          path: base
+          ref: ${{ github.event.pull_request.base.sha || github.event.inputs.base_ref }}
+
+      - name: Pin Mesa
+        run: |
+          PIN_FILE=head/games/pikmin1/tools/scenarios/golden/linux/MESA_PIN
+          if [ -s "$PIN_FILE" ]; then
+            PIN=$(tr -d '[:space:]' < "$PIN_FILE")
+            printf 'Package: src:mesa\nPin: version %s\nPin-Priority: 1001\n' "$PIN" | sudo tee /etc/apt/preferences.d/mesa-pin
+          fi
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends --allow-downgrades \
+            cmake ninja-build ccache pkg-config libsdl2-dev libgl1-mesa-dev libx11-dev \
+            libgl1-mesa-dri libglx-mesa0 libegl-mesa0 xvfb
+          echo "Mesa in use: $(dpkg-query -W -f='${Version}' libgl1-mesa-dri)"
+
+      - name: Restore ccache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-ba-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-ba-${{ runner.os }}-
+            ccache-scen-${{ runner.os }}-${{ runner.arch }}-
+
+      # The same scenario configuration as the Disc-free scenarios job. ccache is keyed by
+      # content (CCACHE_BASEDIR, NOHASHDIR), so the base and head trees share its objects.
+      - name: Build the base and the head
+        run: |
+          for tree in base head; do
+            cmake -S "$tree/games/pikmin1" -B "build/$tree" -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+              -DPIKMIN_BUILD_LAUNCHER=OFF -DPIKMIN_BUILD_TESTS=OFF \
+              -DPIKMIN_NATIVE_JAUDIO=OFF -DPIKMIN_BUILD_SCENARIOS=ON \
+              -DPIKMIN_SCENARIO_FLOAT_DET=ON
+            cmake --build "build/$tree" --parallel --target pikmin_pc nectar_standin_generator
+          done
+
+      # Each tree gets its own stand-in data (its generator), and both are captured with the
+      # head's golden_shots.py so the shot list is identical.
+      - name: Capture the same shots on both
+        env:
+          SDL_AUDIODRIVER: dummy
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          LP_NUM_THREADS: "1"
+        run: |
+          for tree in base head; do
+            mkdir -p "build/$tree-data"
+            "build/$tree/nectar_standin_generator" "$PWD/build/$tree-data" \
+              --manifest "$tree/games/pikmin1/tools/scenarios/boot-manifest.txt"
+            xvfb-run -a python3 head/games/pikmin1/tools/scenarios/golden_shots.py capture \
+              --game "$PWD/build/$tree/bin/nectar" --data "$PWD/build/$tree-data" \
+              --out "$PWD/shots/$tree"
+          done
+
+      - name: Build the side-by-side pictures
+        run: |
+          python3 head/games/pikmin1/tools/scenarios/make_before_after.py \
+            --before shots/base --after shots/head --out before-after
+          {
+            echo "## Screenshot before and after (stand-in art, Linux llvmpipe)"
+            echo
+            cat before-after/summary.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload before-after pictures
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-before-after
+          path: |
+            before-after/
+            shots/
+          retention-days: 14
+
+      # A PR from a fork has a read-only token; the artifact and the job summary still carry the
+      # result then, so a failed comment does not fail the job.
+      - name: Comment on the PR
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          {
+            echo "### Screenshot before and after (stand-in art, Linux llvmpipe)"
+            echo
+            cat before-after/summary.md
+            echo
+            echo "Side-by-side pictures (before, after, difference): [screenshot-before-after artifact]($ARTIFACT_URL)."
+            echo "Disc-quality shots are not taken here; they need a Mac with the disc or the self-hosted runner."
+          } > comment.md
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none --body-file comment.md

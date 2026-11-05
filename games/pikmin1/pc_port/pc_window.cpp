@@ -2091,6 +2091,7 @@ static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
     // Photo mode freezes the sim, so its toggle (F3 or the touch button) is
     // input too: one flag for the whole game, on pad 0.
     if (pc_photo_mode_poll_toggle()) out[0].flags |= pc_input_log::kLocalPhotoToggle;
+    if (sSettingsMenuOpen) out[0].flags |= pc_input_log::kLocalSettingsClockHold;
     const int owner = sKeyboardOwner;
     if (owner < 0 || owner > 3) return;
     PcLocalInput& in = out[owner];

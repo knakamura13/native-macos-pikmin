@@ -60,6 +60,10 @@ std::vector<nectar::ObjectGenSpec> generators()
 		Spec s;
 		s.kind = Spec::Item;
 		s.name = "sluice soft"; // the soft gate (BuildingItem, three stages)
+		// Health is hours + days * 24 (genItem.cpp:241): 12 + 12 * 24 = 300. The disc's gate values were not read; this is a
+		// chosen value, so a gate survives a few hits (one left at 0 breaks fully on its first).
+		s.itemDays  = 12;
+		s.itemHours = 12;
 		g.push_back(at(s, 0.0f, -350.0f, "soft gate"));
 	}
 	// PLANT_Clover 0, Chidome 1, Hutaba 2, Ine 3, Tanpopo 4, Hae 11: the plants with a model in the boot manifest.
