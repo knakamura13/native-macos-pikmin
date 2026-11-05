@@ -27,6 +27,7 @@ add_library(nectar_assets STATIC
     src/mod_writer.cpp
     src/standin_models.cpp
     src/standin_art.cpp
+    src/standin_art_meshes.cpp
     src/blo.cpp
     src/pcr.cpp
     src/standin_ui.cpp
