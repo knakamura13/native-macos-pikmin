@@ -28,10 +28,58 @@ env:
   CTEST_EXCLUDE_LABELS: game-assets
 
 jobs:
+  # Which games a pull request touches (.github/scripts/changed-games.sh): a pull request that
+  # changes only Pikmin 2's own files skips the Pikmin 1 build and tests, one that changes only
+  # Pikmin 1's own files skips Pikmin 2's, and anything else (libs/, tests/, versions.json,
+  # .github/, top-level files, the dolphin_stubs Pikmin 2 compiles) builds both. Pushes and
+  # manual runs build both. The skips are steps inside build-and-test, so its three checks
+  # always finish (no status check here is required on main or the disc-free base branch,
+  # 2026-11-04, but a required one would not be left pending). If this job fails, its outputs
+  # are empty and both games build.
+  changes:
+    name: Changed games
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pikmin1: ${{ steps.classify.outputs.pikmin1 }}
+      pikmin2: ${{ steps.classify.outputs.pikmin2 }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Classify changed paths
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          # The pull request files API lists at most 3000 files; a larger one builds both.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ "${PR_CHANGED_FILES:-3000}" -lt 3000 ]; then
+            # Both sides of a rename count: moving a file out of a game changes that game.
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate \
+              --jq '.[] | .filename, (.previous_filename // empty)' > changed.txt
+            echo "$(wc -l < changed.txt) changed path(s)"
+          else
+            : > changed.txt
+          fi
+          bash .github/scripts/changed-games.sh < changed.txt | tee -a "$GITHUB_OUTPUT"
+
   build-and-test:
     name: ${{ matrix.name }}
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      # 'false' only when the changes job says this game is untouched; empty (a failed or
+      # skipped changes job) builds it.
+      BUILD_P1: ${{ needs.changes.outputs.pikmin1 != 'false' }}
+      BUILD_P2: ${{ needs.changes.outputs.pikmin2 != 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -97,6 +145,7 @@ jobs:
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Configure Pikmin 1
+        if: ${{ env.BUILD_P1 == 'true' }}
         run: |
           cmake -S games/pikmin1 -B build/pikmin1 -G Ninja \
             -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
@@ -108,10 +157,11 @@ jobs:
       # -k 0: report every compile error in one run, not only the first.
       - name: Build Pikmin 1
         id: build-p1
+        if: ${{ env.BUILD_P1 == 'true' }}
         run: cmake --build build/pikmin1 --parallel -- -k 0
 
       - name: Configure Pikmin 2
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.BUILD_P2 == 'true' }}
         run: |
           cmake -S games/pikmin2 -B build/pikmin2 -G Ninja \
             -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
@@ -121,7 +171,7 @@ jobs:
 
       - name: Build Pikmin 2
         id: build-p2
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.BUILD_P2 == 'true' }}
         run: cmake --build build/pikmin2 --parallel -- -k 0
 
       - name: Test Pikmin 1

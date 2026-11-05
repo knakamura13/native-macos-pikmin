@@ -491,11 +491,16 @@ Other jobs of the workflow:
   generator plus six scenarios, as in `standin-audio.md`). Same dependencies,
   `-UWIN32`, Mesa DLLs and environment as the main job. Nothing is skipped on any OS.
 - **`gl-probe`** (each OS): the GL context probe described under [GL probe](#gl-probe).
+- **`scenarios-merge`** (one per OS): the main job runs each OS in 3 shards
+  (`ctest -I <shard>,,3`); this job joins them with `merge_scenario_shards.py`, which fails
+  unless every scenario test ran in exactly one shard, then runs `ci_k_summary.sh` and
+  `check_throw_flight.py` on the merged logs and uploads `scenario-hash-logs-<OS>`.
+  Golden refresh: `golden-update-<OS>` comes from the shard that ran `scenario_screenshot_goldens`.
 - **`scenario-hash-compare`**: see below.
 
 #### Cross-OS state hashes
 
-`build-and-test` and `jaudio-scenarios` upload `build/pikmin1/scenario-logs/*.hash.log`
+`scenarios-merge` (the main job's shards, merged) and `jaudio-scenarios` upload `build/pikmin1/scenario-logs/*.hash.log`
 as artifacts on every run (`scenario-hash-logs-<OS>` and
 `scenario-hash-logs-jaudio-<OS>`, 14 days; about 2.6 MB per OS for the 30 logs of the
 main job and 0.5 MB for the 6 of the JAudio job, a zip of 380 KB and 100 KB).
