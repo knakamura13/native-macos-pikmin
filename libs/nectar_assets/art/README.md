@@ -62,8 +62,12 @@ vertex colour (`dgxGraphics.cpp`). The lit draw ignores vertex colours (the
 model draws white), so the object's draw call must turn the unlit draw on
 (`pc_scenario_push_creature_unlit_draw`): pellets, hives, the ship and the
 captain do, and enemies do when their shape has vertex colours
-(`BTeki::drawTekiShape`). `nectar_mod_writer_test` checks the bindings of the
-45 boot models and `nectar_standin_objects_test` those of the object models.
+(`BTeki::drawTekiShape`). A binding's `tintJoints` put those joints' meshes on
+material 0 instead, the material the game recolours at run time (the walking
+and buried folk take their folk colour, idle pastel and damage flash that way),
+so their art is authored white.
+`nectar_mod_writer_test` checks the bindings of the 45 boot models and
+`nectar_standin_objects_test` those of the object models.
 
 ### Why C++ includes and not OBJ, glTF or JSON
 
