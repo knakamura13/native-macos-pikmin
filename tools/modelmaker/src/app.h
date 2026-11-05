@@ -8,6 +8,7 @@
 #include "export_nhm.h"
 #include "import.h"
 #include "olimar.h"
+#include "accessories.h"
 #include "paint.h"
 #include "rig.h"
 #include "view.h"
@@ -18,18 +19,21 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <map>
 #include <string>
 #include <thread>
 #include <vector>
 
 namespace mm {
 
-/// Lo que se puede deshacer, aparte de la pintura: los retoques de color y
-/// las piezas movidas, por material.
+/// Lo que se puede deshacer, aparte de la pintura: los retoques de color (por
+/// material), las piezas del modelo movidas (por material del modelo) y los
+/// accesorios (con su propio retoque).
 struct EditSnapshot {
 	std::vector<MaterialLook> looks;
 	std::vector<PartEdit> parts;
-	bool operator==(const EditSnapshot& o) const { return looks == o.looks && parts == o.parts; }
+	std::vector<Attachment> accessories;
+	bool operator==(const EditSnapshot& o) const { return looks == o.looks && parts == o.parts && accessories == o.accessories; }
 	bool operator!=(const EditSnapshot& o) const { return !(*this == o); }
 };
 
@@ -39,6 +43,10 @@ struct EditStep {
 	EditSnapshot edits;
 	std::vector<PaintPatch> paint;
 };
+
+/// Un retoque de pieza en el proyecto (part_edit_ui.cpp).
+nlohmann::json partEditJson(const PartEdit& e);
+PartEdit partEditFromJson(const nlohmann::json& o);
 
 class App {
 public:
@@ -76,14 +84,40 @@ private:
 	ExportResult export_;
 	bool rigDirty_ = false, exportDirty_ = false;
 	bool looksDirty_ = false; ///< retoques de color: volver a subir las texturas al soltar el ratón
-	bool partsDirty_ = false; ///< piezas movidas: guardar el paso al soltar el ratón
-	// Deshacer (EditStep): los retoques de color, las piezas y la pintura en
-	// una sola historia. Un cambio cuenta al soltar el ratón (un arrastre
-	// entero es un solo paso).
+	bool partsDirty_ = false; ///< piezas o accesorios cambiados: guardar el paso al soltar el ratón
+	// Deshacer (EditStep): los retoques de color, las piezas, los accesorios y
+	// la pintura en una sola historia. Un cambio cuenta al soltar el ratón (un
+	// arrastre entero es un solo paso).
 	std::vector<EditStep> editUndo_, editRedo_;
 	EditSnapshot editCommitted_;
 	double lastRebuild_ = 0;
 	std::vector<std::size_t> order_; ///< triángulos ordenados por material
+
+	// Accesorios (accessories_ui.cpp). Los materiales de model_ son los del
+	// modelo [0, baseMaterials_), el tallo de los Pikmin y los de cada
+	// accesorio. Cada uno tiene una clave: los del modelo, su índice (no se
+	// mueven); los de detrás, la de tailKeys_.
+	std::vector<Attachment> attachments_;
+	PartLibrary accessoryLibrary_;
+	std::size_t baseMaterials_ = 0;
+	std::vector<std::string> tailKeys_;  ///< quién es cada material añadido ("stem", "part<uid>.<i>")
+	std::map<std::string, std::pair<MaterialLook, char>> tailMemory_; ///< su color y tinte, aunque se quite
+	std::vector<int> accessoryMaterial_; ///< primer material de cada accesorio (-1: no se pudo abrir)
+	int nextAccessoryUid_ = 1;
+	std::string restoreDir_; ///< carpeta del proyecto que se abre (rutas relativas de la pintura y los accesorios)
+	bool stemMaterial(ImpMaterial& stem) const;
+	void modelReplaced(bool keepAccessories);
+	void layoutMaterials();
+	void appendAttachments();
+	bool accessoryMaterials(int uid, int& first, int& end) const;
+	void accessoriesChanged();
+	bool addAttachment(const std::string& part, int point);
+	void removeAttachment(std::size_t index);
+	std::string accessoriesDir() const;
+	void drawAccessories();
+	nlohmann::json accessoriesJson() const;
+	void restoreAccessories(const nlohmann::json& project);
+	void bundleAccessoryFiles(nlohmann::json& project, std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& out) const;
 
 	// Vista.
 	View view_;
@@ -165,7 +199,7 @@ private:
 	void drawWorkflow(float x, float y, float width, float height);
 	void drawPanel(float x, float y, float width, float height);
 	void drawColours();
-	EditSnapshot edits() const { return { exportOpt_.looks, fit_.parts }; }
+	EditSnapshot edits() const { return { exportOpt_.looks, fit_.parts, attachments_ }; }
 	void commitEdits();
 	void pushEditStep(EditStep step);
 	void undoEdits(bool redo);
@@ -173,18 +207,25 @@ private:
 	void undoShortcuts();
 	void drawUndoButtons();
 
-	// Piezas (part_edit_ui.cpp): elegir un material y moverlo con el gizmo.
-	int selectedPart_ = -1;
+	// Piezas (part_edit_ui.cpp): elegir un material del modelo o un accesorio
+	// y moverlo con el gizmo.
+	int selectedPart_      = -1; ///< material del modelo elegido
+	int selectedAccessory_ = 0;  ///< o el uid del accesorio elegido
 	int gizmoOp_      = 0; ///< 0 mover, 1 girar, 2 escalar
 	int partAnimBefore_ = -1; ///< la animación que había al elegir una pieza
+	bool partSelected() const { return selectedPart_ >= 0 || selectedAccessory_ != 0; }
 	void drawParts();
-	void selectPart(int material);
+	void selectPart(int material, int accessory);
+	void selectMaterial(int material);
+	PartEdit* selectedEdit();
+	bool selectedMaterials(int& first, int& end) const;
 	bool pressOnGizmo_ = false;
 	bool drawPartGizmo(bool hovered); ///< true si el ratón es del gizmo; un clic en la vista elige pieza
 	int pickPart(const ImVec2& mouse) const;
-	bool partPreview(Mat34 move[2], Mat34 normal[2]) const; ///< [1]: para las copias reflejadas
-	nlohmann::json partsJson() const;
-	void restoreParts(const nlohmann::json& j);
+	/// [1]: para las copias reflejadas; [first, end): los materiales que mueve.
+	bool partPreview(Mat34 move[2], Mat34 normal[2], int& first, int& end);
+	nlohmann::json partEditsJson() const;
+	void restorePartEdits(const nlohmann::json& j);
 
 	// Pintar sobre el modelo (paint_ui.cpp).
 	PaintState paint_;

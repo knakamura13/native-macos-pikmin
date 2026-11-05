@@ -84,6 +84,8 @@ add_executable(nectar_modelmaker
     src/part_edit_ui.cpp
     src/rig.cpp
     src/export_nhm.cpp
+    src/accessories.cpp
+    src/accessories_ui.cpp
     src/simplify.cpp
     src/view.cpp
     src/game_look.cpp
