@@ -2318,7 +2318,7 @@ if(PIKMIN_BUILD_SCENARIOS)
             hardmode_boss_life:sandbox_all_objects:30 hardmode_boss_life_off:sandbox_all_objects:30
             hardmode_cheats:sandbox:30 settings_health_pct:sandbox:30 settings_health_pct_off:sandbox:30
             settings_invincible:sandbox:30 settings_invincible_off:sandbox:30 speedrun_cheats:sandbox:30
-            unlock_zones:sandbox:30 settings_menu_pause:sandbox:30
+            unlock_zones:sandbox:30 settings_menu_pause:sandbox:30,60
             throw_release_quick_grab:sandbox:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
@@ -2603,6 +2603,21 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
 
+    # F1 clock holds must survive Quick Save-style input record/replay.
+    foreach(rate 30 60)
+        add_test(NAME scenario_input_replay_settings_menu_pause_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=settings_menu_pause -DRATE=${rate}
+                -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-input-replay
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_input_replay.cmake)
+        set_tests_properties(scenario_input_replay_settings_menu_pause_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+            ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+            TIMEOUT 120)
+    endforeach()
+
     # Hand-off (issue #76) and co-op scenarios (tools/scenarios/README.md).
     # first_yellow's scripted part, headless: its hand-off point is a pass.
     # coop_smoke and coop_look: two captains in split screen on the sandbox.
@@ -2664,6 +2679,33 @@ if(PIKMIN_BUILD_SCENARIOS)
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
         TIMEOUT 1200)
+    # A slow memory card (issue #125): the challenge results window's save step makes the
+    # default card file on the card thread and polls it once per tick. With the card thread
+    # sleeping 1 s before each command, the scenario's synchronous card wait must keep the
+    # per-tick log identical. Negative control: --scenario-card-async (the game's own
+    # polling) with the same slow card must change the exit tick or miss the 60 s bound.
+    set(_card_delay "--scenario-card-delay-ms$<SEMICOLON>1000")
+    add_test(NAME scenario_card_delay_determinism_challenge_extinction_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=challenge_extinction -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-card-delay-determinism
+            "-DSECOND_ARGS=${_card_delay}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    add_test(NAME scenario_card_delay_determinism_negative_challenge_extinction_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=challenge_extinction -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-card-delay-determinism-negative
+            "-DSECOND_ARGS=${_card_delay}$<SEMICOLON>--scenario-card-async"
+            -DEXPECT_DIFFER=1 -DSECOND_MAY_FAIL=1
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    set_tests_properties(scenario_card_delay_determinism_challenge_extinction_30
+                         scenario_card_delay_determinism_negative_challenge_extinction_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 1200)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_test(NAME scenario_screenshot_verify_png_self
         COMMAND ${Python3_EXECUTABLE}
@@ -2671,12 +2713,31 @@ if(PIKMIN_BUILD_SCENARIOS)
     set_tests_properties(scenario_screenshot_verify_png_self PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios
         TIMEOUT 60)
+    # Per-OS golden pictures (#87 P2): the stand-in boot, title, main menu, file select and world map
+    # shots (golden_shots.py's SHOTS) against tools/scenarios/golden/<os>/ with that OS's tolerance.
+    # PIKMIN_UPDATE_GOLDENS=1 writes the captures instead of comparing (refresh_goldens.sh).
+    add_test(NAME scenario_screenshot_goldens_self
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/test_golden_shots.py)
+    set_tests_properties(scenario_screenshot_goldens_self PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios
+        TIMEOUT 300)
+    add_test(NAME scenario_screenshot_goldens
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/golden_shots.py check
+            --game $<TARGET_FILE:${NECTAR_GAME}>
+            --data ${PIKMIN_STANDIN_DATA}
+            --work-dir ${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/goldens)
+    set_tests_properties(scenario_screenshot_goldens PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        RUN_SERIAL TRUE
+        TIMEOUT 900)
     add_test(NAME scenario_screenshot_boot_smoke_30
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30
             -DUSE_FULL_WINDOW=1
-            $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:-DGOLDEN_COMPARE=1>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
     set_tests_properties(scenario_screenshot_boot_smoke_30 PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree
@@ -2688,7 +2749,6 @@ if(PIKMIN_BUILD_SCENARIOS)
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30_resize
-            $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:-DGOLDEN_COMPARE=1>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
     set_tests_properties(scenario_screenshot_boot_smoke_30_resize PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree

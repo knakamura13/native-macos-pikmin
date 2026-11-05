@@ -37,7 +37,6 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(verify "${CMAKE_CURRENT_LIST_DIR}/verify_scenario_png.py")
-set(golden "${CMAKE_CURRENT_LIST_DIR}/golden/boot_smoke_tick100_640x480.png")
 
 set(common_verify
     --expect-width ${capture_w}
@@ -46,14 +45,9 @@ set(common_verify
     --min-distinct-colors 80
     --min-variance 80.0)
 
-set(verify_pos_cmd "${Python3_EXECUTABLE}" "${verify}" "${pos_png}" ${common_verify})
-if(DEFINED GOLDEN_COMPARE)
-    list(APPEND verify_pos_cmd
-        --golden "${golden}" --golden-tolerance 10 --golden-max-diff-ratio 0.03)
-endif()
-
+# The per-OS golden comparison is scenario_screenshot_goldens (golden_shots.py).
 execute_process(
-    COMMAND ${verify_pos_cmd}
+    COMMAND "${Python3_EXECUTABLE}" "${verify}" "${pos_png}" ${common_verify}
     RESULT_VARIABLE pos_rc)
 if(NOT pos_rc STREQUAL "0")
     message(FATAL_ERROR "positive PNG check failed")
