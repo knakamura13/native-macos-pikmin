@@ -54,6 +54,10 @@ struct MaterialLook {
 	}
 	bool operator!=(const MaterialLook& o) const { return !(*this == o); }
 };
+/// La textura del material lista para el pack (o un color liso): color base
+/// multiplicado y alfa según el modo.
+nectar::Image materialImage(const ImpMaterial& m, int maxSide);
+
 /// Color 0..1: tono girado y luego por `colour` y `brightness`.
 void applyLook(const MaterialLook& look, float rgb[3]);
 void applyLook(const MaterialLook& look, nectar::Image& img);
@@ -63,6 +67,9 @@ struct ExportOptions {
 	bool pikmin    = false; ///< hasta 100 en pantalla: presupuesto de triángulos mucho menor
 	std::vector<char> noTint; ///< por material: no lo tiñe el color del J2 en cooperativo
 	std::vector<MaterialLook> looks; ///< por material
+	/// Por material: lo pintado encima (paint.h), después del retoque de color
+	/// para que salga del color elegido. Vacía o transparente: sin pintar.
+	std::vector<nectar::Image> paint;
 };
 
 ExportResult buildParts(const ImpModel& model, const RigResult& rig, const OlimarRig& olimar, const FitSettings& fit, const ExportOptions& opt);

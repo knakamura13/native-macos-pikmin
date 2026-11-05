@@ -1,6 +1,7 @@
 #include "export_nhm.h"
 
 #include "lang.h"
+#include "paint.h"
 
 #include <algorithm>
 #include <cmath>
@@ -30,21 +31,6 @@ nectar::Image solid(const float c[4])
 	return img;
 }
 
-// Textura del material ya lista: color base multiplicado y alfa según el modo.
-nectar::Image materialImage(const ImpMaterial& m, int maxSide)
-{
-	nectar::Image img = m.texture.empty() ? solid(m.color) : nectar::shrinkToFit(m.texture, maxSide, maxSide);
-	if (!m.texture.empty()) {
-		for (std::size_t i = 0; i + 3 < img.rgba.size(); i += 4)
-			for (int k = 0; k < 4; ++k) img.rgba[i + std::size_t(k)] = std::uint8_t(std::clamp(img.rgba[i + std::size_t(k)] * m.color[k], 0.0f, 255.0f));
-	}
-	for (std::size_t i = 3; i < img.rgba.size(); i += 4) {
-		if (m.alpha == ImpMaterial::Opaque) img.rgba[i] = 255;
-		else if (m.alpha == ImpMaterial::Mask) img.rgba[i] = img.rgba[i] >= std::uint8_t(m.cutoff * 255.0f) ? 255 : 0;
-	}
-	return img;
-}
-
 void blit(nectar::Image& dst, const nectar::Image& src, int x0, int y0, int cell)
 {
 	// Vecino más cercano a la celda (las celdas son pequeñas: se ve igual).
@@ -65,6 +51,20 @@ void put(std::vector<std::uint8_t>& out, const T& v)
 }
 
 } // namespace
+
+nectar::Image materialImage(const ImpMaterial& m, int maxSide)
+{
+	nectar::Image img = m.texture.empty() ? solid(m.color) : nectar::shrinkToFit(m.texture, maxSide, maxSide);
+	if (!m.texture.empty()) {
+		for (std::size_t i = 0; i + 3 < img.rgba.size(); i += 4)
+			for (int k = 0; k < 4; ++k) img.rgba[i + std::size_t(k)] = std::uint8_t(std::clamp(img.rgba[i + std::size_t(k)] * m.color[k], 0.0f, 255.0f));
+	}
+	for (std::size_t i = 3; i < img.rgba.size(); i += 4) {
+		if (m.alpha == ImpMaterial::Opaque) img.rgba[i] = 255;
+		else if (m.alpha == ImpMaterial::Mask) img.rgba[i] = img.rgba[i] >= std::uint8_t(m.cutoff * 255.0f) ? 255 : 0;
+	}
+	return img;
+}
 
 void applyLook(const MaterialLook& look, float c[3])
 {
@@ -153,6 +153,12 @@ ExportResult buildParts(const ImpModel& model, const RigResult& rig, const Olima
 			g.texture = materialImage(mat, opt.textureMax);
 		}
 		applyLook(lookOf(m), g.texture);
+		// La pintura, encima del retoque (sale del color que se eligió). Un
+		// material sin pintar no cambia.
+		if (g.paletteUv.empty() && std::size_t(m) < opt.paint.size() && !paintEmpty(opt.paint[std::size_t(m)])) {
+			compositePaint(g.texture, opt.paint[std::size_t(m)]);
+			g.texture = nectar::shrinkToFit(g.texture, opt.textureMax, opt.textureMax);
+		}
 		for (std::size_t t : g.tris)
 			for (int k = 0; k < 3; ++k) {
 				const Vec2& uv = rig.verts[t * 3 + std::size_t(k)].uv;

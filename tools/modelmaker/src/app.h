@@ -8,6 +8,7 @@
 #include "export_nhm.h"
 #include "import.h"
 #include "olimar.h"
+#include "paint.h"
 #include "rig.h"
 #include "view.h"
 
@@ -23,13 +24,20 @@
 
 namespace mm {
 
-/// Lo que se puede deshacer: los retoques de color y las piezas movidas, por
-/// material.
+/// Lo que se puede deshacer, aparte de la pintura: los retoques de color y
+/// las piezas movidas, por material.
 struct EditSnapshot {
 	std::vector<MaterialLook> looks;
 	std::vector<PartEdit> parts;
 	bool operator==(const EditSnapshot& o) const { return looks == o.looks && parts == o.parts; }
 	bool operator!=(const EditSnapshot& o) const { return !(*this == o); }
+};
+
+/// Un paso de deshacer o rehacer: cómo quedan los retoques y, si fue un trazo
+/// o un relleno, los trozos de capa que cambió (se intercambian con la capa).
+struct EditStep {
+	EditSnapshot edits;
+	std::vector<PaintPatch> paint;
 };
 
 class App {
@@ -69,10 +77,10 @@ private:
 	bool rigDirty_ = false, exportDirty_ = false;
 	bool looksDirty_ = false; ///< retoques de color: volver a subir las texturas al soltar el ratón
 	bool partsDirty_ = false; ///< piezas movidas: guardar el paso al soltar el ratón
-	// Deshacer los retoques de color y las piezas (exportOpt_.looks y
-	// fit_.parts). Un cambio cuenta al soltar el ratón (un arrastre entero es
-	// un solo paso).
-	std::vector<EditSnapshot> editUndo_, editRedo_;
+	// Deshacer (EditStep): los retoques de color, las piezas y la pintura en
+	// una sola historia. Un cambio cuenta al soltar el ratón (un arrastre
+	// entero es un solo paso).
+	std::vector<EditStep> editUndo_, editRedo_;
 	EditSnapshot editCommitted_;
 	double lastRebuild_ = 0;
 	std::vector<std::size_t> order_; ///< triángulos ordenados por material
@@ -159,6 +167,7 @@ private:
 	void drawColours();
 	EditSnapshot edits() const { return { exportOpt_.looks, fit_.parts }; }
 	void commitEdits();
+	void pushEditStep(EditStep step);
 	void undoEdits(bool redo);
 	void resetEditHistory();
 	void undoShortcuts();
@@ -176,6 +185,26 @@ private:
 	bool partPreview(Mat34 move[2], Mat34 normal[2]) const; ///< [1]: para las copias reflejadas
 	nlohmann::json partsJson() const;
 	void restoreParts(const nlohmann::json& j);
+
+	// Pintar sobre el modelo (paint_ui.cpp).
+	PaintState paint_;
+	void drawPaint();
+	bool paintMouse(bool hovered);
+	bool paintable(int material);
+	bool needsPaintSetup(int material);
+	bool fillable(int material);
+	void preparePaint(int material);
+	void finishPreparePaint(int material);
+	void fillPaint(int material, bool erase);
+	void endStroke();
+	void updatePaintTextures();
+	GLuint paintedTexture(std::size_t material);
+	void resetPaint();
+	void readPaintSetups(bool restoreProject);
+	void applyPaintSetups(ImpModel& model);
+	void restorePaint(const nlohmann::json& j);
+	void paintJson(nlohmann::json& j, const std::string& dir) const;
+	void paintFiles(const std::string& dir, std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& out) const;
 	void drawView(float x, float y, float width, float height);
 	void drawOverlay(const std::vector<Mat34>& skin);
 	bool project(const Vec3& p, ImVec2& out) const;
@@ -184,7 +213,7 @@ private:
 	std::string customDir() const;
 	std::string projectPath() const;
 	void saveProject() const;
-	nlohmann::json projectJson(const std::string& source) const;
+	nlohmann::json projectJson(const std::string& source, const std::string& paintDir) const;
 	/// El proyecto para guardarlo con el personaje: project.json y una copia
 	/// del modelo original con todo lo que abrió (texturas, .bin, .mtl).
 	void projectFiles(std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& out) const;
