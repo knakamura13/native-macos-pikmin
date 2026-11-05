@@ -3,6 +3,7 @@
 // Vista 3D del creador de modelos (OpenGL 3.3, a una textura que ImGui
 // muestra). Las mallas se mueven en la CPU cada fotograma, como en el juego.
 
+#include "game_look.h"
 #include "gl.h"
 #include "mm_math.h"
 #include "nectar_assets/image.h"
@@ -32,6 +33,9 @@ struct DynamicMesh {
 		int first = 0, count = 0;
 		GLuint texture = 0;
 		bool blend     = false;
+		// Solo con la luz del juego (las piezas del pack, como en pc_hd_models.cpp).
+		bool cull = false; ///< quitar las caras de atrás
+		bool tint = false; ///< la tiñe GameLook::tint
 	};
 	std::vector<Range> ranges;
 	std::vector<GpuVertex> data;
@@ -47,7 +51,8 @@ public:
 	int height() const { return height_; }
 	GLuint colorTexture() const { return color_; }
 
-	void begin(const nm::M4& viewProj);
+	/// Con `look`, hasta end() las mallas iluminadas usan la luz del juego.
+	void begin(const nm::M4& viewProj, const GameLook* look = nullptr);
 	void drawMesh(const DynamicMesh& m, bool lit, float alpha = 1.0f);
 	void drawLines(const std::vector<Vec3>& pairs, const float colour[4]);
 	void end();
@@ -61,6 +66,9 @@ public:
 private:
 	GLuint program_ = 0, fbo_ = 0, color_ = 0, depth_ = 0, white_ = 0;
 	GLint uMvp_ = -1, uUseTex_ = -1, uLit_ = -1, uAlpha_ = -1, uTex_ = -1;
+	GLint uGame_ = -1, uMatColor_ = -1, uNumLights_ = -1, uLightPos_ = -1, uLightColor_ = -1, uLightK_ = -1, uAmbColor_ = -1,
+	      uChan0En_ = -1, uPerPixel_ = -1;
+	const GameLook* look_ = nullptr;
 	int width_ = 0, height_ = 0;
 	nm::M4 viewProj_;
 	DynamicMesh lines_;
