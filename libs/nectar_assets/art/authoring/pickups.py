@@ -28,7 +28,11 @@ BEADS = [(1.9, 0.8, 0.5), (1.5, -1.7, -0.3), (1.2, 0.1, -2.0)]
 # The bomb's origin is where the game puts it: on the ground when it lies there
 # (the old stand-in, a ball centred on the origin, sat half buried) and in the
 # folk's hands when one carries it. Lifting the ball 1.4 shows most of it above
-# the ground and keeps it close to the hands.
+# the ground and keeps it close to the hands. It does not float: the ball's
+# bottom stays about 1.6 below the origin, so it sits slightly sunk into the
+# ground. A LIFT of about 3.05 would rest it flush, at the cost of carrying it
+# that much higher above the hands. Draw-only either way: the collision sphere
+# (standin_models.cpp, radius 6 at the origin) does not depend on the art.
 LIFT = 1.4
 
 
