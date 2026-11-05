@@ -72,9 +72,11 @@ def run_self_test() -> None:
     w, h, pixels = read_png_rgb(str(GOLDEN))
     assert w == 640 and h == 480
     n = distinct_color_count(pixels)
-    # Stand-in art (#115) uses more distinct flat-shaded colours than grey cubes (~126).
-    if not (100 <= n <= 400):
-        raise AssertionError(f"golden distinct colours {n}, expected flat-shaded stand-in range (100..400)")
+    # The Blender terrain (#115) textures the ground, so the stand-in frame has about
+    # 28,200-28,400 distinct colours on every OS (flat-shaded art had 100-400, grey cubes ~126).
+    # The band still rejects a blank or flat frame and a decode that scrambles pixels.
+    if not (15000 <= n <= 45000):
+        raise AssertionError(f"golden distinct colours {n}, expected textured stand-in range (15000..45000)")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
