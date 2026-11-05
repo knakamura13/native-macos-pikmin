@@ -462,6 +462,7 @@ void apply_provider()
 		sYawValid[p]         = true;
 		sExt[p]              = scripted[p].flags & pc_input_log::kExtKnown;
 		sRotate[p]           = scripted[p].cursorRotate;
+		sLocalFlags[p]       = scripted[p].local & pc_input_log::kLocalKnown;
 	}
 }
 
@@ -882,7 +883,7 @@ void pc_input_log_tick(void)
 	if (sYawCaptureFn != nullptr) sYawCaptureFn();
 	// Local inputs: live only without a replay (past its end they stay
 	// neutral, like the pads). A scenario provider owns the rotate and ext
-	// slots it filled above, so live local input does not overwrite them.
+	// and local-flag slots it filled above, so live local input does not overwrite them.
 	capture_local(!replaying && sProvider == nullptr);
 
 	// Pre-sim record write: file the pads plus the yaw the sim will use, so

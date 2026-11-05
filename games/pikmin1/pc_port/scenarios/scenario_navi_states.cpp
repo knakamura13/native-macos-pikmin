@@ -8,10 +8,10 @@
 // (getThrowVelocity, height 100) and ends in Walk after the landing motions. InteractBury::actNavi
 // refuses in an invincible state, enters NAVISTATE_Bury, takes the damage and goes to Dead at
 // health <= 1 (navi.cpp:4520-4532). NaviBuryState with no input frees him after mEscapeTimer, 150
-// exec ticks (naviState.cpp:418, 463), then the GNuke motion: 5 s at 30 Hz but 2.5 s at 60 Hz,
-// because the counter is not scaled by frame time (measured: Walk after 6.30 s at 30 Hz, 3.80 s at
-// 60 Hz; the motion is 1.3 s at both; see the W7 findings on #100). The Escape bound (10 s) holds
-// at both rates; the difference is printed, not asserted. Rope, RopeExit, Funbari, Stuck, Pellet,
+// exec ticks at 30 Hz (naviState.cpp:418, 463), then the GNuke motion (1.3 s at both rates). The
+// port scales the timer by PC_TICKS30 (300 ticks at 60 Hz), so the escape is 5 s at every rate;
+// before that fix the timer counted raw ticks and 60 Hz freed him after 2.5 s (Walk after 3.80 s
+// against 6.30 s at 30 Hz; the W7 findings on #100). Escape asserts 5 to 7 s. Rope, RopeExit, Funbari, Stuck, Pellet,
 // Pick and Water have no injection path on a stand-in stage (they are entered from rope, wall, pellet, plucking
 // and water geometry or objects) and are not driven here (coverage/edge-cases.md EC-34).
 //
@@ -21,14 +21,16 @@
 //   Land     Walk within 15 s, standing within 40 units (xz) of the target.
 //   Bury     InteractBury(10) is taken: state Bury, health -10. A second one is refused
 //            (invincible) and the health is unchanged.
-//   Escape   With no input, Walk again within 10 s (the time is printed per rate).
+//   Escape   With no input, Walk again after 5 to 7 s at both rates (the time is printed).
 //   Lethal   Health set to 5; InteractBury(10) takes the captain to Dead within 1 s.
 //
 // Negative controls: the refused second Geyzer and Bury are the contrasts to the taken first ones
 // (the same call, refused only because of the state). Manual (2026-10-31, local, not committed):
 // with the health left at full for Lethal it fails "EC-34: Bury at health <= 1 kills (Dead within 1 s)"
 // (state 19 Bury, health 80); with the Geyzer target 150 units further than checked it fails "the geyser lands the
-// captain at its target (within 40 units)", both at 30 Hz.
+// captain at its target (within 40 units)", both at 30 Hz. Without the PC_TICKS30 scaling
+// (2026-11-04, local) navi_states_60 fails "EC-34: with no input the captain is out of Bury after
+// the 5 s escape timer and his get-up (5 to 7 s)" at 3.80 s; navi_states_30 passes at 6.30 s.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -117,6 +119,11 @@ public:
 		case Escape:
 			if (st == NAVISTATE_Walk) {
 				std::printf("[scenario] navi_states: out of Bury with no input after %.2f s (%u ticks)\n", s, t - mPhaseTick);
+				// The 5 s escape timer, then the get-up motion: the same time at every tick rate.
+				if (s < 5.0f || s > 7.0f) {
+					fail(t, "EC-34: with no input the captain is out of Bury after the 5 s escape timer and his get-up (5 to 7 s)", "%.2f s", s);
+					return;
+				}
 				navi->mHealth = 5.0f;
 				const bool taken = navi->stimulate(InteractBury(navi, false, 10.0f));
 				std::printf("[scenario] navi_states: tick %u lethal bury: taken %d, health %.1f\n", t, (int)taken, navi->mHealth);

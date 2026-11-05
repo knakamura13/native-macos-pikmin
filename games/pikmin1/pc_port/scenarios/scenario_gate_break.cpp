@@ -12,8 +12,8 @@
 // WaitInit. The reinforced and bomb gates (breakable_gates setting) are not on a stand-in stage.
 //
 // In order, each within a bound in seconds:
-//   Find     The soft gate: stages >= 1, stage 0, waypoint closed. Its health is set to 300 (the
-//            stand-in generator gives it 0, see onStageReady).
+//   Find     The soft gate: stages >= 1, stage 0, waypoint closed, health 300 (the stand-in
+//            generator writes days 12 and hours 12: 12 + 12 * 24; a chosen value, not the disc's).
 //   Scratch  A 1-damage hit is taken but the stage stays 0 and the waypoint closed.
 //   Break    One hit per second of one stage's worth of health: each moves the stage by exactly 1;
 //            the last leaves health 0 and the gate completed.
@@ -64,10 +64,12 @@ public:
 			return;
 		}
 		// GenObjectItem gives a gate the generator's parameters C + B * hours as its health; the
-		// stand-in default.gen leaves both 0, and a gate at 0 breaks fully on its first hit. The
-		// scenario sets one (the disc's gate values were not read).
-		std::printf("[scenario] gate_break: generator health %.1f of %.1f; set to %.1f\n", mGate->mHealth, mGate->mMaxHealth, kGateHealth);
-		mGate->mHealth = mGate->mMaxHealth = kGateHealth;
+		// stand-in default.gen writes 12 and 12 (the disc's gate values were not read).
+		std::printf("[scenario] gate_break: generator health %.1f of %.1f\n", mGate->mHealth, mGate->mMaxHealth);
+		if (mGate->mHealth != kGateHealth || mGate->mMaxHealth != kGateHealth) {
+			fail(0, "the stand-in generator gives the soft gate health 300", "health %.1f of %.1f", mGate->mHealth, mGate->mMaxHealth);
+			return;
+		}
 		mStep = mGate->mMaxHealth / float(mGate->mNumStages);
 		std::printf("[scenario] gate_break: soft gate, %d stages, health %.1f (%.1f a stage), waypoint %d closed\n", mGate->mNumStages,
 		            mGate->mMaxHealth, mStep, mGate->mWayPoint->mIndex);
