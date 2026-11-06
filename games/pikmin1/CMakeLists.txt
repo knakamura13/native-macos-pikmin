@@ -491,6 +491,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_ship_part_carry.cpp
         pc_port/scenarios/scenario_ufo_part_discovery.cpp
         pc_port/scenarios/scenario_pellet_table.cpp
+        pc_port/scenarios/scenario_onion_boot_carry.cpp
         pc_port/scenarios/scenario_pellet_carry.cpp
         pc_port/scenarios/scenario_title_boot.cpp
         pc_port/scenarios/scenario_world_map.cpp
@@ -1681,6 +1682,39 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(nectar_standin_objects_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME nectar_standin_objects_test COMMAND nectar_standin_objects_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
 
+    # No Day Limit: the voyage log's Misc pages never run out (no disc or save)
+    add_executable(pc_diary_misc_pool_test
+        pc_port/pc_diary_misc_pool_test.cpp
+        src/plugPikiKando/resultFlag.cpp)
+    target_include_directories(pc_diary_misc_pool_test BEFORE PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/result_flag_stubs)
+    target_include_directories(pc_diary_misc_pool_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin/OS
+        ${PC_PORT_DIR})
+    target_compile_options(pc_diary_misc_pool_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_diary_misc_pool_test COMMAND pc_diary_misc_pool_test)
+
+    # Touch control layer: simulated fingers in, PAD_* buttons and stick out.
+    # Renderer, window and settings are stubbed (tests/pc_touch_test_stubs.cpp),
+    # so it needs no GPU, window or art. The layer is only built with
+    # -DPIKMIN_TOUCH=ON (Android), so the test is too.
+    if(PIKMIN_TOUCH)
+        add_executable(pc_touch_test
+            ../../tests/pc_touch_test.cpp
+            ../../tests/pc_touch_test_stubs.cpp
+            pc_port/touch/pc_touch.cpp)
+        target_include_directories(pc_touch_test PRIVATE ${SDL2_INCLUDE_DIRS} ../../tests pc_port)
+        target_link_libraries(pc_touch_test PRIVATE ${SDL2_LIBRARIES})
+        target_compile_options(pc_touch_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        add_test(NAME pc_touch_test COMMAND pc_touch_test)
+        # A scratch working directory: the layer reads pikmin_touch_layout.conf
+        # from the current directory, and a player's saved layout must not leak in.
+        set_tests_properties(pc_touch_test PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
+
     # Photo mode camera convention (no stage needed)
     add_executable(pc_photo_mode_test pc_port/pc_photo_mode_test.cpp pc_port/pc_photo_mode.cpp)
     target_include_directories(pc_photo_mode_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
@@ -1714,6 +1748,12 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_seed_landing_test PRIVATE pc_port)
     target_compile_options(pc_seed_landing_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_seed_landing_test COMMAND pc_seed_landing_test)
+
+    # Breakable-wall sides stay after the sink animation (no disc or window).
+    add_executable(pc_wall_sides_test pc_port/pc_wall_sides_test.cpp)
+    target_include_directories(pc_wall_sides_test PRIVATE pc_port)
+    target_compile_options(pc_wall_sides_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_wall_sides_test COMMAND pc_wall_sides_test)
 
     # Title screen and main menu clicks (no window, no disc)
     add_executable(pc_menu_click_test pc_port/pc_menu_click_test.cpp pc_port/pc_menu_click.cpp)
@@ -2131,6 +2171,24 @@ if(PIKMIN_BUILD_SCENARIOS)
         endforeach()
     endforeach()
 
+    # Natural Onion boot/carry against the installed disc assets. Forest Navel
+    # has the undiscovered blue Onion; Forest of Hope has yellow and red.
+    foreach(colour blue yellow red)
+        if(colour STREQUAL "blue")
+            set(_boot_stage stage2)
+        else()
+            set(_boot_stage stage1)
+        endif()
+        foreach(rate 30 60)
+            add_test(NAME scenario_${colour}_onion_boot_${rate}_disc
+                COMMAND ${NECTAR_GAME} --scenario ${colour}_onion_boot --scenario-tick-rate ${rate})
+            set_tests_properties(scenario_${colour}_onion_boot_${rate}_disc PROPERTIES
+                WORKING_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}"
+                ENVIRONMENT "PIKMIN_SCENARIO_STAGE=stages/${_boot_stage}.ini"
+                TIMEOUT 600 SKIP_RETURN_CODE 77 LABELS "game-assets")
+        endforeach()
+    endforeach()
+
     # Stand-in mode (#68): no disc. nectar_standin_generator writes the stand-in
     # tree (every libs/nectar_assets writer, plus the sandbox stage) into
     # <build>/scenario-data/assets/dataDir as a FIXTURES_SETUP test, so
@@ -2344,6 +2402,7 @@ if(PIKMIN_BUILD_SCENARIOS)
 
     # Disc-free W2 scenarios (coverage/milestones.md, issue #94), name:stage:rates.
     foreach(entry pellet_table:sandbox:30,60 ufo_part_discovery:sandbox:30,60
+        blue_onion_boot:sandbox_objects:30,60 red_onion_boot:sandbox_onions:30,60 yellow_onion_boot:sandbox_onions:30,60
         pellet_carry:sandbox_objects:30,60
         ship_part_carry:practice:30,60
         nectar_growth:sandbox:30,60
@@ -2710,6 +2769,16 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    foreach(rate 30 60)
+        add_test(NAME scenario_onion_boot_negative_${rate}
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_onion_boot_negative.py
+                --game $<TARGET_FILE:${NECTAR_GAME}> --data ${PIKMIN_STANDIN_DATA}
+                --rate ${rate} --work-dir ${CMAKE_CURRENT_BINARY_DIR}/scenario-onion-boot-negative)
+        set_tests_properties(scenario_onion_boot_negative_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree TIMEOUT 300)
+    endforeach()
+
     add_test(NAME scenario_screenshot_verify_png_self
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/test_verify_scenario_png.py)

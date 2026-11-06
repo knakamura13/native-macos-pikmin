@@ -49,6 +49,7 @@ constexpr int kStandInMinForcedCounterFrames = 31;
 // at anim key 1, one notify event at frame 9 (eventType/cmd/keyType all 0).
 // Both use flags 5 and speed 30. The old Action0-only ThrowWait read was wrong.
 // Provenance, hashes and reproduction: games/pikmin1/tools/scenarios/throwwait-disc-keys.md.
+// The stand-ins use those flags (5: constant speed, not the code default 2) and speed 30.0.
 constexpr int kThrowWaitFrames    = 21;
 constexpr int kThrowWaitGrabFrame = 1; ///< K: anim-key frame of ThrowWait's KEY_Action0
 constexpr int kThrowFrames        = 10;

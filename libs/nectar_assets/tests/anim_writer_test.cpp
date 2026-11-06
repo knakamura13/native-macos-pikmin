@@ -625,7 +625,7 @@ void testStandInSet()
 		check(info.animKeys == std::vector<int>({ 0, w.k, w.n - 1 }), std::string(w.label) + ": anim keys [0, K, N-1]");
 		const LoadedEntry& e = loaded[std::size_t(w.info)];
 		check(e.anim.frames == w.n, std::string(w.label) + ": totalFrameCount == N");
-		check(info.flags == 5 && info.speed == 30.0f, std::string(w.label) + ": disc flags 5 and speed 30");
+		check(info.flags == 5 && info.speed == 30.0f, std::string(w.label) + ": disc flags 5 (constant speed) and speed 30");
 	}
 
 	// Fresh USA Rev 1 AnimMgr dump: preserve the record order, including keys sharing a frame.
