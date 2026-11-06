@@ -11,8 +11,8 @@
 //   Throws Six blue Pikmin are born into the party. Each throw holds A until
 //          NaviThrowWaitState::mThrowChargeLevel is the wanted level, then releases, aimed 90 from
 //          the captain (the cursor offset is set each tick, as the stick would) and 60 degrees
-//          round from the last. The stand-in ThrowWait motion has no KEY_LoopEnd, so the level
-//          never rises by itself: the scenario sets it as KEY_LoopEnd would. Navi::throwPiki adds
+//          round from the last. The disc-matched ThrowWait loop raises charge
+//          without manual assignment, one level at each KEY_LoopEnd. Navi::throwPiki adds
 //          the captain's whole velocity to the Pikmin's, the vertical part too, and a captain
 //          standing in ThrowWait sometimes carries a falling speed (seen down to -24.4 at y 0)
 //          that lowers the arc; the scenario zeroes his vertical speed so the peak shows the
@@ -173,6 +173,7 @@ public:
 				mSawHanged = mSawFlying = false;
 				mThrown    = nullptr;
 				mLevel     = kLevel[mThrow];
+				mLastCharge = 0;
 				C_NAVI_PARM(navi, mThrowMaxHeight) = mMaxHeight + (kRaised[mThrow] ? kRaise : 0.0f);
 				// The idle cursor sits at the captain's feet, which throws straight up; aim
 				// kAim away from him instead, as the stick would.
@@ -197,10 +198,14 @@ public:
 				fail(t, "the release tick at the wanted charge level", "level %d, want %d", wait->mThrowChargeLevel, mLevel);
 				return;
 			}
-			if (wait->mIsHoldingThrowPiki && wait->mThrowChargeLevel < mLevel) {
-				// The stand-in ThrowWait motion has no KEY_LoopEnd, so the level never
-				// rises by itself: set it as KEY_LoopEnd would. exec reads it next tick.
-				wait->mThrowChargeLevel = mLevel;
+			if (wait->mThrowChargeLevel != mLastCharge) {
+				if (wait->mThrowChargeLevel != mLastCharge + 1) {
+					fail(t, "charge rises one level at a time without manual assignment", "level %d after %d", wait->mThrowChargeLevel, mLastCharge);
+					return;
+				}
+				mLastCharge = wait->mThrowChargeLevel;
+				std::printf("[scenario] throw_levels: natural charge %d at %.2f s held\n", mLastCharge, s);
+				// The animation runs after exec: let exec consume the new charge before release.
 				return;
 			}
 			if (wait->mIsHoldingThrowPiki && wait->mThrowChargeLevel == mLevel) {
@@ -296,6 +301,7 @@ public:
 	}
 
 private:
+	int mLastCharge = 0;
 	enum Phase { Away, Empty, Settle, Held, Release, Flight, Back, Done };
 
 	void enter(Phase p, unsigned t)

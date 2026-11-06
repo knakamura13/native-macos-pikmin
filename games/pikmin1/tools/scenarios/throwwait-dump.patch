@@ -1,0 +1,40 @@
+diff --git a/games/pikmin1/src/plugPikiColin/animMgr.cpp b/games/pikmin1/src/plugPikiColin/animMgr.cpp
+index ab8c482c8..4be5b54f9 100644
+--- a/games/pikmin1/src/plugPikiColin/animMgr.cpp
++++ b/games/pikmin1/src/plugPikiColin/animMgr.cpp
+@@ -9,6 +9,8 @@
+ #include "sysNew.h"
+ #include "system.h"
+ #include <string.h>
++#include <cstdio>
++#include <cstdlib>
+ #if defined(PIKI_PC_PORT)
+ #include "timing/pc_render_phase.h"
+ #include "timing/pc_anim_timing.h"
+@@ -377,6 +379,8 @@ void AnimMgr::loadAnims(immut char* animPath, immut char* bundlePath)
+ 				info->setIndex();
+ 				info->updateAnimFlags();
+ 				info->checkAnimData();
++                if (std::getenv("NECTAR_DUMP_THROW_KEYS") && (strcmp(info->mName, "throw.dca") == 0 || strcmp(info->mName, "trwwait.dca") == 0))
++                    std::printf("[throw-key-dump] loaded=%s frames=%d\n", info->mName, info->mData->mTotalFrameCount);
+ 			} else {
+ 				PRINT("COULD NOT FIND ANIM (%s) CREATING DUMMY\n", info->mName);
+ 				info->mData = new AnimDck(mModel, mModel->mJointCount);
+@@ -461,6 +465,17 @@ void AnimMgr::read(RandomAccessStream& input)
+ 		AnimInfo* info = new AnimInfo();
+ 		info->mMgr     = this;
+ 		info->doread(input, version);
++        if (std::getenv("NECTAR_DUMP_THROW_KEYS") && (i == 54 || i == 63)) {
++            std::printf("[throw-key-dump] info=%d name=%s flags=%u speed=%.9g version=%d infoCount=%d base=%s\n", i, info->mName, (unsigned)info->mParams.mFlags(), info->mParams.mSpeed(), version, infoCount, mParams.mBasePath().mString);
++            const char* names[] = { "anim", "info", "event" };
++            AnimKey* heads[] = { &info->mAnimKeys, &info->mInfoKeys, &info->mEventKeys };
++            for (int list = 0; list < 3; ++list) {
++                int count = 0;
++                for (AnimKey* key = heads[list]->mNext; key != heads[list]; key = key->mNext, ++count)
++                    std::printf("[throw-key-dump] %s[%d] frameOrIndex=%d eventType=%d cmd=%u keyType=%u\n", names[list], count, key->mFrameIndex, key->mEventType, (unsigned)key->mEventCmdID, (unsigned)key->mKeyType);
++                std::printf("[throw-key-dump] %s count=%d\n", names[list], count);
++            }
++        }
+ 		mAnimList.add(info);
+ 	}
+ }

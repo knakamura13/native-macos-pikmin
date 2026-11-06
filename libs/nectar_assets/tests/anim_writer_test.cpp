@@ -236,7 +236,7 @@ struct KeyTimeline {
 };
 
 // PaniAnimator::startMotion / animate / checkConstantKeys / checkConstantKey
-// (panianimator.cpp:151-295) for a one-shot: start key 0, end key clamped to the
+// (panianimator.cpp:151-295) while held: start key 0, end key clamped to the
 // last, counter += speed * dt per tick. `dt` is the sim step, 1/30 or 1/60.
 KeyTimeline runMotion(const LoadedInfo& info, float speed, float dt, int maxTicks)
 {
@@ -245,11 +245,18 @@ KeyTimeline runMotion(const LoadedInfo& info, float speed, float dt, int maxTick
 	const float endValue = keyValue(int(info.animKeys.size()) - 1);
 	float counter        = keyValue(0);
 	int current          = 0;
+	int loopStart        = 0;
 	for (int tick = 1; tick <= maxTicks && current >= 0; tick++) {
 		counter += speed * dt;
 		for (; current < int(info.infoKeys.size()); current++) {
 			if (counter < keyValue(info.infoKeys[std::size_t(current)].mFrameIndex)) break;
 			const int type = info.infoKeys[std::size_t(current)].mKeyType;
+			if (type == 0) loopStart = current;
+			if (type == 1) {
+				counter -= keyValue(info.infoKeys[std::size_t(current)].mFrameIndex)
+						- keyValue(info.infoKeys[std::size_t(loopStart)].mFrameIndex);
+				current = loopStart;
+			}
 			if (type >= 2 && type <= 5 && type - 1 == KEY_Action0 && t.actionTick < 0) t.actionTick = tick;
 		}
 		if (counter >= endValue) {
@@ -618,7 +625,26 @@ void testStandInSet()
 		check(info.animKeys == std::vector<int>({ 0, w.k, w.n - 1 }), std::string(w.label) + ": anim keys [0, K, N-1]");
 		const LoadedEntry& e = loaded[std::size_t(w.info)];
 		check(e.anim.frames == w.n, std::string(w.label) + ": totalFrameCount == N");
-		check(info.flags == 2 && info.speed == 30.0f, std::string(w.label) + ": code-default flags and speed (the disc's speed is 30 as well)");
+		check(info.flags == 5 && info.speed == 30.0f, std::string(w.label) + ": disc flags 5 and speed 30");
+	}
+
+	// Fresh USA Rev 1 AnimMgr dump: preserve the record order, including keys sharing a frame.
+	const LoadedInfo& wait = m.infos[63];
+	check(wait.infoKeys.size() == 4, "ThrowWait: four disc info keys");
+	const int indices[] = { 1, 1, 2, 2 }, types[] = { 2, 0, 3, 1 };
+	for (std::size_t k = 0; k < wait.infoKeys.size() && k < 4; ++k) {
+		const AnimKey& key = wait.infoKeys[k];
+		check(key.mFrameIndex == indices[k] && key.mKeyType == types[k] && key.mEventType == 0 && key.mEventCmdID == 0,
+			"ThrowWait: disc Action0, LoopStart, Action1, LoopEnd records in order");
+	}
+	check(wait.eventKeys.empty(), "ThrowWait: no disc event keys");
+	const LoadedInfo& throwInfo = m.infos[54];
+	check(throwInfo.infoKeys.size() == 1, "Throw: only Action0 info key");
+	check(throwInfo.eventKeys.size() == 1, "Throw: one disc event key");
+	if (throwInfo.eventKeys.size() == 1) {
+		const AnimKey& key = throwInfo.eventKeys[0];
+		check(key.mFrameIndex == 9 && key.mEventType == 0 && key.mEventCmdID == 0 && key.mKeyType == 0,
+			"Throw: disc notify event at frame 9");
 	}
 
 	// PickLoop (info 68): the disc's timing, read back as the game reads it. ActTransport lifts on its KEY_Action0.
@@ -648,7 +674,7 @@ void testStandInSet()
 	check(w60.actionTick == 2 * nectar::kThrowWaitGrabFrame || w60.actionTick == 2 * nectar::kThrowWaitGrabFrame + 1, "ThrowWait KEY_Action0 lands about 2K ticks after at 60 Hz (a float edge can add one)");
 	check(t30.actionTick > 0 && t60.actionTick > 0, "Throw's KEY_Action0 fires (the Pikmin leaves the hand)");
 	check(t30.finishedTick > t30.actionTick && t60.finishedTick > t60.actionTick, "Throw finishes after it (KEY_Finished ends the state)");
-	check(w30.finishedTick > w30.actionTick, "ThrowWait is longer than K");
+	check(w30.finishedTick == -1 && w60.finishedTick == -1, "ThrowWait loops while held instead of finishing");
 	// The measured calibration: the same fixed part (kMeasuredTicks30 - ticks) at both rates.
 	const int fixed30 = kMeasuredTicks30 - w30.actionTick, fixed60 = kMeasuredTicks60 - w60.actionTick;
 	check(fixed30 == fixed60, "the disc's 13 and 14 ticks (calibration K) differ by the animation's own ticks at 30 and 60 Hz: the same " + std::to_string(fixed30) + " fixed ticks both times");

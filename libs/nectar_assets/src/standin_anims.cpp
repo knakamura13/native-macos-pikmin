@@ -39,18 +39,23 @@ StandInAnimSet buildPikiSet()
 		}
 		a.info.name = name;
 		if (i == kAnimInfoThrowWait) {
-			// Anim keys [0, K, N-1] and one info key pointing at the middle one.
+			// Disc info-key order matters: Action0, LoopStart, Action1, LoopEnd.
 			// The first tick the counter reaches K, NaviThrowWaitState hangs the Pikmin.
 			a.frameCount     = kThrowWaitFrames;
 			a.measured       = true;
 			a.info.animKeys  = { 0, kThrowWaitGrabFrame, kThrowWaitFrames - 1 };
-			a.info.infoKeys  = { actionKey(1) };
+			a.info.flags     = 5;
+			a.info.speed     = 30.0f;
+			a.info.infoKeys  = { actionKey(1), { 1, 0, 0, 0 }, { 2, 0, 0, 3 }, { 2, 0, 0, 1 } };
 		} else if (i == kAnimInfoThrow) {
 			// NaviThrowState calls throwPiki on this key; KEY_Finished ends the state.
 			a.frameCount     = kThrowFrames;
 			a.measured       = true;
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
+			a.info.flags     = 5;
+			a.info.speed     = 30.0f;
+			a.info.eventKeys = { { kThrowFrames - 1, 0, 0, 0 } }; // disc notify (sound) at frame 9
 		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari || i == kAnimInfoPickLoop || i == kAnimInfoKizuku || i == kAnimInfoFlick
 		           || i == kAnimInfoWait || i == kAnimInfoAttack || i == kAnimInfoStillJump || i == kAnimInfoJKoke || i == kAnimInfoGetUp) {
 			// Disc timing (standin_anims.h): anim keys, then info keys as (anim-key

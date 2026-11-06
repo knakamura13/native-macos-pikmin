@@ -42,10 +42,13 @@ constexpr int kAnimInfoThrowWait = 63; ///< PIKIANIM_ThrowWait (36): hangs the P
 constexpr int kStandInDefaultFrames = 40;
 constexpr int kStandInMinForcedCounterFrames = 31;
 
-// Measured on the disc (VERSION_GPIE01_01 install). Info 63 'trwwait': frame
-// count 21, anim keys [0, 1, 20], one info key per Action0. Info 54 'throw':
-// frame count 10, anim keys [0, 1, 9], one Action0 info key. Both p00 5 and spd 30.
-// The stand-ins use the code-default flags (2) and speed (30.0, equal to the disc).
+// Re-decoded through the game's AnimMgr reader (VERSION_GPIE01_01, 2026-11-06).
+// Info 63 'trwwait': 21 frames, anim keys [0, 1, 20]; info keys in order:
+// Action0 and LoopStart at anim key 1, Action1 and LoopEnd at anim key 2.
+// No event keys. Info 54 'throw': 10 frames, anim keys [0, 1, 9], one Action0
+// at anim key 1, one notify event at frame 9 (eventType/cmd/keyType all 0).
+// Both use flags 5 and speed 30. The old Action0-only ThrowWait read was wrong.
+// Provenance, hashes and reproduction: games/pikmin1/tools/scenarios/throwwait-disc-keys.md.
 constexpr int kThrowWaitFrames    = 21;
 constexpr int kThrowWaitGrabFrame = 1; ///< K: anim-key frame of ThrowWait's KEY_Action0
 constexpr int kThrowFrames        = 10;
