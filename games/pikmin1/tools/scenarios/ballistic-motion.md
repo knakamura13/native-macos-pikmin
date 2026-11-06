@@ -27,7 +27,10 @@ unforced original-disc step was 0.032989752 seconds; its flick peak 9.006573 agr
 with the fixed 30 Hz port's 9.011110. The raw traces retain this timing limitation. A second capture normalizes only
 `gsys->mDeltaTime` to exactly 1/30 at each controller breakpoint, retaining the
 original executable's physics instructions. Its flick peak is 9.011106, against
-the port's 9.011110. Both unforced and normalized traces are retained.
+the port's 9.011110. Both unforced and normalized traces are retained. Across all 61 height samples,
+the normalized original-disc and port 30 Hz traces differ by at most 0.000004 units
+for fall and round identically to six decimals for flick. CI anchors the 30 Hz
+fall/flick scenarios to these retained original-disc traces within 0.001 units.
 Newly measured GameCube yellow/bud/flower throws are not claimed: those port cases
 are checked against their 30 Hz reference, with original provenance in the throw
 checker.

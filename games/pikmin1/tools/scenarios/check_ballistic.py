@@ -6,6 +6,7 @@ Only the airborne part is compared: post-contact AI and animation timing are sep
 contracts. No expected disc values are invented; the 30 Hz scenario log is the reference.
 """
 import argparse
+import json
 from pathlib import Path
 import re
 
@@ -55,17 +56,35 @@ def compare(directory):
     return problems
 
 
+def check_disc_reference(directory):
+    """Anchor CI's 30 Hz fall/flick to retained original-executable measurements."""
+    evidence = json.loads((Path(__file__).parent / 'evidence' / 'ballistic-gc-2026-11-06.json').read_text())
+    problems = []
+    for case in ('fall', 'flick'):
+        rows, _, _ = collect(Path(directory) / f'scenario_ballistic_{case}_30.log', case, 30)
+        pattern = re.compile(r'^\[ballistic\] TRACE ' + case + r' (\d+) ([-\d.]+) ([-\d.]+)$')
+        expected = [pattern.match(line) for line in evidence['fixed_30hz_trace_lines'][case]]
+        expected = [m for m in expected if m]
+        if len(expected) != len(rows):
+            raise ValueError(f'disc {case}: incomplete reference trajectory')
+        for (tick, y, _), measured in zip(rows, expected):
+            if tick != int(measured[1]) or abs(y - float(measured[2])) > 0.001:
+                problems.append(f'{case} 30 Hz tick {tick} height {y:.6f}, original disc {float(measured[2]):.6f} (tolerance 0.001)')
+                break
+    return problems
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory')
     args = parser.parse_args()
     try:
-        problems = compare(args.directory)
+        problems = compare(args.directory) + check_disc_reference(args.directory)
     except (OSError, ValueError) as error:
         parser.exit(1, f'FAIL: {error}\n')
     if problems:
         parser.exit(1, '\n'.join('FAIL: ' + p for p in problems) + '\n')
-    print('ballistic fall/flick/launch/impulse/zero-gravity/drag/volatile/scripted/enemy match 30 Hz at 60/120 Hz')
+    print('ballistic trajectories match 30 Hz at 60/120 Hz; 30 Hz fall/flick match original disc within 0.001 units')
 
 
 if __name__ == '__main__':

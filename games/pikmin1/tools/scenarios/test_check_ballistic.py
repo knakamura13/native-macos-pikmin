@@ -1,7 +1,9 @@
 import pathlib
+import json
+import re
 import tempfile
 import unittest
-from check_ballistic import CASES, compare, collect
+from check_ballistic import CASES, compare, collect, check_disc_reference
 
 
 class BallisticCheckerTests(unittest.TestCase):
@@ -35,6 +37,21 @@ class BallisticCheckerTests(unittest.TestCase):
     def test_missing_pass_or_samples_fails(self):
         p = self.path(); p.write_text(p.read_text().replace('[scenario] PASS', '[scenario] FAIL'))
         with self.assertRaisesRegex(ValueError, 'missing PASS'): compare(self.directory)
+
+    def test_original_disc_anchor_and_negative_control(self):
+        evidence = json.loads((pathlib.Path(__file__).parent / 'evidence' / 'ballistic-gc-2026-11-06.json').read_text())
+        for case in ('fall', 'flick'):
+            trace = [line.replace(f'TRACE {case} ', f'TRACE ballistic_{case} ') + '\n'
+                     for line in evidence['fixed_30hz_trace_lines'][case] if ' TRACE ' in line]
+            heights = [float(line.split()[4]) for line in trace]
+            landing = next(t for t, y in enumerate(heights) if t and y <= 0.01)
+            trace += [f'[ballistic] END ballistic_{case} peak {max(heights):.6f} landing {landing}\n',
+                      f'[scenario] PASS ballistic_{case} at tick 999\n']
+            self.path(case, 30).write_text(''.join(trace))
+        self.assertEqual(check_disc_reference(self.directory), [])
+        path = self.path('fall', 30)
+        path.write_text(re.sub(r'(TRACE ballistic_fall 1 )([-\d.]+)', lambda m: m[1] + f'{float(m[2]) + 0.02:.6f}', path.read_text(), count=1))
+        self.assertRegex(' '.join(check_disc_reference(self.directory)), 'original disc')
 
     def test_duplicate_tick_fails(self):
         p = self.path(); s = p.read_text(); p.write_text(s.replace('fall 1 ', 'fall 0 '))
