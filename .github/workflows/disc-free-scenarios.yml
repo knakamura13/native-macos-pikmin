@@ -343,6 +343,7 @@ jobs:
         run: |
           mkdir -p shard-out/scenario-logs shard-out/Testing/Temporary
           for f in build/pikmin1/scenario-logs/*.hash.log \
+                   build/pikmin1/scenario-logs/scenario_ballistic_*.log \
                    build/pikmin1/scenario-logs/scenario_throw_release_*.log \
                    build/pikmin1/scenario-logs/scenario_throw_flight_*.log; do
             if [ -f "$f" ]; then cp "$f" shard-out/scenario-logs/; fi
