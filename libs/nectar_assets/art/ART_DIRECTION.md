@@ -162,6 +162,18 @@ and four landing feet.
 - **Differs from the Dolphin:** not elongated, no nose cone, no cockpit canopy,
   no fins or tail. A round flying lamp-kettle.
 
+### Ship parts: engine and radar roles
+
+- **Engine** (`objects/ufoparts/soto5.mod`): a low brass fan cartridge with
+  four rounded vanes, a glowing amber hub and four teal connectors. A broad
+  horizontal ring distinguishes it from the upright radar hoop.
+- **Radar** (`objects/ufoparts/fuzoku1.mod`): a squat teal instrument base
+  supporting an upright brass compass hoop, with a cream pointer and amber
+  pivot. No dish or antenna. Its open hoop reads above the base at distance.
+- Both use the lantern barge's materials. No saturated folk colours. The
+  existing 20-joint and 5-joint rigs, bounds and collision spheres stay intact;
+  the artwork hangs from the root and never supplies gameplay measurements.
+
 ### Pellets (`objects/pellets/white1-4.mod`)
 
 Thick rounded honey-gold seed tokens: a domed disc with a bevelled rim and a

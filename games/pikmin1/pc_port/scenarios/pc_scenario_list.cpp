@@ -41,6 +41,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_boot_smoke(),
 		pc_scenario_make_hud_layout(),
 		pc_scenario_make_standin_showcase(),
+		pc_scenario_make_ship_parts_showcase(),
 		pc_scenario_make_throw_release(),
 		pc_scenario_make_day30_clock(),
 		pc_scenario_make_sprout_landing(),

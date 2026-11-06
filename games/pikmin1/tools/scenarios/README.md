@@ -1182,3 +1182,20 @@ Unix Makefiles, `PIKMIN_NATIVE_JAUDIO=OFF`):
   `-G Ninja`.
 - `gl_probe.c`, built with the command above, printed `GL_PROBE_OK` (4.1 Metal,
   Apple M3 Max).
+
+## Ship-part art showcase (#115)
+
+`ship_parts_showcase` spawns the real `ust5` and `uf01` pellets on the showcase
+stage, with a fixed camera away from the landing site. It runs for 150 ticks.
+The engine cartridge is on the left, the compass instrument on the right.
+
+```sh
+PIKMIN_SCENARIO_DATA_DIR="$PWD/build/pikmin1-scenarios/scenario-data" \
+  build/pikmin1-scenarios/bin/nectar --scenario ship_parts_showcase \
+  --scenario-screenshot "120:$PWD/ship_parts.png"
+```
+
+`scenario_screenshot_ship_parts_30` checks the two objects' colours in separate
+regions at 640x480. CI uploads the capture in `scenario-screenshots-*`, and the
+before/after workflow attaches a comparison using each revision's generated assets.
+These are original Hollowmere designs; this slice does not complete all of #115.

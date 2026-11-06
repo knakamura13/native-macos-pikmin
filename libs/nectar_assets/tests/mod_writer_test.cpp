@@ -440,6 +440,25 @@ void testStandIns(const std::string& manifestPath)
 		const auto& eyes = m.joints[1].matPolys;
 		check(eyes.size() == 1 && eyes[0].first != 0, std::string(path) + ": the eyes and trait (joint 1) keep their own colours");
 	}
+	// Ship parts must have readable coloured equipment art, while retaining the
+	// model spec's gameplay structure (the art exporter must never own it).
+	for (const char* path : { "dataDir/objects/ufoparts/soto5.mod", "dataDir/objects/ufoparts/fuzoku1.mod" }) {
+		const auto* spec = nectar::findStandInModel(path);
+		check(spec != nullptr, std::string(path) + ": model spec exists");
+		if (!spec) continue;
+		const auto model = nectar::buildStandInModel(*spec);
+		check(!model.colours.empty(), std::string(path) + ": coloured ship-part art replaces the grey primitive");
+		check(model.trailingIni == spec->collInfo, std::string(path) + ": collision spheres stay byte-identical");
+		check(model.joints.size() == spec->parents.size(), std::string(path) + ": joint count is unchanged");
+		for (std::size_t j = 0; j < model.joints.size(); j++) {
+			check(model.joints[j].parent == spec->parents[j], std::string(path) + ": parent is unchanged");
+			const float h = j == 0 ? spec->halfSize : spec->halfSize * 0.5f;
+			const auto& joint = model.joints[j];
+			check(joint.boundsMin.x == -h && joint.boundsMin.y == -h && joint.boundsMin.z == -h
+			      && joint.boundsMax.x == h && joint.boundsMax.y == h && joint.boundsMax.z == h,
+			      std::string(path) + ": joint bounds stay unchanged");
+		}
+	}
 	check(nectar::writeStandInModels(files, err), "writeStandInModels: " + err);
 	check(files.size() == specs.size(), "one file per spec");
 
