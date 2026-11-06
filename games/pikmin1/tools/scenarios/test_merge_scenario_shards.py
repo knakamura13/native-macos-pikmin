@@ -40,6 +40,8 @@ class ShardMergeTests(unittest.TestCase):
     def test_retains_each_shards_exact_provenance(self):
         result = self.run_merge()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.out / 'scenario-evidence/metadata.json').read_bytes(),
+                         (self.shards[0] / 'scenario-evidence/metadata.json').read_bytes())
         for shard in self.shards:
             for source in (shard / 'scenario-evidence').iterdir():
                 self.assertEqual((self.out / 'scenario-evidence' / shard.name / source.name).read_bytes(),
@@ -52,6 +54,12 @@ class ShardMergeTests(unittest.TestCase):
         result = self.run_merge()
         self.assertEqual(result.returncode, 1)
         self.assertIn('common.hash.log: written by', result.stdout)
+
+    def test_conflicting_metadata_still_fails(self):
+        (self.shards[1] / 'scenario-evidence/metadata.json').write_text('{"revision":"different"}')
+        result = self.run_merge()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('metadata.json', result.stdout)
 
     def test_missing_test_still_fails(self):
         self.junit(1, ['generate'])

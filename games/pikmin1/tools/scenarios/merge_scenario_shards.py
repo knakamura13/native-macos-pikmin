@@ -131,6 +131,16 @@ def main():
         evidence = os.path.join(d, "scenario-evidence")
         if os.path.isdir(evidence):
             shutil.copytree(evidence, os.path.join(out, "scenario-evidence", shard))
+            # The timing comparator reads shared source/revision metadata at the root.
+            # Keep its existing contract and reject conflicting metadata; raw build
+            # files remain per shard because hosted tool versions and paths differ.
+            metadata = os.path.join(evidence, "metadata.json")
+            shared = os.path.join(out, "scenario-evidence", "metadata.json")
+            if os.path.isfile(metadata):
+                if os.path.isfile(shared) and not filecmp.cmp(metadata, shared, shallow=False):
+                    problems.append(f"metadata.json: differs in {shard}")
+                elif not os.path.exists(shared):
+                    shutil.copy2(metadata, shared)
         last = os.path.join(d, "Testing", "Temporary", "LastTest.log")
         if os.path.isfile(last):
             dst = os.path.join(out, "Testing", "Temporary", f"LastTest_shard{i}.log")
