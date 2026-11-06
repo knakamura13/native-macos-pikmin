@@ -24,7 +24,7 @@
 #include "gameflow.h"
 #include "teki.h"
 namespace {
-enum Kind { Fall, Flick, Launch, Impulse, ZeroGravity, Drag, Volatile, GravityToggle, SubtickImpulse };
+enum Kind { Fall, Flick, Launch, Impulse, ZeroGravity, Drag, Volatile, GravityToggle, SubtickImpulse, FlowerNegative, FlowerApexImpulse };
 class Ballistic : public PcScenario {
 public:
 	Ballistic(const char* n, Kind k) : mName(n), mKind(k) {}
@@ -61,7 +61,11 @@ public:
 					scenarioFailf(t, "real Flick state", "state %d", mPiki->getState()); return;
 				}
 			}
-			mPiki->mVelocity.set(0, mKind == Flick || mKind == Launch || mKind == Drag || mKind == GravityToggle || mKind == SubtickImpulse ? 125.0f : 0.0f, 0);
+			if (mKind == FlowerNegative || mKind == FlowerApexImpulse) {
+				mPiki->setFlower(Flower);
+				mPiki->mFSM->transit(mPiki, PIKISTATE_Flying);
+			}
+			mPiki->mVelocity.set(0, mKind == Flick || mKind == Launch || mKind == Drag || mKind == GravityToggle || mKind == SubtickImpulse || mKind == FlowerApexImpulse ? 125.0f : (mKind == FlowerNegative ? -50.0f : 0.0f), 0);
 			mPiki->mTargetVelocity.set(0, 0, 0);
 			mPiki->mVolatileVelocity.set(0, 0, 0);
 			mPiki->mSRT.t = at;
@@ -105,7 +109,7 @@ public:
 		}
 		// Inject after the trace, so the next movement tick consumes this real impulse.
 		// Use the same physical time (7/30 s) at every rate; helper tests cover subframe impulses.
-		if (mKind == Impulse && elapsed == 7 * (rate / 30)) mPiki->mVelocity.y += 125.0f;
+		if ((mKind == Impulse || mKind == FlowerApexImpulse) && elapsed == 7 * (rate / 30)) mPiki->mVelocity.y += 125.0f;
 		if (mKind == GravityToggle && elapsed == 1) {
 			mPiki->disableGravity();
 			mEventY = mPiki->mSRT.t.y;
@@ -191,6 +195,8 @@ private:
 };
 }
 #define BALLISTIC_FACTORY(suffix, kind) PcScenario* pc_scenario_make_ballistic_##suffix() { static Ballistic s("ballistic_" #suffix, kind); return &s; }
+BALLISTIC_FACTORY(flower_negative, FlowerNegative)
+BALLISTIC_FACTORY(flower_apex_impulse, FlowerApexImpulse)
 BALLISTIC_FACTORY(fall, Fall)
 BALLISTIC_FACTORY(flick, Flick)
 BALLISTIC_FACTORY(launch, Launch)

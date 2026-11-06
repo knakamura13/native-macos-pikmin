@@ -2470,7 +2470,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     endforeach()
 
     # Controlled real movement probes (#157), compared at shared reference times.
-    foreach(scenario ballistic_fall ballistic_flick ballistic_launch ballistic_impulse ballistic_zero_gravity ballistic_drag ballistic_volatile ballistic_scripted ballistic_enemy)
+    foreach(scenario ballistic_flower_negative ballistic_flower_apex_impulse ballistic_fall ballistic_flick ballistic_launch ballistic_impulse ballistic_zero_gravity ballistic_drag ballistic_volatile ballistic_scripted ballistic_enemy)
         foreach(rate 30 60 120)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
@@ -2483,6 +2483,10 @@ if(PIKMIN_BUILD_SCENARIOS)
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
                 ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini;PIKMIN_BALLISTIC_SPOT=-350,350"
                 TIMEOUT 600)
+            if(scenario MATCHES "^ballistic_flower_")
+                set_property(TEST scenario_${scenario}_${rate} APPEND PROPERTY ENVIRONMENT
+                    "PIKMIN_BALLISTIC_GLIDE_NOISE_ZERO=1")
+            endif()
         endforeach()
     endforeach()
 
@@ -2509,7 +2513,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
             -s ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios -p test_check_ballistic.py)
     set(ballistic_probe_tests "")
-    foreach(probe fall flick launch impulse zero_gravity drag volatile scripted enemy)
+    foreach(probe flower_negative flower_apex_impulse fall flick launch impulse zero_gravity drag volatile scripted enemy)
         foreach(rate 30 60 120)
             list(APPEND ballistic_probe_tests scenario_ballistic_${probe}_${rate})
         endforeach()

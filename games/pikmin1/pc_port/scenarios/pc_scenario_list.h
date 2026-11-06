@@ -134,6 +134,8 @@ PcScenario* pc_scenario_make_throw_flight_hold(void);
 
 PcScenario* pc_scenario_make_ballistic_gravity_toggle(void);
 PcScenario* pc_scenario_make_ballistic_subtick_impulse(void);
+PcScenario* pc_scenario_make_ballistic_flower_negative(void);
+PcScenario* pc_scenario_make_ballistic_flower_apex_impulse(void);
 PcScenario* pc_scenario_make_ballistic_fall(void);
 PcScenario* pc_scenario_make_ballistic_flick(void);
 PcScenario* pc_scenario_make_ballistic_launch(void);

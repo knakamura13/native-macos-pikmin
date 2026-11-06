@@ -96,6 +96,8 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_throw_levels(),
 		pc_scenario_make_ballistic_gravity_toggle(),
 		pc_scenario_make_ballistic_subtick_impulse(),
+		pc_scenario_make_ballistic_flower_negative(),
+		pc_scenario_make_ballistic_flower_apex_impulse(),
 		pc_scenario_make_ballistic_fall(),
 		pc_scenario_make_ballistic_flick(),
 		pc_scenario_make_ballistic_launch(),

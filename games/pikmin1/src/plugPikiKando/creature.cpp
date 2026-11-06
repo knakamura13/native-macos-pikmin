@@ -779,12 +779,6 @@ void Creature::update()
 	do {
 		if (referenceMotion) {
 			deltaTime = mPcBallisticClock.slice(remaining);
-			if (mPcBallisticClock.boundary() && mObjType == OBJTYPE_Piki) {
-				Piki* piki = static_cast<Piki*>(this);
-				if (piki->getState() == PIKISTATE_Flying) {
-					static_cast<PikiFlyingState*>(piki->getCurrState())->integrateFlight(piki, PcBallisticClock::step, false);
-				}
-			}
 		} else {
 			mPcBallisticClock.reset();
 		}
@@ -874,7 +868,18 @@ void Creature::update()
 	moveRotation(deltaTime);
 	MATCHING_STOP_TIMER("MOVENEW");
 #if defined(PIKI_PC_PORT)
-		if (referenceMotion) mPcBallisticClock.advance(deltaTime);
+		if (referenceMotion) {
+			mPcBallisticClock.advance(deltaTime);
+			// ViewPiki runs its state handler after Creature movement. Preserve
+			// that ordering, including inherited downward velocity and impulses
+			// applied at the apex, at each completed reference interval.
+			if (mPcBallisticClock.boundary() && mObjType == OBJTYPE_Piki) {
+				Piki* piki = static_cast<Piki*>(this);
+				if (piki->getState() == PIKISTATE_Flying) {
+					static_cast<PikiFlyingState*>(piki->getCurrState())->integrateFlight(piki, PcBallisticClock::step, false);
+				}
+			}
+		}
 		remaining -= deltaTime;
 	} while (remaining > 0.0000001f);
 	if (mGroundTriangle) mPcBallisticClock.reset();

@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import re
 
-CASES = ('fall', 'flick', 'launch', 'impulse', 'zero_gravity', 'drag', 'volatile', 'scripted', 'enemy')
+CASES = ('flower_negative', 'flower_apex_impulse', 'fall', 'flick', 'launch', 'impulse', 'zero_gravity', 'drag', 'volatile', 'scripted', 'enemy')
 TOLERANCE = 0.1
 TRACE = re.compile(r'^\[ballistic\] TRACE ballistic_(\w+) (\d+) ([-\d.]+) ([-\d.]+)$', re.M)
 END = re.compile(r'^\[ballistic\] END ballistic_(\w+) peak ([-\d.]+) landing (\d+)$', re.M)
@@ -46,12 +46,15 @@ def compare(directory):
             # Collision tracing stays at high frequency; allow one original tick of contact quantization.
             if landing and abs(got_landing / rate - landing / 30) > 1 / 30 + 0.00001:
                 problems.append(f'{case} {rate} Hz landing {got_landing / rate:.6f}s, 30 Hz {landing / 30:.6f}s')
-            for tick, y, _ in ref:
+            for tick, y, velocity in ref:
                 if landing and tick >= landing:
                     break
                 got_y = rows[tick * (rate // 30)][1]
                 if abs(got_y - y) > TOLERANCE:
                     problems.append(f'{case} {rate} Hz t={tick}/30 height {got_y:.6f}, 30 Hz {y:.6f}')
+                    break
+                if case.startswith('flower_') and abs(rows[tick * (rate // 30)][2] - velocity) > 0.1:
+                    problems.append(f'{case} {rate} Hz t={tick}/30 velocity {rows[tick * (rate // 30)][2]:.6f}, 30 Hz {velocity:.6f}')
                     break
     return problems
 

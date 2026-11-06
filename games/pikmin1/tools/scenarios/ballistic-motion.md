@@ -73,17 +73,28 @@ observable. Its30 Hz schema is unchanged.
 
 ## Regression checks
 
-`throw_levels` asserts the normal peak61.29 within0.1 units at 30/60/120 Hz while
+`throw_levels` asserts the normal peak61.29 within 0.1 units at 30/60/120 Hz while
 retaining its raised-height charge negative control. `check_throw_flight.py`
 checks every leaf/bud/flower/yellow throw, with peak tolerance 0.05 and launch-speed
 tolerance 0.1; yellow peaks 104.40 at all three rates. High-frequency ground contact
 can quantize landing by one high-rate tick; its measured flight is 37/74/149 ticks.
 
-The controlled scenarios compare full airborne heights at shared30 Hz timestamps
-and every sampled peak within0.1 units. They cover fall, real Flick, elevated
+The controlled scenarios compare full airborne heights at shared 30 Hz timestamps
+and every sampled peak within 0.1 units. They cover fall, real Flick, elevated
 launch, a mid-flight impulse, zero gravity, drag, volatile movement, real Teki
 action-gravity and a real scripted acceleration event. Separate assertions cover
 mid-interval gravity disable, a sub-tick impulse and repeated enemy ground contact.
+Two further real Flying-state fixtures cover an inherited negative launch speed
+and an impulse at the apex. They assert both heights and reference-boundary
+velocities within 0.1. These controlled fixtures normalize the original glide-noise
+value to zero using `PIKMIN_BALLISTIC_GLIDE_NOISE_ZERO=1`, while retaining the random
+draw. This isolates integration from the world's rate-dependent RNG interleaving;
+ordinary throw tests keep the game's noise. The knob exists only in scenario
+builds and has no release-build effect. The flower force callback runs at the
+**end** of each reference interval, matching ViewPiki's movement-before-state
+ordering. A start-of-interval callback erases inherited downward speed and misses
+an apex impulse; the two probes reject that ordering.
+
 The clock unit also splits non-divisor 75 Hz segments. Corrupted-log tests prove
 missing traces, changed heights and an interior apex cannot pass the checker.
 

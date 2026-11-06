@@ -1,4 +1,7 @@
 #include "PikiState.h"
+#if PIKI_SCENARIOS
+#include <cstdlib>
+#endif
 #include "AIConstant.h"
 #include "BombItem.h"
 #include "CPlate.h"
@@ -2042,6 +2045,12 @@ void PikiFlyingState::integrateFlight(Piki* piki, f32 forceTime, bool spin)
 
 	// for some natural variation in fall speed
 	f32 randomFactor = (gsys->getRand(1.0f) - 0.5f) * 0.01f;
+#if PIKI_SCENARIOS
+	// Controlled trajectory fixtures isolate integration from the world's
+	// rate-dependent RNG stream. Keep the draw, and never change release builds.
+	const char* fixedNoise = std::getenv("PIKMIN_BALLISTIC_GLIDE_NOISE_ZERO");
+	if (fixedNoise && fixedNoise[0] == '1' && fixedNoise[1] == '\0') randomFactor = 0.0f;
+#endif
 
 	STACK_PAD_TERNARY(randomFactor, 1);
 
