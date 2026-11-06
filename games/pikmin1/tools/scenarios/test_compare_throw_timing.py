@@ -57,6 +57,41 @@ class ComparisonTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'provenance differs'):
             compare(self.sources)
 
+    def nest_evidence(self, name, shards=('shard-a', 'shard-b')):
+        evidence = self.sources[name].parent/'scenario-evidence'
+        raw = (evidence/'metadata.json').read_text()
+        (evidence/'metadata.json').unlink()
+        for index, shard in enumerate(shards):
+            directory = evidence/shard
+            directory.mkdir()
+            (directory/'metadata.json').write_text(raw)
+            (directory/'CMakeCache.txt').write_text(f'CMAKE_CACHE_PATCH_VERSION:INTERNAL={index}\n')
+
+    def test_nested_shard_provenance(self):
+        # Merged shard artifacts nest provenance; unsharded JAudio artifacts keep one file.
+        self.nest_evidence('macOS')
+        self.nest_evidence('Linux')
+        caches = sorted((self.sources['macOS'].parent/'scenario-evidence').glob('*/CMakeCache.txt'))
+        self.assertEqual(len(caches), 2)
+        self.assertNotEqual(caches[0].read_bytes(), caches[1].read_bytes())
+        self.assertTrue((self.sources['Windows'].parent/'scenario-evidence'/'metadata.json').is_file())
+        self.assertEqual(compare(self.sources)['Linux'], {'30':15,'60':18})
+
+    def test_nested_revision_conflict(self):
+        self.nest_evidence('macOS')
+        path = self.sources['macOS'].parent/'scenario-evidence'/'shard-b'/'metadata.json'
+        data = json.loads(path.read_text())
+        data['revision'] = 'different'
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError,'provenance differs'):
+            compare(self.sources)
+
+    def test_nested_missing_metadata(self):
+        self.nest_evidence('macOS', shards=('shard-a',))
+        (self.sources['macOS'].parent/'scenario-evidence'/'shard-a'/'metadata.json').unlink()
+        with self.assertRaises(OSError):
+            compare(self.sources)
+
     def test_single_source(self):
         with self.assertRaisesRegex(ValueError,'two distinct'):
             compare({'macOS': self.sources['macOS']})
