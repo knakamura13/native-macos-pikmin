@@ -24,9 +24,10 @@
 // dead at 2.4 s (30 Hz) and 1.6 s (60 Hz), Flick 3.3 s (5 flicks at 30 Hz, none at 60 Hz); the disc 3.4 s
 // and 2.5 s, Flick 2.9 s. They still win sooner than the disc; the open lead is the stand-in Bulborb's
 // collision spheres, which sit lower than the disc's (#154).
-// The measured rest rig now puts cent at y=11.199888 (enemy scale 0.8), gives
-// kills 3.2/2.4 s, and Flick absent/2.71 s at 30/60 Hz. This is not parity:
-// the disc's moving joints and the stage's pre-fight phase remain different.
+// The measured MOD rest rig puts cent near 14 at actor scale 1, not 11.2 at
+// scale 0.8 (the earlier claim was wrong). Moving collision-joint channels now
+// reproduce the full disc-Chappy-bundle overlay: kills 3.5/3.0 s and Flick
+// 3.20/2.99 s at 30/60 Hz. Other actor geometry and stage history still differ.
 // Decode, hashes, comparisons and limits: tools/scenarios/standin-chappy-rig.md.
 #include "scenarios/pc_scenario_list.h"
 
@@ -44,6 +45,9 @@
 #include "Piki.h"
 #include "PikiMgr.h"
 #include "PikiState.h"
+#include "TekiConditions.h"
+#include "TekiParameters.h"
+#include "netplay/pc_sim_rng.h"
 #include "scenarios/scenario_carry_common.h"
 #include "teki.h"
 
@@ -92,7 +96,18 @@ public:
 				CollPart* part = mBulb->mCollInfo->getSphere(id);
 				if (part) std::printf(" sphere=%08x,%.3f,%.3f,%.3f", id, part->mCentre.x - mBulb->mSRT.t.x, part->mCentre.y - mBulb->mSRT.t.y, part->mCentre.z - mBulb->mSRT.t.z);
 			}
-			std::printf("\n");
+			TekiRecognitionCondition recognized(mBulb);
+			TekiLowerRangeCondition nearby(mBulb);
+			const int nearbyPikis = mBulb->countPikis(TekiAndCondition(&recognized, &nearby));
+			std::printf(" scale=%.6f,%.6f,%.6f rate=%.6f yaw=%.6f ai=%d damage=%.1f pending=%.1f nearby=%d flick_at=%d rng=%08x\n",
+			            mBulb->mSRT.s.x, mBulb->mSRT.s.y, mBulb->mSRT.s.z, mBulb->getScaleRate(), mBulb->mFaceDirection,
+			            int(mBulb->mStateID), mBulb->mDamageCount, mBulb->mStoredDamage, nearbyPikis, mBulb->getFlickDamageCount(nearbyPikis), pc_sim_rng_state());
+			if (t == 0) {
+				Navi* navi = naviMgr->getNavi();
+				const auto& upper = navi->mNaviAnimMgr.getUpperAnimator();
+				const auto& lower = navi->mNaviAnimMgr.getLowerAnimator();
+				std::printf("[combat-captain] upper=%d lower=%d frame=%.3f centre=%.6f,%.6f,%.6f\n", upper.mCurrentAnimID, lower.mCurrentAnimID, upper.mAnimationCounter, navi->getCentre().x, navi->getCentre().y, navi->getCentre().z);
+			}
 			if (t == 0 && !mPiki.empty()) {
 				AnimMgr* mgr = mPiki[0]->mPikiAnimMgr.getUpperAnimator().mAnimInfo->mMgr;
 				for (int k = 0; k < mgr->countAnims(); k++) {
@@ -116,6 +131,13 @@ public:
 				continue;
 			}
 			const int state = p->getState();
+			if (std::getenv("PIKMIN_SCENARIO_COMBAT_PIKI_TRACE")) {
+				const Vector3f centre = p->getCentre();
+				std::printf("[combat-piki] tick=%u p=%zu pos=%.6f,%.6f,%.6f centre=%.6f,%.6f,%.6f yaw=%.6f state=%d mode=%d anim=%d frame=%.3f stick=%d rng=%08x\n",
+				            t, i, p->mSRT.t.x, p->mSRT.t.y, p->mSRT.t.z, centre.x, centre.y, centre.z, p->mFaceDirection,
+				            state, p->mMode, p->mPikiAnimMgr.getUpperAnimator().mCurrentAnimID, p->mPikiAnimMgr.getUpperAnimator().mAnimationCounter,
+				            int(p->mStickTarget == mBulb), pc_sim_rng_state());
+			}
 			if (std::getenv("PIKMIN_SCENARIO_COMBAT_TRACE")) {
 				AnimInfo* a = p->mPikiAnimMgr.getUpperAnimator().mAnimInfo;
 				int index = -1;

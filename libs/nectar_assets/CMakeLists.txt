@@ -47,6 +47,7 @@ add_library(nectar_assets STATIC
     src/mod_platform_writer.cpp
     src/standin_sandbox.cpp
     src/standin_objects.cpp
+    src/standin_chappy_motion.cpp
     src/standin_object_profiles.cpp
     src/standin_world.cpp
     src/standin_world_data.cpp

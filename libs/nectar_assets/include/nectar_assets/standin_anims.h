@@ -33,6 +33,9 @@ constexpr int kStandInAnimCount = 100;
 // Locomotion measured through the disc AnimMgr for #154 (standin-chappy-rig.md):
 // Run, Nigeru and Walk all have 40 frames, flags 6, speed 30, keys [0,10,30,39],
 // LoopStart at key 1 and LoopEnd at key 2.
+// Swallowed combat motion, measured from the same disc AnimMgr: 20 frames,
+// flags 5, speed 30, keys [0,19], LoopStart key 0 and LoopEnd key 1.
+constexpr int kAnimInfoEsa      = 8;
 constexpr int kAnimInfoRun      = 0;
 constexpr int kAnimInfoWalk     = 25;
 constexpr int kAnimInfoNigeru    = 4;  ///< PIKIANIM_Nigeru: Navi::enableMotionBlend starts the lower animator on it at counter 10.0

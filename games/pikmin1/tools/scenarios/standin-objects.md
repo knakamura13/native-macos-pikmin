@@ -26,7 +26,9 @@ boss `parms.bin` files, carried as words (a `tekipara` file is a version int,
 eight ids and the type's int and float parameters in order; the counts differ per
 enemy, so the words are not split).
 
-Not read and not written: curves, geometry, textures, animation names, event keys
+Except for measured Chappy collision-ancestor channels
+(#154, [rig evidence](standin-chappy-rig.md)), animation curves remain unwritten.
+Not read or written here: geometry, textures, animation names, event keys
 (sound and effect cues; their counts per info are 0 to 19), the `pelMgr` carry
 weights, the plants' light-flare groups and anything else.
 
@@ -34,9 +36,9 @@ weights, the plants' light-flare groups and anything else.
 
 | Files | Notes |
 |-------|-------|
-| 48 `.anm` bundles and their AnimMgr tables (`anims.bin`, `.key`, `gate.bin`, `whiteN.bin`, `plants/*.bin`, `ufoparts/*.bin`, `ufo0705.bin`) | The 47 of the boot manifest and `gt_hard.anm` (counted on the generated tree, 2026-10-28; this file's own writer covers the 46 object sets, the manifest's Pikmin set is not checked here). Each info is a static identity DCK with the disc's frame count and keys, under invented names (`<id>_<nn>.dck`). |
+| 48 `.anm` bundles and their AnimMgr tables (`anims.bin`, `.key`, `gate.bin`, `whiteN.bin`, `plants/*.bin`, `ufoparts/*.bin`, `ufo0705.bin`) | The 47 of the boot manifest and `gt_hard.anm` (counted on the generated tree, 2026-10-28; this file's own writer covers the 46 object sets, the manifest's Pikmin set is not checked here). Infos use static DCK payloads with measured frame counts/keys and invented names, except Chappy: its collision ancestors retain the disc's measured DCA/DCK channels ([rig evidence](standin-chappy-rig.md)). |
 | `ufoparts/naka1.mod`, `naka4.mod`, `naka7.mod` | One joint, one `cent` sphere. The disc's pellet table loads them by id. |
-| `tekis/chappy/chappy.mod` | 17 joints, measured disc rest SRT in both model and static animations, and the disc's collision parts (`cent`, `head`, `body`, `slot`, `lleg`, `rleg`). Evidence and remaining timing gap: [Chappy rig](standin-chappy-rig.md). |
+| `tekis/chappy/chappy.mod` | 17 joints, measured disc rest SRT and collision-driving motion, and the disc's collision parts (`cent`, `head`, `body`, `slot`, `lleg`, `rleg`). Evidence and remaining timing gap: [Chappy rig](standin-chappy-rig.md). |
 | `parms/pelMgr.bin` | Twelve pellet configs: blue, red and yellow at 1, 5, 10 and 20. The carry numbers are this file's own, not the disc's. Then the Main Engine's, all the disc's (Tutorial stage, below), and the Whimsical Radar's (`uf01`, shape `fuzoku1`, ship part; 10 to 20 carriers, this file's own numbers, for `ship_part_carry`). Then six enemy corpses, for the stand-in enemies that leave one (`tkch` chappy, `tksw` swallow, `tkbe` beatle, `tkka` kabekuiA, `tkkb` kabekuiB, `tkot` otama): type 0, colour -1, model and shape id the enemy's own; carriers and seeds are this file's own numbers. `BTeki::dieSoon` halts the game when a dying enemy has no config, so `enemy_kills` (W7 #98) needs them. 20 configs in all (`pellet_table`). |
 | `objects/pelAnim.bin` | 23 shape infos: the four pellets, the 16 ship parts the game always loads, and `un01`, `un04`, `un07`. With it the game loads those 20 resident shapes at stage start, as on the disc. |
 

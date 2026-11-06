@@ -80,7 +80,7 @@ struct LoadedAnim {
 	bool ok          = true;
 };
 
-LoadedAnim readDck(RamStream& in)
+LoadedAnim readDck(RamStream& in, bool dck = true)
 {
 	LoadedAnim a;
 	a.jointCount = in.readInt();
@@ -101,7 +101,7 @@ LoadedAnim readDck(RamStream& in)
 			for (int j = 0; j < 3; j++) {
 				set[j].mEntryNum   = in.readInt();
 				set[j].mDataOffset = in.readInt();
-				set[j].mFlags      = in.readInt();
+				set[j].mFlags      = dck ? in.readInt() : 0;
 			}
 		}
 	}
@@ -205,8 +205,8 @@ std::vector<LoadedEntry> loadBundleLoop(const Bytes& bytes, int& pendingAfter)
 		fs.readString(path);
 		e.name      = path.mString;
 		e.payloadAt = fs.getPosition();
-		if (e.type == 3) {
-			e.anim = readDck(fs);
+		if (e.type == 2 || e.type == 3) {
+			e.anim = readDck(fs, e.type == 3);
 		} else {
 			e.anim.ok = false;
 			fs.setPosition(fs.getPosition() + e.size);
@@ -356,27 +356,18 @@ void testProfiles()
 			const LoadedEntry& e = loaded[i];
 			const std::string who = set.bundlePath + " entry " + std::to_string(i);
 			check(e.name == m.baseDir + "/" + m.infos[i].name, who + ": named <base>/<info name> (exact, case-sensitive match)");
-			check(e.type == 3 && e.anim.ok, who + ": a DCK entry the loader accepts");
+			check((e.type == 3 || (std::string(p.id) == "chappy" && e.type == 2)) && e.anim.ok, who + ": an animation entry the loader accepts");
 			check(e.consumedEnd - e.payloadAt == e.size, who + ": the reader consumed exactly `size` bytes");
 			check(e.anim.jointCount == p.joints, who + ": joint count is the model's");
 			check(e.anim.frames == p.infos[i].frames, who + ": frame count is the profile's");
-			check(e.anim.activeJoints == 0, who + ": every joint static");
+			check(std::string(p.id) == "chappy" ? e.anim.activeJoints > 0 : e.anim.activeJoints == 0,
+			      who + ": only Chappy collision joints have measured motion");
 			check(e.anim.parent == set.parents, who + ": parents");
-			if (std::string(p.id) == "chappy") {
-				const auto& poses = *std::find_if(nectar::standInObjectModelSpecs().begin(), nectar::standInObjectModelSpecs().end(), [](const auto& m) { return m.path == "dataDir/tekis/chappy/chappy.mod"; });
-				for (std::size_t j = 0; j < poses.restPose.size(); j++) {
-					const nectar::Vec3 values[] = { poses.restPose[j].scale, poses.restPose[j].rotation, poses.restPose[j].translation };
-					const DataChunk* blocks[] = { &e.anim.scale, &e.anim.rotate, &e.anim.translate };
-					const AnimParam* channels[] = { e.anim.info[j].mScale, e.anim.info[j].mRotation, e.anim.info[j].mTranslation };
-					for (int k = 0; k < 3; k++) {
-						const float xyz[] = { values[k].x, values[k].y, values[k].z };
-						for (int axis = 0; axis < 3; axis++) check(channels[k][axis].mEntryNum == 1 && blocks[k]->mData[channels[k][axis].mDataOffset] == xyz[axis], who + ": all joint SRT channels match the measured model pose");
-					}
-				}
-			}
-			if (std::string(p.id) == "chappy") {
+			if (std::string(p.id) == "chappy" && i == 2) {
 				const auto& y = e.anim.info[0].mTranslation[1];
-				check(y.mEntryNum == 1 && std::fabs(e.anim.translate.mData[y.mDataOffset] - 13.999859809875488f) < 0.00001f, who + ": runtime disc root height");
+				check(e.type == 2 && e.anim.frames == 75 && y.mEntryNum == 75, "Chappy idle collision root has the disc's 75 DCA samples");
+				check(std::fabs(e.anim.translate.mData[y.mDataOffset + 10] - 10.569416999816895f) < 0.00001f,
+				      "Chappy idle LoopStart uses the measured moving root height");
 			}
 		}
 

@@ -1,6 +1,7 @@
 #include "nectar_assets/standin_objects.h"
 
 #include "be_writer.h"
+#include "standin_chappy_motion.h"
 #include "nectar_assets/anim.h"
 #include "nectar_assets/bundle.h"
 #include "nectar_assets/gen.h"
@@ -148,35 +149,20 @@ bool writeObjectAnimSet(const StandInAnimSet& set, std::vector<StandInAnimFile>&
 	if (!writeAnimMgrTable(set.table(), table.bytes, error)) return false;
 
 	std::vector<BundleEntry> entries;
-	const StandInModelSpec* model = findAnyModel(modPathOf(set.bundlePath));
 	for (std::size_t i = 0; i < set.anims.size(); i++) {
 		BundleEntry e;
 		e.type = BUNDLE_DCK;
 		e.name = set.entryName(int(i));
 		AnimPayload payload = makeStaticAnim(set.parents, set.anims[i].frameCount);
-		if (model && !model->restPose.empty()) {
-			if (model->restPose.size() != payload.joints.size()) {
-				error = "rest pose joint count mismatch";
+
+		if (set.bundlePath == "dataDir/tekis/chappy/chappy.anm") {
+			if (!makeChappyCollisionMotion(int(i), payload, e.type) || payload.frameCount != set.anims[i].frameCount) {
+				error = "Chappy collision motion does not match its measured timing profile";
 				return false;
 			}
-			payload.scaleData.clear();
-			payload.rotateData.clear();
-			payload.translateData.clear();
-			for (std::size_t j = 0; j < model->restPose.size(); j++) {
-				const StandInJointPose& pose = model->restPose[j];
-				const Vec3 values[] = { pose.scale, pose.rotation, pose.translation };
-				std::vector<float>* blocks[] = { &payload.scaleData, &payload.rotateData, &payload.translateData };
-				AnimChannel* channels[] = { payload.joints[j].scale, payload.joints[j].rotate, payload.joints[j].translate };
-				for (int k = 0; k < 3; k++) {
-					const float xyz[] = { values[k].x, values[k].y, values[k].z };
-					for (int axis = 0; axis < 3; axis++) {
-						channels[k][axis] = { 1, int(blocks[k]->size()), 0 };
-						blocks[k]->push_back(xyz[axis]);
-					}
-				}
-			}
 		}
-		if (!writeDckPayload(payload, e.payload, error)) {
+		const bool written = e.type == BUNDLE_DCA ? writeDcaPayload(payload, e.payload, error) : writeDckPayload(payload, e.payload, error);
+		if (!written) {
 			error = e.name + ": " + error;
 			return false;
 		}

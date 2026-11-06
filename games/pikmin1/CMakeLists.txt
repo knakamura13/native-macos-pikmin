@@ -1658,6 +1658,7 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/anim.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_anims.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_objects.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_chappy_motion.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_object_profiles.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_world.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_world_data.cpp

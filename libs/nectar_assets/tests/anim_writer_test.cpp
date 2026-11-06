@@ -504,6 +504,11 @@ void testStandInSet()
 		          && a.info.infoKeys[1].frame == 2 && a.info.infoKeys[1].keyType == 1, "combat locomotion carries disc loop keys");
 	}
 
+	const auto& eaten = set.anims[nectar::kAnimInfoEsa];
+	check(eaten.frameCount == 20 && eaten.info.flags == 5 && eaten.info.animKeys == std::vector<std::int32_t>({ 0, 19 })
+	          && eaten.info.infoKeys.size() == 2 && eaten.info.infoKeys[0].frame == 0 && eaten.info.infoKeys[0].keyType == 0
+	          && eaten.info.infoKeys[1].frame == 1 && eaten.info.infoKeys[1].keyType == 1, "Esa swallowed combat motion carries the disc's measured loop");
+
 	// Each assertion fires on its own mutation.
 	auto breaks = [&](const char* what, auto mutate) {
 		nectar::StandInAnimSet s = set;
