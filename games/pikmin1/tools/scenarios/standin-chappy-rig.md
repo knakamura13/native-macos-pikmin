@@ -151,7 +151,8 @@ scenario tick 925, by `TAIAsetTargetPointCircleRandom::start`. This is captain
 idle scheduling, not damage cadence. The temporary RNG instrumentation was
 removed and the game rebuilt; it is not part of the change.
 
-Final full-log SHA-256 values (generated artifacts remain in the build directory):
+Full-log SHA-256 values from the original `c34b4e617` experiment (before the
+include-base refresh; generated artifacts are not committed):
 
 | Log | SHA-256 |
 |---|---|
@@ -163,3 +164,26 @@ Final full-log SHA-256 values (generated artifacts remain in the build directory
 | `flick_out_of_range_60` | `ec1537b2f6c7d187550d0b5533d455f438ccc808e300f7d53852d23f0cf7df21` |
 | `piki_hazard_deaths_30` | `798ab4b32821b95cb15dc301ae1252277a99c37b6d7c6ae7dabcef684ca4d3c3` |
 | `piki_hazard_deaths_60` | `16ab5fe880f5af522f22cfcb05a685306857c6ef837e4ee943a52eeeeb2676f4` |
+
+## Current include-base refresh
+
+Before publication, merged `origin/knakamura/disc-free-gameplay-develop` at
+`205b7e393` (includes #173–175) into this branch without rewriting history.
+Rebuilt all targets and reran `ctest -E _disc`: **297/298 pass**; the sole failure
+is the same pre-existing `scenario_screenshot_goldens` boot shot, with identical
+pixel metrics. `ctest -R _disc` on the disc install: **29/29 pass** (26
+`game-assets`, plus three other names matched by the regex). Fight metrics are
+unchanged. The eight hash logs listed above remain byte-identical to the earlier
+experiment, so their recorded SHA-256 values still apply.
+
+The refreshed-base control has **184 scenario executions, all passing**, with
+only the two Chappy assets restored and only infos 0/4/25 of Pikmin AnimMgr
+restored to the base's generic keys. All other newer include-base inputs remain
+in both trees. Of **184 common hash logs, 8 change and 176 are identical**;
+first divergence ticks/fields are the same eight rows above.
+
+A second refreshed-base control retained the new Chappy rig but restored only
+the locomotion infos: another **184 executions, all passing**. It reproduces
+exactly the eight geometry changes, and rig-only versus final again differs
+only in `enemy_kills_30`. Thus the isolation and the traced idle-RNG explanation
+also hold after the base refresh.
