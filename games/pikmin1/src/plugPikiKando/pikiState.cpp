@@ -1070,6 +1070,9 @@ PikiFlickState::PikiFlickState()
  */
 void PikiFlickState::init(Piki* piki)
 {
+#if defined(PIKI_PC_PORT)
+	if (piki->mGroundTriangle || !piki->mHoldingCreature.isNull()) piki->mPcBallisticClock.reset();
+#endif
 	mState            = FLS_FlyingBack;
 	mInitialAngle     = piki->mRotationAngle;
 	mRotationDelta    = 0.1f * (PI * gsys->getRand(1.0f));
@@ -1934,6 +1937,9 @@ void PikiFlyingState::restartEffect()
  */
 void PikiFlyingState::init(Piki* piki)
 {
+#if defined(PIKI_PC_PORT)
+	piki->mPcBallisticClock.reset();
+#endif
 	PRINT_KANDO("flying state init\n");
 	PRINT_KANDO("piki is %s\n", piki->isHolding() ? "holding" : "not holding");
 	piki->mMotionSpeed = 30.0f;
@@ -1968,7 +1974,20 @@ void PikiFlyingState::exec(Piki* piki)
 	}
 
 	mSparkleEffect.updatePos(piki->mSRT.t);
+	const f32 dt = gsys->getFrameTime();
+#if defined(PIKI_PC_PORT)
+	if (PcBallisticClock::enabled(dt)) {
+		// Visual spin stays at the configured cadence. Ballistic terms run
+		// from the shared movement clock at every reference boundary.
+		if (mIsFlowerGliding) piki->mFaceDirection = roundAng(dt * PI / 0.42f + piki->mFaceDirection);
+		return;
+	}
+#endif
+	integrateFlight(piki, dt, true);
+}
 
+void PikiFlyingState::integrateFlight(Piki* piki, f32 forceTime, bool spin)
+{
 	f32 startGrav          = AICONST.mGravity() * 0.8f;
 	f32 glideGrav          = AICONST.mGravity() * C_PIKI_PARM(piki, mFlowerGravityScale);
 	f32 gravTransitionTime = 0.15f;
@@ -2018,8 +2037,8 @@ void PikiFlyingState::exec(Piki* piki)
 		return;
 	}
 
-	piki->mFaceDirection = roundAng(gsys->getFrameTime() * PI / 0.42f + piki->mFaceDirection);
-	mGlideTimer += gsys->getFrameTime();
+	if (spin) piki->mFaceDirection = roundAng(forceTime * PI / 0.42f + piki->mFaceDirection);
+	mGlideTimer += forceTime;
 
 	// for some natural variation in fall speed
 	f32 randomFactor = (gsys->getRand(1.0f) - 0.5f) * 0.01f;
@@ -2033,7 +2052,7 @@ void PikiFlyingState::exec(Piki* piki)
 		gravAdjust = glideGrav;
 	}
 
-	piki->mVelocity.y += ((AICONST.mGravity() - gravAdjust) * (randomFactor + 1.0f)) * gsys->getFrameTime();
+	piki->mVelocity.y += ((AICONST.mGravity() - gravAdjust) * (randomFactor + 1.0f)) * forceTime;
 
 	STACK_PAD_VAR(4);
 }

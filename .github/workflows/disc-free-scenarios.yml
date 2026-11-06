@@ -554,8 +554,13 @@ jobs:
         if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, matrix.runner_os) }}
         run: bash games/pikmin1/tools/scenarios/ci_k_summary.sh merged "${{ matrix.name }}, native JAudio off"
 
+      # Aggregate comparisons need the complete log set, not one CTest shard.
+      - name: Ballistic parity against the 30 Hz reference
+        if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, matrix.runner_os) }}
+        run: python3 games/pikmin1/tools/scenarios/check_ballistic.py merged/scenario-logs
+
       # The throw itself on the stand-in tree, held to the disc: every throw of
-      # throw_flight_{leaf,bud,flower,yellow} at 30 and 60 Hz must have the disc's grab,
+      # throw_flight_{leaf,bud,flower,yellow} at 30/60/120 Hz must retain the measured grab,
       # release and flight ticks exactly, its peak height within 0.05 and its launch
       # speed within 0.1 (check_throw_flight.py has the values and where they come
       # from). The 2.6 s hold and throw_cadence are not asserted yet.
