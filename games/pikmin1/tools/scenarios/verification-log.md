@@ -97,3 +97,14 @@ stand-ins needs the key it waits on (Action0 or LoopEnd) in the stand-in table, 
 - 3j: the draw-side effect of negative glyph widths, and the negative widths of the all-opaque 256x128 and 64x32 fonts.
 - 3h: `rootRing.txe` on a native Windows build (not built here).
 - Item 5: the states listed as not covered.
+
+## Chappy rig follow-up (#154, 2026-11-06)
+
+The disc's measured 17-joint rest SRT now feeds both the stand-in model and
+static object animation payloads. Collision local offsets/radii are unchanged;
+cent's scaled rest height is 11.199888. Kill time changes 2.4/1.6 -> 3.2/2.4 s
+at 30/60 Hz, disc 3.4/2.5 s. Flick remains absent at 30 Hz and averages 2.71 s
+at 60 Hz, disc 2.89/2.78 s, so #154 remains open. Run/Nigeru/Walk's measured
+loop keys are applied as well. Full decode path, source SHA-256, controlled
+experiments, the pre-existing screenshot-golden failure and per-log hash
+reasons are in [standin-chappy-rig.md](standin-chappy-rig.md).

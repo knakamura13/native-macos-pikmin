@@ -37,6 +37,11 @@ constexpr int kStandInModelCount = 45;
 /// rango (ufoAnim.cpp:26-40): la nave necesita al menos 54.
 constexpr int kStandInShipMinJoints = 54;
 
+struct StandInJointPose {
+	Vec3 scale { 1, 1, 1 };
+	Vec3 rotation, translation;
+};
+
 struct StandInModelSpec {
 	std::string path;          ///< relativa a assets/, con dataDir/ como en el manifiesto de #64
 	std::vector<int> parents;  ///< padre de cada articulación (-1 la raíz); su tamaño es el número de articulaciones
@@ -46,6 +51,8 @@ struct StandInModelSpec {
 	/// The root box's triangles are also the model's collision (a platform, written with writePlatformMod): the
 	/// push box (objects/hinderrock/cube10.mod), which HinderRock turns into a DynBuildShape that Pikmin push against.
 	bool platform = false;
+	/// Optional measured local rest SRT; empty retains the identity rig.
+	std::vector<StandInJointPose> restPose;
 
 	int jointCount() const { return int(parents.size()); }
 };

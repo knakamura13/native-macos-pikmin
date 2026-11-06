@@ -362,6 +362,22 @@ void testProfiles()
 			check(e.anim.frames == p.infos[i].frames, who + ": frame count is the profile's");
 			check(e.anim.activeJoints == 0, who + ": every joint static");
 			check(e.anim.parent == set.parents, who + ": parents");
+			if (std::string(p.id) == "chappy") {
+				const auto& poses = *std::find_if(nectar::standInObjectModelSpecs().begin(), nectar::standInObjectModelSpecs().end(), [](const auto& m) { return m.path == "dataDir/tekis/chappy/chappy.mod"; });
+				for (std::size_t j = 0; j < poses.restPose.size(); j++) {
+					const nectar::Vec3 values[] = { poses.restPose[j].scale, poses.restPose[j].rotation, poses.restPose[j].translation };
+					const DataChunk* blocks[] = { &e.anim.scale, &e.anim.rotate, &e.anim.translate };
+					const AnimParam* channels[] = { e.anim.info[j].mScale, e.anim.info[j].mRotation, e.anim.info[j].mTranslation };
+					for (int k = 0; k < 3; k++) {
+						const float xyz[] = { values[k].x, values[k].y, values[k].z };
+						for (int axis = 0; axis < 3; axis++) check(channels[k][axis].mEntryNum == 1 && blocks[k]->mData[channels[k][axis].mDataOffset] == xyz[axis], who + ": all joint SRT channels match the measured model pose");
+					}
+				}
+			}
+			if (std::string(p.id) == "chappy") {
+				const auto& y = e.anim.info[0].mTranslation[1];
+				check(y.mEntryNum == 1 && std::fabs(e.anim.translate.mData[y.mDataOffset] - 13.999859809875488f) < 0.00001f, who + ": runtime disc root height");
+			}
 		}
 
 		// The model, when one is written: same joint count and parents.
@@ -491,20 +507,46 @@ void testModels()
 			check(byId.count("head") && byId["head"]->code == "stik" && byId["head"]->joint == 4, spec.path + ": head sticks, joint 4");
 			check(byId.count("cent") && byId["cent"]->depth == 1, spec.path + ": 'cent' is a child of the body part");
 			check(parts.size() == 8, spec.path + ": eight parts, two of them without an id");
+			check(std::fabs(m.joints[0].translation.y - 13.999859809875488f) < 0.00001f, "chappy: measured disc root height");
 			// The art hangs each part from the joint that means it, so real animations would move
 			// the right part: the shell on the body (1), head and pincers on the head (4, 'head' and
 			// 'slot'), the eye stalks on 5 and 6, the legs on the shins (8 'rleg', 11 'lleg'). The
-			// skeleton's placeholder is a 12-triangle box. The stand-in poses are identity, so the
-			// art must also stand on the ground: nothing below the model origin.
+			// skeleton's placeholder is a 12-triangle box. Rebinding keeps the
+			// original artwork on the ground under the measured rest pose.
 			const nectar::Model built = nectar::buildStandInModel(spec);
 			for (int j : { 1, 4, 5, 6, 8, 11 }) {
 				std::size_t tris = 0;
 				for (const nectar::ModMtxGroup& g : built.meshes[std::size_t(j)].groups) tris += g.tris.size();
 				check(tris > 12, spec.path + ": joint " + std::to_string(j) + " carries its part of the art");
 			}
+			nectar::StandInModelSpec identity = spec;
+			identity.restPose.clear();
+			const auto original = nectar::buildStandInModel(identity);
+			const auto bind = built.bindPose();
 			float lowest = 0.0f;
-			for (const nectar::Vec3& p : built.positions) lowest = std::min(lowest, p.y);
-			check(lowest > -0.05f, spec.path + ": stands on the ground (lowest point " + std::to_string(lowest) + ")");
+			for (std::size_t mi = 0; mi < built.meshes.size(); mi++) {
+				const auto& mesh = built.meshes[mi];
+				for (std::size_t gi = 0; gi < mesh.groups.size(); gi++) {
+					const auto& group = mesh.groups[gi];
+					for (std::size_t ti = 0; ti < group.tris.size(); ti++) for (int vi = 0; vi < 3; vi++) {
+						const auto& v = group.tris[ti].v[vi];
+						const auto& old = original.meshes[mi].groups[gi].tris[ti].v[vi];
+						const int joint = built.vtxMatrices[group.deps[v.mtxSlot]].index;
+						const auto world = bind[joint].point(built.positions[v.pos]);
+						const auto expected = original.positions[old.pos];
+						check(std::fabs(world.x-expected.x) < 0.0001f && std::fabs(world.y-expected.y) < 0.0001f && std::fabs(world.z-expected.z) < 0.0001f, "chappy: rebinding preserves authored art");
+						lowest = std::min(lowest, world.y);
+						if (v.nrm >= 0) {
+							const auto normal = bind[joint].dir(built.normals[v.nrm]);
+							const auto expectedNormal = original.normals[old.nrm];
+							const float length = std::sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
+							const float expectedLength = std::sqrt(expectedNormal.x*expectedNormal.x + expectedNormal.y*expectedNormal.y + expectedNormal.z*expectedNormal.z);
+							if (length > 0.0f && expectedLength > 0.0f) check(std::fabs(normal.x/length-expectedNormal.x/expectedLength) < 0.0001f && std::fabs(normal.y/length-expectedNormal.y/expectedLength) < 0.0001f && std::fabs(normal.z/length-expectedNormal.z/expectedLength) < 0.0001f, "chappy: renderer normal direction preserved");
+						}
+					}
+				}
+			}
+			check(lowest > -0.05f, spec.path + ": posed art stands on the ground");
 		}
 	}
 }

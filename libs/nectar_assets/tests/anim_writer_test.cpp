@@ -496,6 +496,14 @@ void testStandInSet()
 	std::string err;
 	check(nectar::checkStandInAnims(set, err), "the stand-in set passes the generator assertions: " + err);
 
+	// Disc locomotion timing reached while approaching/detaching in bulborb_fight.
+	for (int i : { nectar::kAnimInfoRun, nectar::kAnimInfoNigeru, nectar::kAnimInfoWalk }) {
+		const auto& a = set.anims[std::size_t(i)];
+		check(a.frameCount == 40 && a.info.flags == 6 && a.info.animKeys == std::vector<std::int32_t>({ 0, 10, 30, 39 })
+		          && a.info.infoKeys.size() == 2 && a.info.infoKeys[0].frame == 1 && a.info.infoKeys[0].keyType == 0
+		          && a.info.infoKeys[1].frame == 2 && a.info.infoKeys[1].keyType == 1, "combat locomotion carries disc loop keys");
+	}
+
 	// Each assertion fires on its own mutation.
 	auto breaks = [&](const char* what, auto mutate) {
 		nectar::StandInAnimSet s = set;

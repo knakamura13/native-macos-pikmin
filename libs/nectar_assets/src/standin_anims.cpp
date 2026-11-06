@@ -89,6 +89,15 @@ StandInAnimSet buildPikiSet()
 				e.eventType = 1;
 				a.info.eventKeys.push_back(e);
 			}
+		} else if (i == kAnimInfoRun || i == kAnimInfoNigeru || i == kAnimInfoWalk) {
+			// Run, Nigeru and Walk: measured through the disc AnimMgr; the
+			// approach/detach motions in bulborb_fight loop frames 10 through 30.
+			a.frameCount = 40;
+			a.measured = true;
+			a.info.flags = 6;
+			a.info.speed = 30.0f;
+			a.info.animKeys = { 0, 10, 30, 39 };
+			a.info.infoKeys = { { 1, 0, 0, 0 }, { 2, 0, 0, 1 } };
 		} else if (i == kAnimInfoMizunomi) {
 			// Loop window frames 10 to 20 (anim keys 1 and 2): info keys loop start, loop end.
 			a.frameCount    = kStandInDefaultFrames;

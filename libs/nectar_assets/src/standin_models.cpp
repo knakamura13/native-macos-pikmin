@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <map>
 
 namespace nectar {
 
@@ -248,7 +249,63 @@ const StandInModelSpec* findStandInModel(const std::string& path)
 
 Model buildStandInModel(const StandInModelSpec& spec)
 {
-	return buildArtStandInModel(spec);
+	Model model = buildArtStandInModel(spec);
+	if (spec.restPose.empty()) return model;
+	if (spec.restPose.size() != model.joints.size()) return {};
+	for (std::size_t j = 0; j < model.joints.size(); j++) {
+		model.joints[j].scale       = spec.restPose[j].scale;
+		model.joints[j].rotation    = spec.restPose[j].rotation;
+		model.joints[j].translation = spec.restPose[j].translation;
+	}
+	// Art was authored with identity joints. Rebind every mesh, including fallback
+	// and placeholder geometry, so the measured rig preserves its world appearance.
+	const auto bind      = model.bindPose();
+	const auto positions = model.positions;
+	const auto normals   = model.normals;
+	std::map<std::pair<int, int>, int> reboundPositions, reboundNormals;
+	for (ModMesh& mesh : model.meshes) {
+		for (ModMtxGroup& group : mesh.groups) {
+			for (ModTriangle& tri : group.tris) {
+				for (ModVertex& v : tri.v) {
+					const int joint = model.vtxMatrices[std::size_t(group.deps[std::size_t(v.mtxSlot)])].index;
+					const auto& a = bind[std::size_t(joint)].m;
+					const auto positionKey = std::make_pair(joint, v.pos);
+					const auto normalKey = std::make_pair(joint, v.nrm);
+					const auto oldPosition = reboundPositions.find(positionKey);
+					const auto oldNormal = reboundNormals.find(normalKey);
+					// Invert the affine linear part (the measured rig includes a 0.1 scale).
+					const float det = a[0][0] * (a[1][1]*a[2][2] - a[1][2]*a[2][1])
+					                - a[0][1] * (a[1][0]*a[2][2] - a[1][2]*a[2][0])
+					                + a[0][2] * (a[1][0]*a[2][1] - a[1][1]*a[2][0]);
+					const Vec3 p = positions[std::size_t(v.pos)];
+					const float x = p.x - a[0][3], y = p.y - a[1][3], z = p.z - a[2][3];
+					if (oldPosition != reboundPositions.end()) {
+						v.pos = oldPosition->second;
+					} else {
+						v.pos = int(model.positions.size());
+						reboundPositions[positionKey] = v.pos;
+						model.positions.push_back({
+						    ((a[1][1]*a[2][2]-a[1][2]*a[2][1])*x + (a[0][2]*a[2][1]-a[0][1]*a[2][2])*y + (a[0][1]*a[1][2]-a[0][2]*a[1][1])*z) / det,
+						    ((a[1][2]*a[2][0]-a[1][0]*a[2][2])*x + (a[0][0]*a[2][2]-a[0][2]*a[2][0])*y + (a[0][2]*a[1][0]-a[0][0]*a[1][2])*z) / det,
+						    ((a[1][0]*a[2][1]-a[1][1]*a[2][0])*x + (a[0][1]*a[2][0]-a[0][0]*a[2][1])*y + (a[0][0]*a[1][1]-a[0][1]*a[1][0])*z) / det });
+					}
+					if (v.nrm >= 0) {
+						const Vec3 n = normals[std::size_t(v.nrm)];
+						if (oldNormal != reboundNormals.end()) {
+							v.nrm = oldNormal->second;
+							continue;
+						}
+						v.nrm = int(model.normals.size());
+						reboundNormals[normalKey] = v.nrm;
+						model.normals.push_back({ a[0][0]*n.x + a[1][0]*n.y + a[2][0]*n.z,
+						                         a[0][1]*n.x + a[1][1]*n.y + a[2][1]*n.z,
+						                         a[0][2]*n.x + a[1][2]*n.y + a[2][2]*n.z });
+					}
+				}
+			}
+		}
+	}
+	return model;
 }
 
 bool writeStandInModels(std::vector<StandInModelFile>& out, std::string& error)

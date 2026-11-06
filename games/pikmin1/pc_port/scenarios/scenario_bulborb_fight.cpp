@@ -24,13 +24,19 @@
 // dead at 2.4 s (30 Hz) and 1.6 s (60 Hz), Flick 3.3 s (5 flicks at 30 Hz, none at 60 Hz); the disc 3.4 s
 // and 2.5 s, Flick 2.9 s. They still win sooner than the disc; the open lead is the stand-in Bulborb's
 // collision spheres, which sit lower than the disc's (#154).
+// The measured rest rig now puts cent at y=11.199888 (enemy scale 0.8), gives
+// kills 3.2/2.4 s, and Flick absent/2.71 s at 30/60 Hz. This is not parity:
+// the disc's moving joints and the stage's pre-fight phase remain different.
+// Decode, hashes, comparisons and limits: tools/scenarios/standin-chappy-rig.md.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
 
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 
+#include "Collision.h"
 #include "GameStat.h"
 #include "MapMgr.h"
 #include "Navi.h"
@@ -79,6 +85,26 @@ public:
 	{
 		if (mDone) return;
 		const unsigned rate = unsigned(pc_scenario_ticks_per_second());
+		if (std::getenv("PIKMIN_SCENARIO_COMBAT_TRACE")) {
+			std::printf("[combat-trace] tick=%u hp=%.1f motion=%d frame=%.3f", t, mBulb->mHealth,
+			            mBulb->mTekiAnimator->mMotionIdx, mBulb->mTekiAnimator->mAnimationCounter);
+			for (u32 id : { u32('cent'), u32('head'), u32('body') }) {
+				CollPart* part = mBulb->mCollInfo->getSphere(id);
+				if (part) std::printf(" sphere=%08x,%.3f,%.3f,%.3f", id, part->mCentre.x - mBulb->mSRT.t.x, part->mCentre.y - mBulb->mSRT.t.y, part->mCentre.z - mBulb->mSRT.t.z);
+			}
+			std::printf("\n");
+			if (t == 0 && !mPiki.empty()) {
+				AnimMgr* mgr = mPiki[0]->mPikiAnimMgr.getUpperAnimator().mAnimInfo->mMgr;
+				for (int k = 0; k < mgr->countAnims(); k++) {
+					AnimInfo* a = mgr->findAnim(k);
+					std::printf("[combat-motion] info=%d frames=%d flags=%d speed=%.1f keys", k, a->mData ? a->mData->mTotalFrameCount : -1, int(a->mParams.mFlags()), a->mParams.mSpeed());
+					for (int j = 0; j < a->countAKeys(); j++) std::printf(" %d", a->getKeyValue(j));
+					std::printf(" info");
+					for (int j = 0; j < a->countIKeys(); j++) std::printf(" %d:%d", a->getInfoKey(j)->mFrameIndex, a->getInfoKey(j)->mKeyType);
+					std::printf("\n");
+				}
+			}
+		}
 		for (size_t i = 0; i < mPiki.size(); i++) {
 			Piki* p = mPiki[i];
 			if (!p->isAlive()) {
@@ -90,6 +116,15 @@ public:
 				continue;
 			}
 			const int state = p->getState();
+			if (std::getenv("PIKMIN_SCENARIO_COMBAT_TRACE")) {
+				AnimInfo* a = p->mPikiAnimMgr.getUpperAnimator().mAnimInfo;
+				int index = -1;
+				for (int k = 0; a && k < a->mMgr->countAnims(); k++) if (a->mMgr->findAnim(k) == a) index = k;
+				if (index >= 0 && index < 128 && !mSeenMotion[index]) {
+					mSeenMotion[index] = true;
+					std::printf("[combat-used] tick=%u info=%d\n", t, index);
+				}
+			}
 			if (state != PIKISTATE_Flick && mState[i] == PIKISTATE_Flick) {
 				const float d = (t - mFlickTick[i]) / float(rate);
 				mFlickSum += d;
@@ -179,6 +214,7 @@ private:
 	int mFlickEnds = 0;
 	unsigned mKillTick = 0;
 	bool mPrinted = false;
+	bool mSeenMotion[128] = {};
 };
 
 } // namespace

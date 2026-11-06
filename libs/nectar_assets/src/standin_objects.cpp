@@ -148,11 +148,35 @@ bool writeObjectAnimSet(const StandInAnimSet& set, std::vector<StandInAnimFile>&
 	if (!writeAnimMgrTable(set.table(), table.bytes, error)) return false;
 
 	std::vector<BundleEntry> entries;
+	const StandInModelSpec* model = findAnyModel(modPathOf(set.bundlePath));
 	for (std::size_t i = 0; i < set.anims.size(); i++) {
 		BundleEntry e;
 		e.type = BUNDLE_DCK;
 		e.name = set.entryName(int(i));
-		if (!writeDckPayload(makeStaticAnim(set.parents, set.anims[i].frameCount), e.payload, error)) {
+		AnimPayload payload = makeStaticAnim(set.parents, set.anims[i].frameCount);
+		if (model && !model->restPose.empty()) {
+			if (model->restPose.size() != payload.joints.size()) {
+				error = "rest pose joint count mismatch";
+				return false;
+			}
+			payload.scaleData.clear();
+			payload.rotateData.clear();
+			payload.translateData.clear();
+			for (std::size_t j = 0; j < model->restPose.size(); j++) {
+				const StandInJointPose& pose = model->restPose[j];
+				const Vec3 values[] = { pose.scale, pose.rotation, pose.translation };
+				std::vector<float>* blocks[] = { &payload.scaleData, &payload.rotateData, &payload.translateData };
+				AnimChannel* channels[] = { payload.joints[j].scale, payload.joints[j].rotate, payload.joints[j].translate };
+				for (int k = 0; k < 3; k++) {
+					const float xyz[] = { values[k].x, values[k].y, values[k].z };
+					for (int axis = 0; axis < 3; axis++) {
+						channels[k][axis] = { 1, int(blocks[k]->size()), 0 };
+						blocks[k]->push_back(xyz[axis]);
+					}
+				}
+			}
+		}
+		if (!writeDckPayload(payload, e.payload, error)) {
 			error = e.name + ": " + error;
 			return false;
 		}
@@ -213,6 +237,59 @@ std::vector<StandInModelSpec> buildObjectModelSpecs()
 		StandInModelSpec m;
 		m.path     = "dataDir/tekis/chappy/chappy.mod";
 		m.parents  = { -1, 0, 1, 0, 3, 3, 3, 0, 7, 8, 0, 10, 11, 0, 13, 14, 15 };
+		// Disc rest SRT, decoded from MOD chunk 0x60; see standin-chappy-rig.md.
+		m.restPose.resize(17);
+		m.restPose[0].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[0].rotation = { 0.0f, 0.0f, 0.0f };
+		m.restPose[0].translation = { 0.0f, 13.9998598f, -0.500132978f };
+		m.restPose[1].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[1].rotation = { -1.57079566f, 1.22062719f, -1.57079566f };
+		m.restPose[1].translation = { -0.0f, 2.79443407f, -0.198558003f };
+		m.restPose[2].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[2].rotation = { 0.0f, 0.0f, -0.244770095f };
+		m.restPose[2].translation = { 6.90935278f, -0.0f, 0.0f };
+		m.restPose[3].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[3].rotation = { 1.57079279f, -1.50238192f, 1.57079983f };
+		m.restPose[3].translation = { -0.0f, 2.79443407f, 0.110491998f };
+		m.restPose[4].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[4].rotation = { 0.0f, 0.0f, 0.13316457f };
+		m.restPose[4].translation = { 7.53785706f, 9.99999997e-07f, 0.0f };
+		m.restPose[5].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[5].rotation = { 0.0f, 0.0f, 0.0f };
+		m.restPose[5].translation = { 16.0389957f, -8.06240654f, -4.99999714f };
+		m.restPose[6].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[6].rotation = { 0.0f, 0.0f, 0.0f };
+		m.restPose[6].translation = { 16.0389957f, -8.06240463f, 4.99999619f };
+		m.restPose[7].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[7].rotation = { -0.923416913f, -0.546872973f, -1.88235319f };
+		m.restPose[7].translation = { -3.21621704f, -5.76300097f, -0.0381730013f };
+		m.restPose[8].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[8].rotation = { 0.0f, 0.0f, 1.05352712f };
+		m.restPose[8].translation = { 4.14549923f, 0.0f, 0.0f };
+		m.restPose[9].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[9].rotation = { -0.0296235438f, 0.178454489f, -2.02614236f };
+		m.restPose[9].translation = { 3.74323606f, -0.00349000003f, -0.0350290015f };
+		m.restPose[10].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[10].rotation = { -2.24216366f, -0.540494204f, -1.24962425f };
+		m.restPose[10].translation = { 3.21621799f, -5.76300097f, -0.0381719992f };
+		m.restPose[11].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[11].rotation = { 0.0f, 0.0f, 1.05352783f };
+		m.restPose[11].translation = { 4.14550018f, 0.0f, 0.0f };
+		m.restPose[12].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[12].rotation = { 0.10816329f, -0.178454399f, -2.02614212f };
+		m.restPose[12].translation = { 3.74323606f, -0.00349000003f, 0.0350290015f };
+		m.restPose[13].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[13].rotation = { -1.57077038f, -1.56161594f, -1.57082236f };
+		m.restPose[13].translation = { -0.0f, -0.917770982f, 3.874753f };
+		m.restPose[14].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[14].rotation = { -3.14159274f, 3.1415925f, 0.220824257f };
+		m.restPose[14].translation = { 1.518942f, -3.16436791f, -0.0f };
+		m.restPose[15].scale = { 0.100000001f, 0.100000001f, 0.100000001f };
+		m.restPose[15].rotation = { 0.0f, 3.49065843e-08f, -3.07644224f };
+		m.restPose[15].translation = { -0.0f, 0.0f, 0.0f };
+		m.restPose[16].scale = { 1.0f, 1.0f, 1.0f };
+		m.restPose[16].rotation = { 0.0f, 0.0f, 0.0f };
+		m.restPose[16].translation = { 18.6588287f, 0.0f, 0.0f };
 		m.colour   = { 200, 70, 60, 255 };
 		m.halfSize = 12.0f;
 		std::string t;
