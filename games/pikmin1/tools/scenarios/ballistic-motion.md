@@ -108,7 +108,13 @@ RNG cadence also changes. High-rate extra-state diagnostics now include the new
 future-motion state. Hash logs are generated build/CI artifacts, not checked-in
 golden files; they must be regenerated and compared across operating systems.
 
-Final validation against the refreshed fork base and its first-difference report
-is recorded with the fork PR. A pre-existing local macOS boot screenshot mismatch
+The refreshed unmodified fork base 205b7e393 was built independently from a Git
+archive. All 102 saved 30 Hz logs remain byte-identical; all 80 saved 60 Hz logs change.
+The [per-scenario first-difference report](evidence/ballistic-hash-impact-205b7e393.csv)
+records each affected tick, hash column and traced owner. First divergence is at
+tick 7 for 43 scenarios, tick 21 for 34, tick 8 for the two challenge death cases, and
+tick 593 when title_boot reaches gameplay. The first changed components are
+captain/enemy/object motion; world, RNG and mode do not differ at those first ticks.
+Final test and cross-OS results are recorded with the fork PR. A pre-existing local macOS boot screenshot mismatch
 must be distinguished from a new physics or 30 Hz regression; goldens are not
 refreshed merely to hide that failure.
