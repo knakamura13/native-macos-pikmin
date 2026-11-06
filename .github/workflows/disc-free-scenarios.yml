@@ -349,6 +349,11 @@ jobs:
             if [ -f "$f" ]; then cp "$f" shard-out/scenario-logs/; fi
           done
           if [ -d build/pikmin1/scenario-evidence ]; then cp -R build/pikmin1/scenario-evidence shard-out/; fi
+          # Hosted tool patch versions can differ between runners. Retain each
+          # shard's original cache without treating it as a shared simulation log.
+          if [ -f shard-out/scenario-evidence/CMakeCache.txt ]; then
+            mv shard-out/scenario-evidence/CMakeCache.txt "shard-out/scenario-evidence/CMakeCache_shard${SHARD}.txt"
+          fi
           if [ -d build/pikmin1/shard ]; then cp -R build/pikmin1/shard shard-out/; fi
           if [ -f build/pikmin1/Testing/Temporary/LastTest.log ]; then
             cp build/pikmin1/Testing/Temporary/LastTest.log shard-out/Testing/Temporary/
