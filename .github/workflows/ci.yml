@@ -12,10 +12,11 @@ on:
 permissions:
   contents: read
 
-# A new push to the same PR or branch cancels the run it replaces.
+# A new push to a pull request cancels the run it replaces. Pushes and manual runs each get
+# their own group (the run id) and are never cancelled.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   BUILD_TYPE: Release
