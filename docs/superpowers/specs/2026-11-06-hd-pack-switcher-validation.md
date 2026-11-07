@@ -15,3 +15,11 @@ Local evidence: `/workspace/pack-switcher-validation/` (build/test logs, render 
 Not tested: real GB-sized archives/network download, GPU texture replacement after restart with a disc, macOS, Windows, Android. Variant storage is desktop Pikmin 1 only; other platforms/games retain legacy layout. Existing downloaded folders are not overwritten automatically; use Delete first where supported, or manage legacy folders separately. Space figures are logical file bytes, not measured filesystem block allocation.
 
 Publication is separate from implementation. Draft PR text and prefilled upstream compare URL are prepared under `/workspace/upstream-prep/`; no push, PR, or upstream write was performed.
+
+## Delete-label follow-up
+
+Reproduced the compact-button bug with the production Fredoka/font fitter: `Delete...` became `Delet...` at 76x26. Delete now uses at least the standard 120-point action width (expanded further from text measurement if needed), with a 30-point compact height. Added full-label/no-fallback font tests at 1x and 2x for both Delete sizes and the compact ZIP-install control.
+
+Re-rendered and inspected pack, confirmation and toast states at 640x480 and 1280x800. All rendered button labels passed an in-process no-truncation/inner-rectangle audit; hand-cursor probes passed for Off and Delete. The confirmation body uses the compact font at both sizes so the complete tested folder path is visible in its field. Longer path values remain selectable/scrollable with a full-path tooltip. Both toast layouts remain within bounds. Full build and all 66 CTest tests passed.
+
+Evidence: `/workspace/pack-switcher-validation/label-fix/` (`control-audit.log`, `ctest.log`, `final-build.log`, and `packs-{narrow,wide}.png`, `confirm-{narrow,wide}.png`, `toast-{narrow,wide}.png`). No push performed for this follow-up.
