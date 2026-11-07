@@ -1682,7 +1682,7 @@ struct Hub {
             }
             ImGui::SameLine(ImGui::GetContentRegionMax().x - buttonW);
             const std::string pickOwner = "model" + std::to_string(model.row);
-            if (glassButton(filePickLabel(pickOwner, model.installed ? "Replace..." : "Install...").c_str(),
+            if (glassButton(filePickLabel(pickOwner, model.installed ? "Replace" : "Install").c_str(),
                             role::kSettingsRow, 40.0f, false, busy || filePickOpen())) {
                 const int row = model.row;
                 startFilePick(pickOwner, "Choose the zip for " + model.name, "Model zip", "*.zip *.ZIP",
@@ -1920,11 +1920,11 @@ struct Hub {
         // One shared width for every Saves-page button: wide enough for the longest label (including the
         // "Waiting for file picker..." state), never below 240 px. Two buttons + gap fit the panel at 960 px.
         float savesButtonW = 240.0f;
-        for (const char* label : {"Import a save...", "Open save folder", "Restore previous save", "Open backups folder",
+        for (const char* label : {"Import a save", "Open save folder", "Restore previous save", "Open backups folder",
                                   "Waiting for file picker..."})
             savesButtonW = std::max(savesButtonW, ImGui::CalcTextSize(label).x + 48.0f);
         const ImVec2 savesButtonSize(savesButtonW, 46.0f);
-        if (glassButton(filePickLabel("gci", "Import a save...").c_str(), savesButtonSize, false,
+        if (glassButton(filePickLabel("gci", "Import a save").c_str(), savesButtonSize, false,
                         busy || filePickOpen()))
             tryImportGciSave();
         ImGui::SameLine(0.0f, 12.0f);
