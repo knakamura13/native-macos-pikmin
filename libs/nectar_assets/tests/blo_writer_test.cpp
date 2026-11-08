@@ -357,7 +357,7 @@ std::map<std::string, LayoutReq> requirements()
 	m["wait_char.blo"].reqs = { { "maru", 'T' }, { std::string("\0ten", 4), 'T' }, { std::string("\0han", 4), 'T' } };
 	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo", "tu_tx03.blo", "tu_tx20.blo",
 	                       "re_j_00.blo", "re_n1_00.blo", "re_g_00.blo", "re_q_00.blo", "re_k_00.blo" })
-		m[f].reqs = { { "tx00", 'A' } }; // tx00..tx19 are optional and any type (the disc has a picture in tu_tx37_01); the stand-in has one text box
+		m[f].reqs = { { "tx00", 'A' } }; // tx00..tx19 are optional and any type (setPageInfoSub searches them with no type); the stand-in has one text box
 	m["tu_tx31.blo"].reqs = { { "tx00", 'A' } }; // captain_damage: TUT_APunchUFO's page
 	// The tutorial scenarios: TUT_NukiAndFree's two pages, TUT_GetEngine's page, the Day 1 diary entry's two pages.
 	for (const char* f : { "tu_tx38_00.blo", "tu_tx38_01.blo", "tu_tx15.blo", "re_a_00.blo", "re_a_01.blo" }) m[f].reqs = { { "tx00", 'A' } };
@@ -649,8 +649,8 @@ bool kindOk(const BloPane& p, char kind)
 int checkHudLayout(const std::string& file, const std::vector<BloPane>& tree)
 {
 	using nectar::findBloPane;
-	using nectar::standin_layout::kBottomRightMinX;
-	using nectar::standin_layout::kBottomRightMinY;
+	using nectar::standin_layout::kLifeCornerMaxX;
+	using nectar::standin_layout::kLifeCornerMinY;
 	using nectar::standin_layout::kTopBandMaxY;
 	const auto inRect = [&](const BloPane* p, int x0, int y0, int x1, int y1) {
 		return p && p->x >= x0 && p->y >= y0 && p->x <= x1 && p->y <= y1;
@@ -659,8 +659,9 @@ int checkHudLayout(const std::string& file, const std::vector<BloPane>& tree)
 	if (file == "play10.blo") {
 		const BloPane* life = findBloPane(tree, "life");
 		const BloPane* navi = findBloPane(tree, "navi");
-		if (!inRect(life, kBottomRightMinX, kBottomRightMinY, 639, 479)) bad++;
-		if (!inRect(navi, kBottomRightMinX, kBottomRightMinY, 639, 479)) bad++;
+		// play10 is drawn at x offset 0 (DrawGameInfo::draw), so the cluster sits in the bottom-left corner.
+		if (!inRect(life, 0, kLifeCornerMinY, kLifeCornerMaxX - 1, 479)) bad++;
+		if (!inRect(navi, 0, kLifeCornerMinY, kLifeCornerMaxX - 1, 479)) bad++;
 		if (life && life->w >= 64 && life->h >= 64) { } else bad++;
 	}
 	if (file == "play09.blo") {
@@ -669,7 +670,8 @@ int checkHudLayout(const std::string& file, const std::vector<BloPane>& tree)
 	if (file == "play_day.blo") {
 		using nectar::standin_layout::kCounterRow0Y;
 		using nectar::standin_layout::kCounterStartX;
-		if (!inRect(findBloPane(tree, "piki"), 0, 300, 200, 479)) bad++;
+		// Below play_day's y 300 split (hidePanesByRow), left of the digit grid.
+		if (!inRect(findBloPane(tree, "piki"), 0, 300, kCounterStartX - 1, 479)) bad++;
 		if (!inRect(findBloPane(tree, "c_mr"), kCounterStartX, kCounterRow0Y - 4, 639, 479)) bad++;
 	}
 	return bad;
@@ -788,8 +790,8 @@ void walkTextAndTags(const std::vector<BloPane>& v, const std::string& file)
 {
 	for (const BloPane& p : v) {
 		check(p.w > 0 && p.h > 0, file + ": '" + p.tag + "' has an empty rectangle");
-		// The only window is con01.blo's p264, whose four corners must be the disc's p2b_64.bti
-		// (P2DWindow::loadResource dereferences them; the stand-in texture set carries it).
+		// The only window is con01.blo's p264. P2DWindow::loadResource dereferences its four
+		// corner textures, so each must name a texture the stand-in set writes (p2b_64.bti).
 		if (p.type == BloType::Window) {
 			check(file == "con01.blo" && p.tag == "p264", file + ": '" + p.tag + "' is a window pane other than con01.blo p264");
 			check(p.texture == "p2b_64.bti" && p.otherCorners[0] == "p2b_64.bti" && p.otherCorners[1] == "p2b_64.bti" &&

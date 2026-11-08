@@ -9,10 +9,13 @@ namespace nectar {
 
 namespace {
 
-// Tipos como en la tabla de etiquetas de #72: P imagen, B panel simple, T caja de
-// texto. Donde el juego acepta cualquier tipo se usa un panel simple, que es lo
-// más inerte. Ventanas solo la de con01.blo (p264): P2DWindow::loadResource
-// desreferencia sus cuatro texturas de esquina, así que lleva las del juego.
+// Provenance (#190): the layout file names, pane tags and pane types are the game
+// code's (each layout cites the search(.., true) calls it answers); positions,
+// text and colours are authored (standin_layout.h). Types follow the #72 tag
+// table: P picture, B plain pane, T text box. Where the game accepts any type a
+// plain pane is used, the most inert. The only window is con01.blo's p264:
+// P2DWindow::loadResource dereferences its four corner textures, so it names one
+// the stand-in texture set carries.
 
 BloPane node(BloType type, const std::string& tag)
 {
@@ -36,7 +39,7 @@ BloPane box(const std::string& tag, const std::string& text = std::string())
 	return p;
 }
 
-// Ventana con las cuatro esquinas en `p2b_64.bti`, como la p264 del disco.
+// A window with all four corners on `p2b_64.bti`, a texture name drawContainer.cpp loads.
 BloPane containerWindow(const std::string& tag)
 {
 	BloPane p    = node(BloType::Window, tag);
@@ -104,7 +107,7 @@ Kids drawMenuSet(int items)
 }
 
 
-// Panel con hijos: la jerarquía de los .blo del disco (un ancla con sus cajas de texto).
+// A pane with children (an anchor with its text boxes).
 BloPane with(BloPane parent, std::initializer_list<BloPane> kids)
 {
 	for (const BloPane& k : kids) parent.children.push_back(k);
@@ -251,8 +254,8 @@ std::vector<StandinLayout> standinBloLayouts()
 		out.push_back(layout("count.blo", k));
 	}
 	{ // drawContainer.cpp:66-136 y 186-195 (DrawContainer::start, al abrir el menú del
-		// contenedor): p264 es una ventana (el disco usa p2b_64.bti en las cuatro esquinas,
-		// que está en el juego de texturas) y ws8c, p2c4, ws8u, ws8l imágenes sin textura
+		// contenedor): p264 es una ventana (p2b_64.bti en las cuatro esquinas, un nombre
+		// que carga drawContainer.cpp) y ws8c, p2c4, ws8u, ws8l imágenes sin textura
 		// (setTexture no hace nada con cero texturas).
 		Kids k;
 		k.add(pane("pall")).add(pic("maru"));
@@ -319,12 +322,13 @@ std::vector<StandinLayout> standinBloLayouts()
 		counter("c_sc", "7_64.bti", 4, 0);
 		counter("c_sr", "8_64.bti", 5, 0);
 		counter("c_s1", "9_64.bti", 6, 0);
-		k.add(placed(pic("dc_l"), { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y, cell, cell }));
-		k.add(placed(pic("dc_c"), { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y, cell, cell }));
-		k.add(placed(pic("dc_r"), { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y, cell, cell }));
-		k.add(texPic("dcsc", "1_sha64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y + 2, cell, cell }));
-		k.add(texPic("dcsl", "0_sha64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y + 2, cell, cell }));
-		k.add(texPic("dcsr", "2_sha64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y + 2, cell, cell }));
+		const int dx = standin_layout::kPlayDayDate.x, dy = standin_layout::kPlayDayDate.y, ds = standin_layout::kDateStep;
+		k.add(placed(pic("dc_l"), { dx, dy, cell, cell }));
+		k.add(placed(pic("dc_c"), { dx + ds, dy, cell, cell }));
+		k.add(placed(pic("dc_r"), { dx + 2 * ds, dy, cell, cell }));
+		k.add(texPic("dcsc", "1_sha64.bti", { dx + ds, dy + 2, cell, cell }));
+		k.add(texPic("dcsl", "0_sha64.bti", { dx, dy + 2, cell, cell }));
+		k.add(texPic("dcsr", "2_sha64.bti", { dx + 2 * ds, dy + 2, cell, cell }));
 		out.push_back(layout("play_day.blo", k));
 	}
 
@@ -396,7 +400,7 @@ std::vector<StandinLayout> standinBloLayouts()
 		digitTags(k, { "4sd2", "sd2l", "sd2c", "sd2r", "dc_l", "dc_c", "dc_r", "ro_l", "ro_c", "ro_r", "ti_l", "ti_c", "ti_r" });
 		out.push_back(layout("account2.blo", k));
 	}
-	{ // ogSave.cpp, ogSaveMgr::ogSaveMgr: ac_save.blo. he00 and he01 sit under hs00 and hs01 on the disc.
+	{ // ogSave.cpp, ogSaveMgr::ogSaveMgr: ac_save.blo.
 		Kids k;
 		k.add(pic("back")).add(pic("1win")).add(box("hs00", "Stand-in text.")).add(box("he00", "Stand-in text."));
 		k.add(box("hs01", "Stand-in text.")).add(box("he01", "Stand-in text."));
@@ -585,7 +589,7 @@ std::vector<StandinLayout> standinBloLayouts()
 
 	// extinction_day30: the final results window that DayOverModeState::makeTotalScoreWindow
 	// builds on Day 30 (bad ending). Constructed in phase two whether or not it is ever started
-	// (the disc's demo73 starts it with a StartTotalResults key; the stand-in tree has no demo73).
+	// (demo73's StartTotalResults key starts it, standin_cinema.cpp).
 	{ // drawUfoParts.cpp: ufo_p.blo. The constructor needs only the screen (DrawCMbest falls back to
 		// the screen's own 'root'); dataSet, run once the window is operated, looks up ui01..ui30
 		// pictures and un01..un30 text boxes. b_00 is one DrawCMbest picture (the count stops at the
@@ -638,7 +642,8 @@ std::vector<StandinLayout> standinBloLayouts()
 	// window (zen::DrawCMresult, built by DayOverModeState::initialisePhaseTwo in challenge mode).
 	// Its constructor opens three screens; its save step (DrawOptionSave) reuses cha_sav2,
 	// ac_chui and data_m above. Tags and types are every search(.., true) of the constructor and
-	// of what it builds, the same as on the disc's files (blo_writer_test with NECTAR_DISC_DATA).
+	// of what it builds (the optional local lane of blo_writer_test, NECTAR_DISC_DATA, compares the
+	// tag table with a user's own install).
 	{ // drawCMresult.cpp, drawCMtitle.cpp, ogGraph.cpp: cha_re.blo. 'titl' anchors the title
 		// (DrawCMtitleObj) with its 'mark' (a BalloonPane); the score digits bigl..bigr and
 		// sbil..sbir are pictures (NumberPicCallBack); p_m0..p_m4 are the five course names, one
@@ -704,11 +709,11 @@ std::vector<StandinLayout> standinBloLayouts()
 	}
 	{ // WorldMapTitleMgr. Its init and setTitle both pass through mapNoScr2Game, so course
 		// game id g shows map<M[M[g]] + 1>: map1 Distant Spring, map2 Forest of Hope, map3 Impact
-		// Site, map4 Forest Navel, map5 Final Trial (checked on the world map capture).
+		// Site, map4 Forest Navel, map5 Final Trial. Pin positions (kWmPoints) are authored.
 		static const char* const names[5] = { "The Distant Spring", "The Forest of Hope", "The Impact Site", "The Forest Navel",
 			                                  "The Final Trial" };
 		Kids k;
-		// mapN is a picture on the disc (the #72 table); here an untextured one carrying the name.
+		// mapN is a picture (the #72 table); here an untextured one carrying the name.
 		// WorldMapTitleObj centres it on (40, 30), so the name sits in its right half.
 		for (int i = 1; i <= 5; i++)
 			k.add(with(placed(pic(tagf("map%d", i)), { 40, 12, 420, 36 }),
@@ -739,11 +744,11 @@ std::vector<StandinLayout> standinBloLayouts()
 		} rows[] = { { "p_rc", "sx_pikmin_r.bti", "rp", 256 }, { "p_yc", "sx_pikmin_y.bti", "yp", 296 }, { "p_bc", "sx_pikmin_b.bti", "bp", 336 } };
 		for (const auto& r : rows) {
 			const std::string d(r.d);
-			// The group is the colour's Pikmin picture (a picture on the disc) with its digits.
+			// The group is the colour's Pikmin picture with its digits.
 			k.add(with(texPic(r.group, r.tex, { 506, r.y, 16, 32 }),
 			           { digit((d + "_l").c_str(), 34, 6), digit((d + "_c").c_str(), 50, 6), digit((d + "_r").c_str(), 66, 6) }));
 		}
-		// The 1×1 ro_c / rt_c are the disc's unused middle digits; nothing sets them.
+		// ro_c / rt_c are middle digits nothing sets: hidden.
 		for (BloPane& p : k.v)
 			if (p.tag == "ro_c" || p.tag == "rt_c") p.visible = false;
 		out.push_back(layout("w_data1.blo", k));
@@ -774,7 +779,7 @@ std::vector<StandinLayout> standinBloLayouts()
 			k.add(placed(pane(tagf("ony%d", i)), { p.x + 6, p.y - 54, 1, 1 }));
 			k.add(placed(pane(tagf("cha%d", i)), { p.x - 16, p.y - 16, 1, 1 }));
 		}
-		k.pics("sli%d", 1, 5); // also in w_line on the disc; the ones drawn are w_line's
+		k.pics("sli%d", 1, 5); // searched here too; the ones drawn are w_line's
 		out.push_back(layout("w_point.blo", k));
 	}
 	{ // The selected course's glow (WorldMapCoursePoint::select shows sliN).
@@ -804,7 +809,7 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.add(texPic("i00l", "sx_pikmin_r.bti", { 238, 226, 16, 32 })).add(texPic("i00r", "sx_pikmin_b.bti", { 386, 226, 16, 32 }));
 		k.add(texPic("i01l", "sx_pikmin_r.bti", { 238, 262, 16, 32 })).add(texPic("i01r", "sx_pikmin_b.bti", { 386, 262, 16, 32 }));
 		k.add(texPic("z**l", "sx_arrow_r.bti", { 236, 230, 24, 24 })).add(texPic("z**r", "sx_arrow_l.bti", { 380, 230, 24, 24 }));
-		cursors(k); // z00l / z00r: on the disc too, unused by WorldMapConfirmMgr
+		cursors(k); // z00l / z00r: searched, unused by WorldMapConfirmMgr
 		out.push_back(layout("w_ok.blo", k));
 	}
 	{
@@ -842,8 +847,8 @@ std::vector<StandinLayout> standinBloLayouts()
 			}
 		out.push_back(layout("cha_hi.blo", k));
 	}
-	{ // ogStart.cpp: the whole screen pulses, so only the prompt lives here (the disc's logo is
-		// the opening cinema's 3D scene, not part of press_s).
+	{ // ogStart.cpp: the whole screen pulses, so only the prompt lives here (the title logo
+		// is not part of press_s).
 		Kids k;
 		k.add(menuRoot({ txt("pst0", "Press START", standin_layout::kPressStart, 30, kCream, kGold) }));
 		out.push_back(layout("press_s.blo", k));
@@ -888,7 +893,7 @@ std::vector<StandinLayout> standinBloLayouts()
 	{
 		Kids k = titleMenu("Options", { "Sound", "Messages", "Rumble", "High Scores" });
 		for (BloPane& p : k.v)
-			if (p.tag == "he01") p.visible = false; // hidden on the disc too (ogTitle.cpp, pcSetupAdvancedMenu)
+			if (p.tag == "he01") p.visible = false; // hidden: ogTitle.cpp's pcSetupAdvancedMenu shows it when it is used
 		out.push_back(layout("option.blo", k));
 	}
 	{
@@ -914,9 +919,10 @@ std::vector<StandinLayout> standinBloLayouts()
 
 	// The map and controller menu (Y in the field, #99): ogScrMenuMgr (ogMenu.cpp) loads cont_y,
 	// m_menu2, cont_00, m_menu2m and black, and the radar (ogRader.cpp) one p_map0N by stage. Tags
-	// and types are every search(.., true) of those constructors; positions follow the retail
-	// screens roughly (map on the left with the Pikmin counts beside it; the controller in the
-	// middle with a labelled window per button around it). Each lives under a lower-case 'root'.
+	// and types are every search(.., true) of those constructors; the composition is authored
+	// (standin_layout.h: the counts panel left and the radar right on the map page; the pad in the
+	// middle with a column of labelled windows either side on the controller page; the page
+	// arrows in the bottom corners). Each lives under a lower-case 'root'.
 	{ // ogMenu.h, ogDrawLR: ya_l and ya_r, the page arrows, with the L and R letters as text-box
 		// children (pcInitTouchHints hides them for touch).
 		BloPane l = texPic("ya_l", "sx_arrow_l.bti", standin_layout::kMenuArrowL);
@@ -934,8 +940,9 @@ std::vector<StandinLayout> standinBloLayouts()
 		static const char* const areas[5] = { "The Impact Site", "The Forest of Hope", "The Forest Navel", "The Distant Spring",
 			                                  "The Final Trial" };
 		for (int i = 0; i < 5; i++) root.children.push_back(txt(tagf("ti%02d", i), areas[i], standin_layout::kMenuTitle, 28, kGold, kOrange));
-		root.children.push_back(txt("idou", "Stick: scroll", { 388, 390, 208, 20 }, 14, kWhite, kSky, 2));
-		root.children.push_back(txt("zoom", "D-pad: zoom", { 388, 412, 208, 20 }, 14, kWhite, kSky, 2));
+		const standin_layout::Rect panel = standin_layout::kMenuInfoPanel;
+		root.children.push_back(txt("idou", "Stick: scroll", { panel.x + 32, panel.y + panel.h + 8, panel.w - 32, 20 }, 14, kWhite, kSky, 2));
+		root.children.push_back(txt("zoom", "D-pad: zoom", { panel.x + 32, panel.y + panel.h + 32, panel.w - 32, 20 }, 14, kWhite, kSky, 2));
 		const int x0 = standin_layout::kMenuCountsX;
 		root.children.push_back(txt("hd_s", "Squad", { x0 + 30, 90, 72, 22 }, 14, kWhite, kSky));
 		root.children.push_back(txt("hd_t", "Total", { x0 + 102, 90, 72, 22 }, 14, kWhite, kSky));
@@ -991,23 +998,25 @@ std::vector<StandinLayout> standinBloLayouts()
 			standin_layout::Rect window; // the labelled window
 			standin_layout::Rect onPad;  // the button drawn over the pad
 		};
-		const standin_layout::Rect pad = standin_layout::kMenuPad;
-		const int lx = 42, rx = 410, ww = 184, wh = 44;
+		namespace L = standin_layout;
+		const L::Rect pad = L::kMenuPad;
+		const int lx = L::kMenuWindowLeftX, rx = L::kMenuWindowRightX, ww = L::kMenuWindowW, wh = L::kMenuWindowH;
+		auto row = [](int i) { return L::kMenuWindowTopY + i * L::kMenuWindowStep; };
 		// On-pad positions follow the drawing in control_sx (128 by 80, drawn at kMenuPad's size).
 		auto on = [&](float cx, float cy, int w, int h) {
 			const float sx = pad.w / 128.0f, sy = pad.h / 80.0f;
 			return standin_layout::Rect { pad.x + int(cx * sx) - w / 2, pad.y + int(cy * sy) - h / 2, w, h };
 		};
 		const Btn btns[9] = {
-			{ "l", "Camera behind", { 200, 200, 210, 255 }, { lx, 96, ww, wh }, on(30, 0, 44, 10) },
-			{ "r", "Zoom", { 200, 200, 210, 255 }, { rx, 96, ww, wh }, on(98, 0, 44, 10) },
-			{ "z", "Camera angle", { 180, 120, 255, 255 }, { rx, 148, ww, wh }, on(100, 8, 30, 8) },
-			{ "y", "Map menu", { 230, 230, 240, 255 }, { rx, 200, ww, wh }, on(96, 14, 14, 12) },
-			{ "x", "Disband", { 230, 230, 240, 255 }, { rx, 252, ww, wh }, on(112, 24, 12, 14) },
-			{ "a", "Throw / Pluck", { 60, 220, 120, 255 }, { rx, 304, ww, wh }, on(98, 28, 22, 22) },
-			{ "b", "Whistle", { 250, 80, 80, 255 }, { rx, 356, ww, wh }, on(84, 38, 13, 13) },
-			{ "c", "Swarm Pikmin", { 255, 220, 60, 255 }, { lx, 304, ww, wh }, on(82, 52, 18, 18) },
-			{ "3d", "Move Olimar", { 200, 200, 210, 255 }, { lx, 200, ww, wh }, on(30, 26, 22, 22) },
+			{ "l", "Camera behind", { 200, 200, 210, 255 }, { lx, row(0), ww, wh }, on(30, 0, 44, 10) },
+			{ "r", "Zoom", { 200, 200, 210, 255 }, { rx, row(0), ww, wh }, on(98, 0, 44, 10) },
+			{ "z", "Camera angle", { 180, 120, 255, 255 }, { rx, row(1), ww, wh }, on(100, 8, 30, 8) },
+			{ "y", "Map menu", { 230, 230, 240, 255 }, { rx, row(2), ww, wh }, on(96, 14, 14, 12) },
+			{ "x", "Disband", { 230, 230, 240, 255 }, { rx, row(3), ww, wh }, on(112, 24, 12, 14) },
+			{ "a", "Throw / Pluck", { 60, 220, 120, 255 }, { rx, row(4), ww, wh }, on(98, 28, 22, 22) },
+			{ "b", "Whistle", { 250, 80, 80, 255 }, { rx, row(5), ww, wh }, on(84, 38, 13, 13) },
+			{ "c", "Swarm Pikmin", { 255, 220, 60, 255 }, { lx, row(4), ww, wh }, on(82, 52, 18, 18) },
+			{ "3d", "Move Olimar", { 200, 200, 210, 255 }, { lx, row(2), ww, wh }, on(30, 26, 22, 22) },
 		};
 		for (const Btn& b : btns) root.children.push_back(texPic(tag4((std::string(b.key) + "_w").c_str()), "sx_panel.bti", b.window));
 		for (const Btn& b : btns) {
@@ -1023,7 +1032,7 @@ std::vector<StandinLayout> standinBloLayouts()
 			                            b.colour, dark, 2));
 		}
 		root.children.push_back(texPic(tag4("st"), "sx_btn.bti", on(64, 26, 10, 10)));
-		root.children.push_back(txt("st_c", "START: pause", { 220, 404, 200, 28 }, 16, kWhite, kSky));
+		root.children.push_back(txt("st_c", "START: pause", { pad.x - 16, pad.y + pad.h + 16, pad.w + 32, 28 }, 16, kWhite, kSky));
 		out.push_back(rootLayout("cont_00.blo", root));
 	}
 	{ // ogMenu.cpp, ogDrawScrInfo2: m_menu2m.blo. 'maps' is the radar's window (ogScrMenuMgr::draw

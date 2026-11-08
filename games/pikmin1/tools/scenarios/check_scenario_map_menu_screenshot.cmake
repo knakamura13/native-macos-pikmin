@@ -36,16 +36,16 @@ set(verify "${CMAKE_CURRENT_LIST_DIR}/verify_scenario_png.py")
 set(common --expect-width 640 --expect-height 480 --require-non-blank
     --min-distinct-colors 60 --min-variance 100.0)
 
-# Map page: gold stage title, the radar's field greens on the left, the dark-blue counts panel
-# with its light-blue text on the right, the right arrow only.
+# Map page: gold stage title, the dark-blue counts panel with its light-blue text on the left,
+# the radar's field greens on the right, the right arrow only.
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${verify}" "${info_png}" ${common}
-        --region-colour 160,30,480,62:FAB632:24:300
-        --region-colour 40,80,370,390:234934:8:20000
-        --region-colour 384,80,596,384:15253F:4:30000
-        --region-colour 384,80,596,384:94CEFF:4:2000
-        --region-colour 602,204,638,276:FFCE29:30:100
-        --max-region-colour 2,204,38,276:FFCE29:30:0
+        --region-colour 160,16,480,64:FAB632:24:300
+        --region-colour 304,80,576,400:234934:8:20000
+        --region-colour 64,80,288,400:15253F:4:30000
+        --region-colour 64,80,288,400:94CEFF:4:2000
+        --region-colour 592,208,640,272:FFCE29:30:100
+        --max-region-colour 0,208,48,272:FFCE29:30:0
     RESULT_VARIABLE info_rc)
 if(NOT info_rc STREQUAL "0")
     message(FATAL_ERROR "map_menu map page (${info_png}) failed its region checks")
@@ -55,13 +55,13 @@ endif()
 # label windows with light-blue text, the left arrow only, and no radar greens.
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${verify}" "${cont_png}" ${common}
-        --region-colour 230,30,410,62:FAB632:24:150
-        --region-colour 232,150,404,258:5242A5:4:4000
-        --region-colour 42,80,226,400:15253F:4:10000
-        --region-colour 42,80,226,400:94CEFF:4:1000
-        --region-colour 2,204,38,276:FFCE29:30:100
-        --max-region-colour 602,204,638,276:FFCE29:30:0
-        --max-region-colour 40,80,370,390:234934:8:500
+        --region-colour 230,16,410,64:FAB632:24:150
+        --region-colour 240,144,400,240:5242A5:4:4000
+        --region-colour 56,80,232,340:15253F:4:10000
+        --region-colour 56,80,232,340:94CEFF:4:1000
+        --region-colour 0,208,48,272:FFCE29:30:100
+        --max-region-colour 592,208,640,272:FFCE29:30:0
+        --max-region-colour 304,80,576,400:234934:8:500
     RESULT_VARIABLE cont_rc)
 if(NOT cont_rc STREQUAL "0")
     message(FATAL_ERROR "map_menu controller page (${cont_png}) failed its region checks")
