@@ -174,6 +174,19 @@ static inline void pc_gfx_count_real_gl()
         pc_netplay_present_note_real();
     }
 }
+
+// Scenario no-render mode (PIKMIN_SCENARIO_NO_RENDER, pc_scenario.cpp): the
+// GL calls that only produce pixels -- draws, clears, the window blit -- are
+// skipped at the macros below, and pc_window skips the swap. Every function
+// around them still runs: display lists are parsed, vertices built, state and
+// textures set, and present() still updates the aspect ratio and render size
+// the game reads. Nothing here feeds GL output back to the CPU, so a run
+// without pixels follows the same simulation as one with them.
+#if PIKI_SCENARIOS
+static bool sScenarioNoRender = false;
+#else
+static constexpr bool sScenarioNoRender = false;
+#endif
 #define glActiveTexture_ptr(...) (pc_gfx_count_real_gl(), (glActiveTexture_ptr)(__VA_ARGS__))
 #define glAttachShader_ptr(...) (pc_gfx_count_real_gl(), (glAttachShader_ptr)(__VA_ARGS__))
 #define glBeginQuery_ptr(...) (pc_gfx_count_real_gl(), (glBeginQuery_ptr)(__VA_ARGS__))
@@ -185,11 +198,11 @@ static inline void pc_gfx_count_real_gl()
 #define glBindVertexArray_ptr(...) (pc_gfx_count_real_gl(), (glBindVertexArray_ptr)(__VA_ARGS__))
 #define glBlendEquation_ptr(...) (pc_gfx_count_real_gl(), (glBlendEquation_ptr)(__VA_ARGS__))
 #define glBlendFunc(...) (pc_gfx_count_real_gl(), (glBlendFunc)(__VA_ARGS__))
-#define glBlitFramebuffer_ptr(...) (pc_gfx_count_real_gl(), (glBlitFramebuffer_ptr)(__VA_ARGS__))
+#define glBlitFramebuffer_ptr(...) (pc_gfx_count_real_gl(), sScenarioNoRender ? (void)0 : (glBlitFramebuffer_ptr)(__VA_ARGS__))
 #define glBufferData_ptr(...) (pc_gfx_count_real_gl(), (glBufferData_ptr)(__VA_ARGS__))
 #define glBufferSubData_ptr(...) (pc_gfx_count_real_gl(), (glBufferSubData_ptr)(__VA_ARGS__))
 #define glCheckFramebufferStatus_ptr(...) (pc_gfx_count_real_gl(), (glCheckFramebufferStatus_ptr)(__VA_ARGS__))
-#define glClear(...) (pc_gfx_count_real_gl(), (glClear)(__VA_ARGS__))
+#define glClear(...) (pc_gfx_count_real_gl(), sScenarioNoRender ? (void)0 : (glClear)(__VA_ARGS__))
 #define glClearColor(...) (pc_gfx_count_real_gl(), (glClearColor)(__VA_ARGS__))
 #define glClearDepth(...) (pc_gfx_count_real_gl(), (glClearDepth)(__VA_ARGS__))
 #define glClearDepthf(...) (pc_gfx_count_real_gl(), (glClearDepthf)(__VA_ARGS__))
@@ -206,7 +219,7 @@ static inline void pc_gfx_count_real_gl()
 #define glDepthFunc(...) (pc_gfx_count_real_gl(), (glDepthFunc)(__VA_ARGS__))
 #define glDepthMask(...) (pc_gfx_count_real_gl(), (glDepthMask)(__VA_ARGS__))
 #define glDisable(...) (pc_gfx_count_real_gl(), (glDisable)(__VA_ARGS__))
-#define glDrawArrays(...) (pc_gfx_count_real_gl(), (glDrawArrays)(__VA_ARGS__))
+#define glDrawArrays(...) (pc_gfx_count_real_gl(), sScenarioNoRender ? (void)0 : (glDrawArrays)(__VA_ARGS__))
 #define glEnable(...) (pc_gfx_count_real_gl(), (glEnable)(__VA_ARGS__))
 #define glEnableVertexAttribArray_ptr(...) (pc_gfx_count_real_gl(), (glEnableVertexAttribArray_ptr)(__VA_ARGS__))
 #define glEndQuery_ptr(...) (pc_gfx_count_real_gl(), (glEndQuery_ptr)(__VA_ARGS__))
@@ -3454,6 +3467,9 @@ static void sync_native_render_target(void)
 }
 
 #if PIKI_SCENARIOS
+void pc_gfx_scenario_set_no_render(int on) { sScenarioNoRender = on != 0; }
+int pc_gfx_scenario_no_render(void) { return sScenarioNoRender ? 1 : 0; }
+
 static bool sScenarioCaptureResizePending = false;
 
 void pc_gfx_scenario_prepare_capture(int renderW, int renderH)

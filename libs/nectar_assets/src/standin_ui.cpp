@@ -583,7 +583,9 @@ std::vector<StandinLayout> standinBloLayouts()
 	// flagTable). With no other flag on, the lowest priority wins: RESFLAG_Misc1 (re_n1_00) on
 	// Day 2, RESFLAG_FinalDay (re_g_00, set by cleanupDayEnd on Day 29) on Day 29. One page each.
 	// onion_day3: the first yellow pluck sets RESFLAG_MeetYellowPikminNoBomb (priority 206, re_q_00).
-	for (const char* f : { "re_n1_00.blo", "re_g_00.blo", "re_q_00.blo" })
+	// gate_break_next_day: a day on course 2 sets RESFLAG_FirstVisitCave (priority 10, re_d_00;
+	// GameCoreSection, stage index 2).
+	for (const char* f : { "re_n1_00.blo", "re_g_00.blo", "re_q_00.blo", "re_d_00.blo" })
 		out.push_back(tutorialPage(f));
 
 	// extinction_day30: the final results window that DayOverModeState::makeTotalScoreWindow
