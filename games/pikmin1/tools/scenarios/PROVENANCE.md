@@ -80,6 +80,7 @@ payload and none is shipped here:
 | A retail boot open-log (`boot-manifest.txt`) | A file-name table of a disc run; the manifest lane generates one locally with `make_boot_manifest.py` |
 | Retail executable traces for the ballistic arcs and their hashes | The `--disc-reference` half of `check_ballistic.py` reads them from `PIKMIN_BALLISTIC_EVIDENCE` |
 | Retail parameter tables, per-frame retail measurements, disc run logs and personal decision records | Not needed by any public check; the local lanes (above) assert measured expected outputs against the user's own install |
+| `onion_day3_disc_courses.inc` (Onion generator placements of a user's install) | Included by `scenario_onion_day3.cpp` only when present; without it the `_disc` entries of that scenario skip |
 | Combat timing measurements against the retail game (issues #154, #180) | A local exact-lane question; the public `bulborb_fight` asserts smoke limits only |
 | `libs/nectar_assets/art/` (Blender sources, exports and rig metadata) and the art-export workflow | Fork art pipeline; the stand-in models are authored in C++ |
 
