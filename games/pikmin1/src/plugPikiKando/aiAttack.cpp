@@ -14,6 +14,12 @@
 
 #if defined(PIKI_PC_PORT)
 #include "pc_coop.h"
+
+// The original per-30 Hz-tick values at the original rate (kept bit for bit at 30 Hz, so no float
+// rounding changes the original behaviour); at 60 and 120 Hz the same per-second behaviour.
+#define PC_ATTACK_RATE(orig, scaled) (PC_TICKS30 == 1 ? (orig) : (scaled))
+#else
+#define PC_ATTACK_RATE(orig, scaled) (orig)
 #endif
 
 // Un Pikmin es objetivo de ataque si es un Pikmin-seta; en VS, también si es
@@ -479,6 +485,16 @@ void ActJumpAttack::procCollideMsg(Piki* piki, MsgCollide* msg)
 		return;
 	}
 
+#if defined(PIKI_PC_PORT)
+	// At 60 and 120 Hz the contact test runs every tick, so a jumping Pikmin sticks to
+	// contacts that a 30 Hz tick moves past (more Pikmin on the enemy's back, damage
+	// sooner). Take the stick decision only on the original 30 Hz boundaries, where
+	// the position equals the 30 Hz one (the ballistic clock keeps it so).
+	if (PcBallisticClock::enabled(gsys->getFrameTime()) && !piki->mPcBallisticClock.boundary()) {
+		return;
+	}
+#endif
+
 	PRINT_KANDO("JUMP STICK ###\n");
 
 	if (msg->mEvent.mColliderPart == 0) {
@@ -592,7 +608,7 @@ int ActJumpAttack::exec()
 			break;
 		}
 
-		mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + 0.2f * angle);
+		mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + PC_ATTACK_RATE(0.2f, 1.0f - powf(0.8f, 1.0f / PC_TICKS30)) * angle);
 		break;
 	}
 	case 0:
@@ -611,15 +627,15 @@ int ActJumpAttack::exec()
 				mState       = 4;
 				mPiki->mTargetVelocity.set(0.0f, 0.0f, 0.0f);
 			}
-		} else if ((!mTargetCollider || mTargetCollider->isStickable()) && _2C && gsys->getRand(1.0f) > 0.9f) {
+		} else if ((!mTargetCollider || mTargetCollider->isStickable()) && _2C && gsys->getRand(1.0f) > PC_ATTACK_RATE(0.9f, 1.0f - 0.1f / PC_TICKS30)) {
 			mState = 2;
 		} else {
-			if (dist2D < getAttackSize() + mPiki->getCentreSize() && gsys->getRand(1.0f) > 0.7f) {
+			if (dist2D < getAttackSize() + mPiki->getCentreSize() && gsys->getRand(1.0f) > PC_ATTACK_RATE(0.7f, 1.0f - 0.3f / PC_TICKS30)) {
 				PRINT_KANDO("jump adjust : dist2d = %.1f d = %.1f\n", dist2D, dist3D);
 				mState = 2;
 			}
 
-			mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + 0.2f * angle);
+			mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + PC_ATTACK_RATE(0.2f, 1.0f - powf(0.8f, 1.0f / PC_TICKS30)) * angle);
 			mPiki->setSpeed(1.0f, direction);
 		}
 

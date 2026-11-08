@@ -325,6 +325,8 @@ static int sMouseCenterX = 0;
 // Centre of the window as it is now (fullscreen included), not the stored
 // windowed size.
 static void warpMouseToCentre() {
+    // A hidden window (--scenario) must not move the user's real pointer.
+    if (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_HIDDEN) return;
     int w = 0, h = 0;
     SDL_GetWindowSize(sWindow, &w, &h);
     SDL_WarpMouseInWindow(sWindow, w / 2, h / 2);
@@ -970,6 +972,11 @@ bool pc_window_save_key_bindings(const char* path) {
     return true;
 }
 
+// --scenario creates the window hidden. SDL_CreateWindow ignores SHOWN, and a
+// window is shown only when HIDDEN is absent, so this replaces the flag.
+static bool sCreateHidden = false;
+void pc_window_set_hidden(bool hidden) { sCreateHidden = hidden; }
+
 bool pc_window_init(const char* title, int width, int height) {
     // The PC entry point creates the window before System::Initialise so GX can
     // build its GL resources. PADInit is called later by ControllerMgr and also
@@ -1055,7 +1062,7 @@ bool pc_window_init(const char* title, int width, int height) {
             SDL_WINDOWPOS_CENTERED,
             sWindowWidth,
             sWindowHeight,
-            SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+            SDL_WINDOW_OPENGL | (sCreateHidden ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN) | SDL_WINDOW_RESIZABLE
 #ifdef __ANDROID__
                 // Modo inmersivo: SDLActivity oculta la barra de estado y los
                 // botones de navegación solo si la ventana es FULLSCREEN.
@@ -1131,7 +1138,8 @@ bool pc_window_init(const char* title, int width, int height) {
     // Center mouse cursor initially
     sMouseCenterX = sWindowWidth / 2;
     sMouseCenterY = sWindowHeight / 2;
-    SDL_WarpMouseInWindow(sWindow, sMouseCenterX, sMouseCenterY);
+    // Not for a hidden window (--scenario): on macOS the warp moves the real pointer.
+    if (!(SDL_GetWindowFlags(sWindow) & SDL_WINDOW_HIDDEN)) SDL_WarpMouseInWindow(sWindow, sMouseCenterX, sMouseCenterY);
     sMouseWarped = true;
     
     SDL_DisplayMode displayMode {};

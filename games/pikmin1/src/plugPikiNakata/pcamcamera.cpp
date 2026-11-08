@@ -8,6 +8,9 @@
 #include "netplay/pc_netplay_camlead.h"
 #include "netplay/pc_netplay_det.h"
 #include "netplay/pc_input_log.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 #endif
 #include "Creature.h"
 #include "DebugLog.h"
@@ -496,6 +499,12 @@ void PcamCamera::update()
 	makePosture();
 	makeMatrix();
 	makeCamera();
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+	if (pc_scenario_apply_debug_camera(mCamera)) {
+		mViewpoint.set(mCamera->mPosition.x, mCamera->mPosition.y, mCamera->mPosition.z);
+		mWatchpoint.set(mCamera->mFocus.x, mCamera->mFocus.y, mCamera->mFocus.z);
+	}
+#endif
 }
 
 /**
