@@ -180,9 +180,19 @@ A consequence worth keeping in mind: ground attacks are slower damage than a stu
 faster facing at 60 Hz would move the result towards 30 Hz only if it shifts Pikmin towards the ground attack, which is why
 tuning any single turn rate to force a match would be wrong without the cause.
 
-Next: attribute the facing change per Pikmin-second to each writer (the `ActJumpAttack` turn with its true sign,
-`Creature::moveRotation`, and anything else) at both rates; the attribution run so far only separated the `ActJumpAttack`
-turn using the signed error, which the quirk above makes the wrong comparison.
+Attribution with the true sign (temporary log, 32 starts, first 0.5 s, per Pikmin-second, positive = toward the target): the
+`ActJumpAttack` state-0 turn is a net push away from the target, -4.21 rad/s at 30 Hz and -5.32 rad/s at 60 Hz, and all the
+other writers (mainly `Creature::moveRotation`) pull toward it, +6.81 and +7.45 rad/s. Net convergence is therefore +2.60
+rad/s at 30 Hz and +2.13 rad/s at 60 Hz, about 18% slower, which fits the slower facing and the lower aligned share. It is a
+feedback between a growing and a shrinking term, so small per-term differences (a few percent) are amplified.
+
+Better method (use it from here): the runs are deterministic per start, so compare variants on the same starts. Paired over
+96 starts, the 60 Hz minus 30 Hz kill time is -0.421 s (se 0.112) for the current parity build and -0.527 s (se 0.095) with the
+exact growth compounding of the away turn; the change at 60 Hz is -0.106 s (se 0.085), not significant and in the wrong
+direction. Earlier unpaired comparisons of means (se about 0.12 to 0.19 each) could not resolve differences of 0.1 s.
+
+Next: apply the same paired comparison to a variant that scales the toward term (`Creature::moveRotation`) and the away term
+together, and to the jump-adjust and ground-attack distance tests, one at a time, each judged against the 0.1 s paired noise.
 
 ## Public stand-in fixture
 
