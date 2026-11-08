@@ -273,9 +273,12 @@ compounded correctly (which is why exact compounding of each term, one at a time
 30 Hz boundaries (and combining the turn terms in the original order within that step), a change to how the AI reads the world
 rather than another constant.
 
-Decision for the project (see #154): accept this as a documented, bounded divergence of finer sampling (about 5% of kill time at
-60 Hz on the paired starts, up to 12% on the heavy-tailed 96-start mean), or invest in a 30 Hz sampled-target pipeline for
-the Pikmin attack AI. The exact-disc test `scenario_combat_rate_disc` pins the default start only.
+Decision (Kyle, 2026-11-08): accepted as a documented, bounded divergence of finer sampling (about 5% of kill time at 60 Hz
+on the paired starts, up to 12% on the heavy-tailed 96-start mean). No sampled-target pipeline for the Pikmin attack AI; no
+constants tuned to force a match. The parity branch keeps its proven per-tick fixes (three `ActJumpAttack` behaviours and the
+`UpdateMgr` slot rotation). The exact-disc test `scenario_combat_rate_disc` pins the default start only. The faithful-turning
+variant (exact growth of the away turn plus compounded `moveRotation`) restores the ground/stuck hit mix and is kept as a patch
+if the question is reopened.
 
 ## Public stand-in fixture
 
