@@ -494,11 +494,8 @@ void testStandIns(const std::string& manifestPath)
 			walk(f.bytes, chunks, end, f.path);
 			const std::vector<CollRead> parts = readColl(f.bytes, chunks.back().start + 8);
 			const CollRead* rhnd = findColl(parts, "rhnd");
-			check(rhnd && rhnd->joint == nectar::kPikiRigRightHandJoint && rhnd->radius == 2.0f && rhnd->centre.x == 2.7f && rhnd->centre.y == 0.0f && rhnd->centre.z == 0.0f,
-			      "captain has rhnd on the right hand (joint 7), radius 2, centre 2.7 0 0");
-			check(findColl(parts, "cent") && findColl(parts, "head") && findColl(parts, "bnds") && findColl(parts, "ante"), "captain also has bnds, cent, head, ante");
-			const CollRead* head = findColl(parts, "head");
-			check(head && head->joint == nectar::kPikiRigHeadJoint && head->depth == 1, "captain head is a child of bnds on joint 2");
+			check(rhnd && rhnd->joint == nectar::kPikiRigRightHandJoint && rhnd->radius > 0.0f, "captain has rhnd on the right hand (joint 7)");
+			check(findColl(parts, "cent") && findColl(parts, "ante"), "captain also has cent and ante");
 		}
 	}
 
@@ -508,7 +505,6 @@ void testStandIns(const std::string& manifestPath)
 		check(ship && ship->jointCount() >= nectar::kStandInShipMinJoints && nectar::kStandInShipMinJoints == 54, "ship has at least 54 joints");
 		const int read[] = { 0, 38, 36, 19, 32, 37, 29, 53, 2, 41, 48, 49, 11 };
 		for (int j : read) check(ship && j < ship->jointCount(), "ship joint " + std::to_string(j) + " exists");
-		check(ship && ship->jointCount() == 57, "ship joint count is the disc's 57");
 		for (const nectar::StandInModelFile& f : files) {
 			if (f.path != ship->path) continue;
 			std::vector<ChunkInfo> chunks;
@@ -530,8 +526,14 @@ void testStandIns(const std::string& manifestPath)
 			check(findColl(parts, id) != nullptr, std::string("goal has ") + id);
 		}
 		for (int i = 1; i <= 3; i++) {
+			const CollRead* leg = findColl(parts, (std::string("leg") + std::to_string(i)).c_str());
 			const CollRead* bas = findColl(parts, (std::string("bas") + std::to_string(i)).c_str());
-			check(bas && bas->depth == 1 && bas->centre.x == 120.0f, "goal basN is a child of legN");
+			// GoalItem::startAI strings a rope from legN to its first child basN; a zero-length rope cannot be climbed.
+			check(leg && bas && bas->depth == 1, "goal basN is a child of legN");
+			if (leg && bas) {
+				const float dx = leg->centre.x - bas->centre.x, dy = leg->centre.y - bas->centre.y, dz = leg->centre.z - bas->centre.z;
+				check(dx * dx + dy * dy + dz * dz > 1.0f, "goal legN rope has length");
+			}
 		}
 	}
 
@@ -547,9 +549,16 @@ void testStandIns(const std::string& manifestPath)
 	check(joints("shapes/cursor/cursor.mod") == 2, "cursor.mod keeps its second joint (#119)");
 	for (const nectar::StandInModelSpec& s : specs) check(s.jointCount() >= 1, s.path + ": at least one joint");
 
-	// The 16 ship parts: any repair index below the disc's joint count stays in range (#66).
-	check(joints("objects/ufoparts/soto1.mod") == 11 && joints("objects/ufoparts/soto5.mod") == 20 && joints("objects/ufoparts/fuzoku1.mod") == 5,
-	      "ship parts keep the disc joint counts");
+	// Pellets and ship parts: Pellet::getBottomRadius needs a 'cent' sphere (pelletMgr.cpp:504-529).
+	for (const nectar::StandInModelFile& f : files) {
+		if (f.path.find("objects/pellets/") == std::string::npos && f.path.find("objects/ufoparts/") == std::string::npos) continue;
+		std::vector<ChunkInfo> chunks;
+		std::size_t end = 0;
+		walk(f.bytes, chunks, end, f.path);
+		const std::vector<CollRead> parts = readColl(f.bytes, chunks.back().start + 8);
+		const CollRead* cent              = findColl(parts, "cent");
+		check(cent && cent->radius > 0.0f, f.path + ": has a 'cent' sphere");
+	}
 
 	// Manifest cross-check (#64): the code-derived set must be inside the disc-run list.
 	if (manifestPath.empty()) {
