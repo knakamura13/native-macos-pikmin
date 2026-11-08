@@ -13,7 +13,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from check_ballistic import check_disc_reference
+from check_ballistic import check_disc_reference, evidence_path
 
 
 def main():
@@ -23,6 +23,9 @@ def main():
     data = os.environ.get("PIKMIN_SCENARIO_DATA_DIR")
     if not data:
         print("Set PIKMIN_SCENARIO_DATA_DIR to a local GPIE01 rev 1 install.")
+        return 77
+    if not evidence_path().is_file():
+        print(f"No retained original-disc traces at {evidence_path()} (set PIKMIN_BALLISTIC_EVIDENCE).")
         return 77
     data_dir = Path(data).resolve()
     if not (data_dir / "assets/dataDir/parms/gamePrms.bin").is_file():

@@ -7,6 +7,7 @@ contracts. No expected disc values are invented; the 30 Hz scenario log is the r
 """
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 
@@ -59,9 +60,15 @@ def compare(directory):
     return problems
 
 
+def evidence_path():
+    """The retained original-disc traces: PIKMIN_BALLISTIC_EVIDENCE, else evidence/ next to this script."""
+    override = os.environ.get('PIKMIN_BALLISTIC_EVIDENCE')
+    return Path(override) if override else Path(__file__).parent / 'evidence' / 'ballistic-gc-2026-11-06.json'
+
+
 def check_disc_reference(directory):
     """Anchor CI's 30 Hz fall/flick to retained original-executable measurements."""
-    evidence = json.loads((Path(__file__).parent / 'evidence' / 'ballistic-gc-2026-11-06.json').read_text())
+    evidence = json.loads(evidence_path().read_text())
     problems = []
     for case in ('fall', 'flick'):
         rows, _, _ = collect(Path(directory) / f'scenario_ballistic_{case}_30.log', case, 30)
