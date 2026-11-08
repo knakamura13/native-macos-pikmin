@@ -16,8 +16,10 @@
 //            nearest P with flat distance < min + frac (R - min) is plucked (frac = timer / expand
 //            while the circle grows, mWhistleRadiusFrac once full), and on no other tick;
 //          - so a, b and c in that order, a on the KEY_LoopStart tick (radius min), b only once the
-//            circle reaches 58 (later than the 0.08 s interval would allow), c one interval after
-//            b; d never;
+//            circle reaches 58 (later than the 0.08 s interval), c on a later cooldown once the
+//            circle reaches it (one interval after b with the code's 0.2 s expand; later with the
+//            disc's 0.45 s, because 84 is still outside the circle when that cooldown comes due);
+//            d never;
 //          - each pluck: one new Pikmin of the sprout's colour where it stood, in AutoNuki with
 //            mPcWhistleNuki, and playerState->mTotalPluckedPikiCount +1;
 //          - within 3 s each plucked Pikmin has left AutoNuki and mPcWhistleNuki is clear.
@@ -374,8 +376,12 @@ private:
 		std::printf("[scenario] whistle_pluck_held: on: a +%d, b +%d, c +%d ticks after KEY_LoopStart, interval %u ticks, d %s\n",
 		            a ? int(a - mPhase1Tick) : -1, b ? int(b - mPhase1Tick) : -1, c ? int(c - mPhase1Tick) : -1, ivl,
 		            mPlucked[3] ? "plucked" : "left");
-		if (!a || !b || !c || mPlucked[3] || !(a < b && b < c) || a != mPhase1Tick || b - a <= ivl || c - b != ivl) {
-			fail(t, "PL4: a on the KEY_LoopStart tick, b once the circle reaches it (later than one interval), c one interval after b, d never",
+		// c follows b by at least one cooldown. With the code's 0.2 s expand the circle already
+		// covers c at that cooldown, so the gap is exactly one interval; with the disc's 0.45 s
+		// the circle reaches c later and the gap is longer. The per-tick check is what requires
+		// the pluck to be the sprout inside the radius.
+		if (!a || !b || !c || mPlucked[3] || !(a < b && b < c) || a != mPhase1Tick || b - a <= ivl || c - b < ivl) {
+			fail(t, "PL4: a on the KEY_LoopStart tick, b once the circle reaches it (later than one interval), c on a later cooldown once the circle reaches it, d never",
 			     "a +%d, b +%d, c +%d, d %d, interval %u", a ? int(a - mPhase1Tick) : -1, b ? int(b - mPhase1Tick) : -1, c ? int(c - mPhase1Tick) : -1,
 			     (int)(mPlucked[3] != 0), ivl);
 			return;
