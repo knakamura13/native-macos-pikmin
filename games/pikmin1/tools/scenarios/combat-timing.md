@@ -75,6 +75,16 @@ Averaged over starts the gap at 60 Hz falls from 0.76 s to 0.60 s, about 3 stand
 roughly 17% remains, and its cause is **not** found. The fix is correct as far as it goes (three per-tick behaviours that
 were demonstrably unscaled) but does not achieve parity; `scenario_combat_rate_disc` pins the default start only.
 
+## Where the remaining gap sits (state trace, 8 starts, parity fix, disc install)
+
+A tick-stamped trace of `ActJumpAttack`'s state changes per Pikmin shows the time inside its states is the same at both
+rates (jump 0.47 s and 0.47 s; jump set-up 0.37 s and 0.33 s; ground attack 0.73 s and 0.71 s), so the gap is not in them.
+It sits outside: the first ground attack starts at 0.70 s at 30 Hz and 0.57 s at 60 Hz (the approach is 0.13 s shorter), and
+a run enters the jump set-up 12.6 times at 30 Hz against 10.1 at 60 Hz (kill 3.23 s against 2.59 s). The next place to
+look is the walk and approach before and between attacks (`ActAttack`, `ActFree` target search, walking and facing in
+`Piki`/`Creature::moveVelocity`, whose velocity lag `v += (target - v) * dt / acceleration` is an explicit Euler step and
+so differs between 30 and 60 Hz), and what the Bulborb does in the same time. Not tested.
+
 ## Public stand-in fixture
 
 The authored fixture (source-default parameters, authored attack schedules, `standin_anims.h`)
