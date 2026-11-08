@@ -1,6 +1,6 @@
 # Combat timing against the original game (issues #154 and #180)
 
-Status: **measured, cause found in three per-tick behaviours, divergence cut from 0.9 s to 0.2 s at 60 Hz on a fork branch; not fully resolved.** The public scenarios assert only smoke
+Status: **measured, cause found in three per-tick behaviours, divergence cut from 0.9 s to 0.2 s at 60 Hz on the default start, but only from 0.76 s to 0.60 s averaged over 16 starts; not resolved.** The public scenarios assert only smoke
 limits (`bulborb_fight`: the Dwarf Bulborb dies within 10 s, a Flick lasts 4 s or less). Those limits
 do not establish parity with the original game and nothing here claims it.
 
@@ -58,6 +58,22 @@ audited. The exact-lane test `scenario_combat_rate_disc` records the measured bo
 the first 1.5 s within 20, equal flick count) so the gap cannot grow back; it does not claim parity. The change alters
 gameplay at 60 and 120 Hz and its stand-in hash logs, so it is not in the upstream package and needs Kyle's decision.
 The 120 Hz abort after the kill is explained: it is the original `ERROR("zannnen")` in `ActTransport::decideGoal` (an lldb break on `_Error`), raised when the Pikmin carrying the corpse are blue and the stage has no blue Onion. The scenario puts blue Pikmin on the Day-1 disc stage, so this is a scenario artifact reached sooner because the kill comes sooner; it is not a tick-rate bug.
+
+## Sampling over start positions (2026-11-08, corrects the single-start numbers above)
+
+One deterministic start is a single trajectory, so the 3.13 / 2.93 / 2.72 s above overstate what the fix does. Sixteen
+runs per rate with the squad's start moved 0 to 45 units along x in steps of 3 (`PIKMIN_FIGHT_SHIFT`,
+`sample_combat_rate.py --seeds 16 --shift-step 3`), mean kill time on the disc install:
+
+| Tick rate | Before the fix | After the fix |
+| --- | --- | --- |
+| 30 Hz | 3.44 s (sd 0.72) | 3.44 s (unchanged by design) |
+| 60 Hz | 2.68 s (sd 0.45) | 2.84 s (sd 0.47) |
+| 120 Hz | not run | 2.71 s (sd 0.40) |
+
+Averaged over starts the gap at 60 Hz falls from 0.76 s to 0.60 s, about 3 standard errors from zero: a real divergence of
+roughly 17% remains, and its cause is **not** found. The fix is correct as far as it goes (three per-tick behaviours that
+were demonstrably unscaled) but does not achieve parity; `scenario_combat_rate_disc` pins the default start only.
 
 ## Public stand-in fixture
 

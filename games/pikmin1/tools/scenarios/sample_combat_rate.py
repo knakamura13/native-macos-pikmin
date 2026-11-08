@@ -27,9 +27,9 @@ FLICK = re.compile(r'Flick lasted ([\d.]+) s on average, [\d.]+ s at most \((\d+
 FLICKS = re.compile(r'flicks (\d+), re-attacks')
 
 
-def run(game, data, stage, rate, preroll):
+def run(game, data, stage, rate, preroll, shift=0):
     env = dict(os.environ, PIKMIN_SCENARIO_DATA_DIR=str(data), PIKMIN_SCENARIO_STAGE=stage,
-               PIKMIN_NETPLAY_TEST_PREROLL_RAND=str(preroll), SDL_AUDIODRIVER='dummy')
+               PIKMIN_NETPLAY_TEST_PREROLL_RAND=str(preroll), PIKMIN_FIGHT_SHIFT=str(shift), SDL_AUDIODRIVER='dummy')
     with tempfile.TemporaryDirectory(prefix='combat-rate-') as scratch:
         result = subprocess.run([str(game), '--scenario', 'bulborb_fight', '--scenario-tick-rate', str(rate)],
                                 cwd=scratch, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -37,11 +37,12 @@ def run(game, data, stage, rate, preroll):
     out = result.stdout
     hits = [(float(t), float(d)) for t, d in HIT.findall(out)]
     kill = KILL.search(out)
+    dead = [float(tm) for tm, d in re.findall(r'HIT t=([\d.]+) s damage [\d.]+ health (-?[\d.]+)', out) if float(d) <= 0.0]
     flick = FLICK.search(out)
     flicks = FLICKS.search(out)
     return {
         'rate': rate, 'preroll': preroll, 'exit': result.returncode,
-        'kill': float(kill.group(1)) if kill else None,
+        'kill': dead[0] if dead else (float(kill.group(1)) if kill else None),
         'early': sum(d for t, d in hits if t <= 1.5),
         'flicks': int(flicks.group(1)) if flicks else None,
         'flick_len': float(flick.group(1)) if flick and int(flick.group(2)) else None,
@@ -61,7 +62,8 @@ def main():
     parser.add_argument('--data', type=Path, help='disc install folder (holds assets/)')
     parser.add_argument('--standin', type=Path, help='stand-in tree folder (holds assets/)')
     parser.add_argument('--rates', type=int, nargs='+', default=[30, 60, 120])
-    parser.add_argument('--seeds', type=int, default=24)
+    parser.add_argument('--seeds', type=int, default=24, help='number of runs per rate; with --shift-step each run starts the squad shift-step units further along x')
+    parser.add_argument('--shift-step', type=float, default=0.0)
     parser.add_argument('--jobs', type=int, default=3)
     args = parser.parse_args()
     if bool(args.data) == bool(args.standin):
@@ -70,7 +72,7 @@ def main():
     stage = 'stages/stage1.ini' if args.data else 'stages/sandbox_objects.ini'
     jobs = [(r, s) for r in args.rates for s in range(args.seeds)]
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
-        rows = list(pool.map(lambda j: run(args.game.resolve(), data, stage, *j), jobs))
+        rows = list(pool.map(lambda j: run(args.game.resolve(), data, stage, j[0], 0, j[1] * args.shift_step), jobs))
     for rate in args.rates:
         mine = [r for r in rows if r['rate'] == rate]
         bad = [r for r in mine if r['exit'] != 0]
