@@ -16,6 +16,8 @@
 #include "hive_crystals_yellow.inc"
 #include "nectar.inc"
 #include "nectar_drop.inc"
+#include "part_engine.inc"
+#include "part_radar.inc"
 #include "pellet_1.inc"
 #include "pellet_10.inc"
 #include "pellet_20.inc"
@@ -39,6 +41,8 @@ static const ArtModel* const kArtModels[] = {
 	&kArt_hive_crystals_yellow,
 	&kArt_nectar,
 	&kArt_nectar_drop,
+	&kArt_part_engine,
+	&kArt_part_radar,
 	&kArt_pellet_1,
 	&kArt_pellet_10,
 	&kArt_pellet_20,

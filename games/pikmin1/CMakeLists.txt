@@ -441,6 +441,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_hud_layout.cpp
         pc_port/scenarios/scenario_standin_showcase.cpp
+        pc_port/scenarios/scenario_ship_parts_showcase.cpp
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
         pc_port/scenarios/scenario_sprout_landing.cpp
@@ -2931,7 +2932,17 @@ if(PIKMIN_BUILD_SCENARIOS)
                 TIMEOUT 600)
         endforeach()
     endforeach()
-    foreach(scenario standin_showcase)
+    add_test(NAME scenario_screenshot_ship_parts_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/ship_parts_30
+            -DPIKMIN_STANDIN_DATA=${PIKMIN_STANDIN_DATA}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_ship_parts_screenshot.cmake)
+    set_tests_properties(scenario_screenshot_ship_parts_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        RUN_SERIAL TRUE TIMEOUT 600)
+    foreach(scenario standin_showcase ship_parts_showcase)
         foreach(rate 30)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

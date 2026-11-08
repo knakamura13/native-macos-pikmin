@@ -81,3 +81,24 @@ so their art is authored white.
 - Static tables of `{ x, y, z, nx, ny, nz, r, g, b }` need none of that: one
   vertex per line diffs cleanly, the compiler rejects a malformed file, and
   nothing new is linked.
+
+## Engine and radar source rebuild (#115)
+
+The two original equipment models live in `blender/ship_parts.blend`. To rebuild
+that source from primitives, then all shipped exports (from the repository root):
+
+```sh
+Blender --background --factory-startup --python libs/nectar_assets/art/authoring/ship_parts.py
+Blender --background --factory-startup --python libs/nectar_assets/art/export_standins.py
+python3 libs/nectar_assets/art/check_export.py --blender /path/to/Blender
+cmake --build build/pikmin1-scenarios --target nectar_standin_generator
+```
+
+The existing export CI checks the new source automatically. `nectar_mod_writer_test`
+asserts that the parts retain their collision text, joint count, parents and bounds.
+`scenario_screenshot_ship_parts_30` captures both real pellets at 640x480 and checks
+brass/amber/teal in their separate screen regions. It fails on the old grey cubes.
+The before/after workflow captures both revisions' generated assets with the head's
+showcase camera, because the base does not yet contain that capture scenario.
+The six existing golden views do not include these parts; leave them unchanged
+unless a golden comparison demonstrates an intentional change.

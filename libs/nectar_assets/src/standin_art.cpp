@@ -631,6 +631,8 @@ const std::vector<StandInArtBinding>& standInArtBindings()
 		{ "dataDir/effects/shapes/y_goal.mod", "hive_crystals_yellow", 10.0f },
 		{ "dataDir/effects/shapes/b_goal.mod", "hive_crystals_blue", 10.0f },
 		{ "dataDir/objects/ufo/ufo0705.mod", "ship", 1.0f },
+		{ "dataDir/objects/ufoparts/soto5.mod", "part_engine", 1.0f },
+		{ "dataDir/objects/ufoparts/fuzoku1.mod", "part_radar", 1.0f },
 		// Nectar: the falling drop and the puddle it leaves are the same beads.
 		{ "dataDir/objects/water/water.mod", "nectar", 1.0f },
 		{ "dataDir/objects/fl_water/fl_water.mod", "nectar_drop", 1.0f },

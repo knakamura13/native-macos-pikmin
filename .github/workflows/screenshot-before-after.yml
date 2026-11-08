@@ -115,6 +115,21 @@ jobs:
               --out "$PWD/shots/$tree"
           done
 
+      # The base predates this capture scenario. Use the head's identical camera
+      # and pellet spawn code for both, loading each revision's generated assets.
+      - name: Capture ship-part assets with the same showcase camera
+        env:
+          SDL_AUDIODRIVER: dummy
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          LP_NUM_THREADS: "1"
+        run: |
+          for tree in base head; do
+            xvfb-run -a env PIKMIN_SCENARIO_DATA_DIR="$PWD/build/$tree-data" \
+              "$PWD/build/head/bin/nectar" --scenario ship_parts_showcase \
+              --scenario-tick-rate 30 --scenario-screenshot "120:$PWD/shots/$tree/ship_parts.png"
+          done
+
       - name: Build the side-by-side pictures
         run: |
           python3 head/games/pikmin1/tools/scenarios/make_before_after.py \
