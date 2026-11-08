@@ -246,33 +246,32 @@ bool stagesIni(Tree& tree, std::string& error)
 // the scenario runner's data gate) and stays empty. naviMgr.bin and pikiMgr.bin
 // hold two lists each (CreatureProp, then NaviProp or PikiProp).
 //
+// naviMgr.bin and pikiMgr.bin carry every ID the disc files set, in the disc's
+// order, with the disc's value. The generated files are byte-identical to the
+// VERSION_GPIE01_01 install (Pikmin-USA-Rev1): naviMgr.bin since 2026-11-06
+// (standin-navi-parms.md; the bytes were re-decoded with the Parameters::read
+// layout, parameters.cpp) and pikiMgr.bin since 2026-11-04 (standin-piki-parms.md).
+// Only the numbers are written; no disc file is copied. p62 is not in the disc
+// captain file, so the pluck-outside-Onion distance stays the code default 15.
+// The disc file stores p48 twice (cursor delay, then clamp stick). Parameters::read
+// applies an ID to the first match only, so both entries are written and the
+// second does not reach the clamp-stick parm. Int IDs are p42, p55, p57, p58,
+// p59 and p61.
+//
 // throw_release touches how the captain and his Pikmin move, collide, aim and
-// throw, and how far a grab reaches, so those IDs carry the disc's values. With
-// the code defaults the captain grabs straight from 80 units (K = 1, the
-// ThrowWait key frame) where the disc walks the Pikmin to the hand first (K = 13
-// at 30 Hz). Only the disc has these numbers: they were read once from the
-// VERSION_GPIE01_01 install's parms/naviMgr.bin, pikiMgr.bin, aiconst.bin and
-// cunit.bin (read-only, decoded with the Parameters::read layout, 2026-10-27),
-// and each differs from the code default in NaviMgr.h, PikiMgr.h,
-// CreatureProp.h, AIConstant.h or CPlate.h (noted per line).
-// The other differing captain and game IDs (whistle, punch) are left at the
-// code defaults because no v1 scenario touches them. pikiMgr.bin is the
-// exception: since 2026-11-04 it carries every ID the disc file sets, with the
-// disc's value (standin-piki-parms.md). Every ID of the three disc files was
-// diffed against these and the code defaults on 2026-10-28 (verification-log.md,
-// item 4); the ones left at code defaults are:
-//  - gamePrms.bin (stays empty): p00 daySpeed (disc 27, code 20) is overwritten
-//    on PC from the day-length setting (27 by default) in GameCoreSection's
-//    constructor, so the file value never reaches the clock; t00 startHour,
-//    t01 endHour, p06 nightTimer and x99 equal the code defaults; p01-p04, s01,
-//    s03 only blend the lighting; p05 nightWarning (disc 18, code 16) is the
-//    Hurry Up message, which day30_clock passes either way (it starts Day 30 at
-//    18:48, after both). x98 is the unused title string.
-//  - naviMgr.bin: p01-p03 whistle, p29/p30 escape animation frames, p31/p33
-//    pressed and push timing, p42 pluck loop count, p49 impatience time, p51
-//    punch damage, p57-p59 Kinoko flick and bury escape, p61 pluck zoom. No v1
-//    scenario whistles, runs into the escape speed, is pressed, pushes, plucks,
-//    punches or is buried.
+// throw, and how far a grab reaches. With the code defaults the captain grabs
+// straight from 80 units (K = 1, the ThrowWait key frame) where the disc walks
+// the Pikmin to the hand first (K = 13 at 30 Hz). Those IDs were first read from
+// the same install on 2026-10-27; the full captain list was filled in on
+// 2026-11-06. Each value that differs from the code default in NaviMgr.h,
+// PikiMgr.h, CreatureProp.h, AIConstant.h or CPlate.h is noted per line.
+// gamePrms.bin stays empty: p00 daySpeed (disc 27, code 20) is overwritten on PC
+// from the day-length setting (27 by default) in GameCoreSection's constructor,
+// so the file value never reaches the clock; t00 startHour, t01 endHour, p06
+// nightTimer and x99 equal the code defaults; p01-p04, s01, s03 only blend the
+// lighting; p05 nightWarning (disc 18, code 16) is the Hurry Up message, which
+// day30_clock passes either way (it starts Day 30 at 18:48, after both). x98 is
+// the unused title string.
 //
 // CreatureProp: the captain's effective code defaults are 1.0, 0.5, 0.5, 0.2,
 // 0.3 (the NaviProp constructor, navi.cpp, overrides s00, s02 and s03 of the
@@ -334,34 +333,71 @@ bool parmFiles(Tree& tree, std::string& error)
 		  {
 		      // CreatureProp, disc values (effective code defaults 1.0, 0.5, 0.5, 0.2, 0.3: only s03 differs).
 		      { parmFloat("s00", 1.0f), parmFloat("s01", 0.5f), parmFloat("s02", 0.5f), parmFloat("s03", 0.1f), parmFloat("s04", 0.3f) },
+		      // NaviProp::Parms: every ID the disc file sets, in the disc file's order (parms/naviMgr.bin,
+		      // re-decoded 2026-11-06). The stand-in file is byte-identical to the disc's. p62 is absent
+		      // there. The full table is in standin-navi-parms.md.
 		      {
 		          parmFloat("p00", 25.0f),   // mActionRadius (code 120)
+		          parmFloat("p60", 200.0f),  // mContinuousPluckDistance, equals the code default
+		          parmFloat("p01", 90.0f),   // mWhistleMaxRadius (code 100): the whistle grows to 90, not 100
+		          parmFloat("p53", 5.0f),    // mWhistleMinRadius, equals the code default
+		          parmFloat("p02", 0.45f),   // mWhistleExpandTime (code 0.2): 5 to 90 in 0.45 s
+		          parmFloat("p03", 1.0f),    // mWhistleHoldTime (code 0.15): the full circle lingers 1 s
 		          parmFloat("p04", 160.0f),  // mMoveSpeed (code 170)
 		          parmFloat("p56", 160.0f),  // mRunSpeed (code 210)
 		          parmFloat("p38", 1.2f),    // mDisplayScale (code 1)
+		          parmFloat("p05", 0.001f),  // stick 0, equals the code default
+		          parmFloat("p20", 0.1f),    // stick 01, equals the code default
+		          parmFloat("p06", 0.8f),    // stick 1, equals the code default
+		          parmFloat("p07", 1.0f),    // stick 2, equals the code default
+		          parmFloat("p08", 120.0f),  // slip angle, equals the code default
+		          parmFloat("p09", 2.5f),    // mThrowHoldMaxTime, equals the code default
 		          parmFloat("p10", 140.0f),  // mThrowMaxDistance (code 600)
 		          parmFloat("p11", 140.0f),  // mThrowMinDistance (code 150)
 		          parmFloat("p24", 75.0f),   // mThrowMaxHeight (code 100)
 		          parmFloat("p25", 75.0f),   // mThrowMinHeight (code 80)
 		          parmFloat("p54", 115.0f),  // mYellowThrowHeight (code 200)
+		          parmFloat("p26", 1.0f),    // mThrowFlightTime, equals the code default
 		          parmFloat("p37", 15.0f),   // mPluckGrabRange (code 80): beyond it the Pikmin walks to the hand first
+		          parmInt("p42", 0),         // mPluckLoopCount (code 1)
 		          parmFloat("p39", 15.0f),   // mPikiWaitRange (code 30)
 		          parmFloat("p40", 40.0f),   // mPikiFormationChangeRange (code 60)
 		          parmFloat("p21", 8.0f),    // mBodyCollisionRadius (code 15)
 		          parmFloat("p41", 8.5f),    // mGroundCollisionRadius (code 16)
 		          parmFloat("p22", 1.0f),    // mInverseMass (code 4)
 		          parmFloat("p23", 0.03f),   // aiming rotation speed (code 0.04)
+		          parmFloat("p14", 5.0f),    // mAsibumiStartSpeed, equals the code default
 		          parmFloat("p15", 8.0f),    // mWalkStartSpeed (code 35)
 		          parmFloat("p16", 20.0f),   // mRunStartSpeed (code 70)
 		          parmFloat("p17", 95.0f),   // mEscapeStartSpeed (code 160)
 		          parmFloat("p18", 60.0f),   // mWalkAnimMinFrames (code 30)
 		          parmFloat("p19", 90.0f),   // mWalkAnimMaxFrames (code 60)
 		          parmFloat("p27", 40.0f),   // mRunAnimMinFrames (code 30)
+		          parmFloat("p28", 60.0f),   // mRunAnimMaxFrames, equals the code default
+		          parmFloat("p29", 60.0f),   // mEscapeAnimMinFrames (code 30): Nigeru plays at this speed
+		          parmFloat("p30", 90.0f),   // escape frames max (code 60); nothing reads it
+		          parmFloat("p31", 2.0f),    // mPressedTotalTime (code 3)
+		          parmFloat("p32", 1.0f),    // mPressedFlatTime, equals the code default
+		          parmFloat("p33", 0.8f),    // push start time (code 0.5); nothing reads it
+		          parmFloat("p34", 0.3f),    // push start stick, equals the code default
+		          parmFloat("p35", 10.0f),   // mShakePreventionAngle, equals the code default
+		          parmFloat("p36", 0.1f),    // anti-shake size, equals the code default
+		          parmFloat("p48", 0.85f),   // mCursorMoveDelayTime (code 2); first p48, the one read applies
+		          parmFloat("p49", 5.0f),    // mPikiImpatienceTime (code 8)
+		          parmFloat("p43", 0.1f),    // mNeutralStickThreshold, equals the code default
 		          parmFloat("p44", 0.65f),   // mCursorMoveStickThreshold (code 0.75)
+		          parmFloat("p48", 0.85f),   // mClampStickToMaxThreshold, equals the code default; second p48, unread
 		          parmFloat("p45", 0.0f),    // mCursorMinRadius (code 50)
 		          parmFloat("p46", 100.0f),  // mCursorMaxRadius (code 300)
 		          parmFloat("p47", 300.0f),  // mCursorMoveSpeed (code 200)
-		          parmFloat("p48", 0.85f),   // mCursorMoveDelayTime (code 2)
+		          parmFloat("p50", 100.0f),  // mHealth, equals the code default
+		          parmFloat("p51", 10.0f),   // mPunchDamage (code 1)
+		          parmFloat("p52", 10.0f),   // mPunchRadius, equals the code default
+		          parmInt("p55", 1),         // mPluckCursorCount, equals the code default
+		          parmInt("p57", 3),         // mMinKinokoFlickActions (code 4)
+		          parmInt("p58", 2),         // mBuryEscapeKeyCount (code 3)
+		          parmInt("p59", 2),         // mBuryEscapeSuccessCount (code 3)
+		          parmInt("p61", 80),        // mPostPluckZoomOutTime (code 100)
 		      },
 		  } },
 		{ "dataDir/parms/pikiMgr.bin",
