@@ -592,7 +592,7 @@ int ActJumpAttack::exec()
 			break;
 		}
 
-		mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + 0.2f * angle);
+		mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + (1.0f - powf(0.8f, 1.0f / PC_TICKS30)) * angle);
 		break;
 	}
 	case 0:
@@ -611,15 +611,15 @@ int ActJumpAttack::exec()
 				mState       = 4;
 				mPiki->mTargetVelocity.set(0.0f, 0.0f, 0.0f);
 			}
-		} else if ((!mTargetCollider || mTargetCollider->isStickable()) && _2C && gsys->getRand(1.0f) > 0.9f) {
+		} else if ((!mTargetCollider || mTargetCollider->isStickable()) && _2C && gsys->getRand(1.0f) > 1.0f - 0.1f / PC_TICKS30) {
 			mState = 2;
 		} else {
-			if (dist2D < getAttackSize() + mPiki->getCentreSize() && gsys->getRand(1.0f) > 0.7f) {
+			if (dist2D < getAttackSize() + mPiki->getCentreSize() && gsys->getRand(1.0f) > 1.0f - 0.3f / PC_TICKS30) {
 				PRINT_KANDO("jump adjust : dist2d = %.1f d = %.1f\n", dist2D, dist3D);
 				mState = 2;
 			}
 
-			mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + 0.2f * angle);
+			mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + (1.0f - powf(0.8f, 1.0f / PC_TICKS30)) * angle);
 			mPiki->setSpeed(1.0f, direction);
 		}
 
