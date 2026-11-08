@@ -1121,6 +1121,12 @@ void scenarioFail(unsigned tick, const char* expected, const char* observed)
 	finish(PC_SCENARIO_EXIT_FAIL);
 }
 
+void scenarioSkip(const char* reason)
+{
+	std::printf("[scenario] SKIP: %s\n", reason);
+	terminate(PC_SCENARIO_EXIT_SKIP);
+}
+
 void scenarioFailf(unsigned tick, const char* expected, const char* fmt, ...)
 {
 	char buf[256];

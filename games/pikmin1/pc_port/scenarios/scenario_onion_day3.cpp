@@ -520,8 +520,7 @@ private:
 		mTree = assetTreeFromRequestedStage();
 		const CourseOnions* course = courseFor(flowCont.mCurrentStage->mFileName, mTree);
 		if (!course && mTree == Disc) {
-			std::printf("[scenario] %s: skipped: no local course table for the disc stage '%s' (onion_day3_disc_courses.inc)\n", mName, flowCont.mCurrentStage->mFileName);
-			std::exit(77);
+			scenarioSkip("onion_day3 on a disc stage needs the local course table onion_day3_disc_courses.inc");
 		}
 		if (!course || !course->hasNextYellow) {
 			fail(0, "Day 2 on a course with a `next` yellow Onion (sandbox_onions or the disc's stage1)", "stage '%s' tree %d",

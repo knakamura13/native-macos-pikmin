@@ -172,6 +172,8 @@ void scenarioPass(void);
 void scenarioFail(unsigned tick, const char* expected, const char* observed);
 // printf-style: records failure with expected/observed text.
 void scenarioFailf(unsigned tick, const char* expected, const char* fmt, ...);
+// Ends the run as skipped (exit 77): the run lacks local data this scenario needs. Never a pass.
+[[noreturn]] void scenarioSkip(const char* reason);
 // The scenario's hand-off point (issue #76). In a --scenario-handoff run the
 // scripted pad is detached, deterministic and unthrottled mode end, the
 // watchdog and every check stop, and the real keyboard, mouse and controllers
