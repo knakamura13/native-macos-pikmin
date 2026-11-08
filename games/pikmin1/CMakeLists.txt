@@ -2210,7 +2210,7 @@ if(PIKMIN_BUILD_SCENARIOS)
                 COMMAND ${NECTAR_GAME} --scenario ${colour}_onion_boot --scenario-tick-rate ${rate})
             set_tests_properties(scenario_${colour}_onion_boot_${rate}_disc PROPERTIES
                 WORKING_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}"
-                ENVIRONMENT "PIKMIN_SCENARIO_STAGE=stages/${_boot_stage}.ini"
+                ENVIRONMENT "PIKMIN_SCENARIO_STAGE=stages/${_boot_stage}.ini;PIKMIN_ONION_BOOT_EXACT=1"
                 TIMEOUT 600 SKIP_RETURN_CODE 77 LABELS "game-assets")
         endforeach()
     endforeach()

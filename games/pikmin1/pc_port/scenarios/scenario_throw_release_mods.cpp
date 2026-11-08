@@ -14,6 +14,7 @@
 #include "Navi.h"
 #include "NaviMgr.h"
 #include "NaviState.h"
+#include "nectar_assets/standin_anims.h"
 #include "Piki.h"
 #include "PikiMgr.h"
 #include "PikiState.h"
@@ -107,7 +108,9 @@ public:
 			}
 			if (cap == NAVISTATE_ThrowWait && static_cast<NaviThrowWaitState*>(navi->getCurrState())->mIsHoldingThrowPiki) {
 				const unsigned k = t - mPress;
-				const unsigned kNormalMax = rate == 60 ? 22u : 13u;
+				// The unaided grab takes the authored ThrowWait grab frame plus the press-to-listener ticks;
+				// Quick Grab must beat it.
+				const unsigned kNormalMax = unsigned(nectar::kThrowWaitGrabFrame) * (rate / 30) + 3u;
 				if (k >= kNormalMax) {
 					scenarioFailf(t, "Quick Grab K < normal K", "K=%u normal max %u", k, kNormalMax);
 					return;

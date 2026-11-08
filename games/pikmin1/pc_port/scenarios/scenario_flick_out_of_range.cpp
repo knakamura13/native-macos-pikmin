@@ -1,7 +1,7 @@
 // flick_out_of_range: does a Pikmin that an enemy flicks out of its work-search range go passive, or go
 // back to the fight? (fork issue #146, split out of #101.)
 //
-// The work-search range is p41, PikiMgr's mIdleAttackSearchRange ("敵のサーチエリア", code default 100, disc 70): the
+// The work-search range is p41, PikiMgr's mIdleAttackSearchRange ("敵のサーチエリア", source default 100): the
 // distance Piki::graspSituation (piki.cpp) looks for an enemy to attack, and the only place it is read
 // on this path. graspSituation runs when a free Pikmin looks for work (ActFree::exec, Piki::actOnSituaton
 // on landing or after a finished job). Getting up from a flick does not call it: PikiFlickState::cleanup
@@ -20,8 +20,8 @@
 // p41 plus the Bulborb's centre size, and graspSituation from there finds no enemy); from getting up until
 // it reaches the Bulborb again it is in attack mode with the Bulborb as its attack target on every tick;
 // and it reaches the Bulborb within 5 s of getting up. The distance at getting up is not asserted: the
-// Bulborb is awake and walks after the Pikmin on some runs. Measured on stand-ins and the disc (Forest of
-// Hope) at 30 and 60 Hz: not passive on any. Traces and stand-in differences: tools/scenarios/README.md.
+// Bulborb is awake and walks after the Pikmin on some runs. Run on the stand-in tree at 30 and 60 Hz; the
+// same scenario can be run by hand on a user-supplied install. Traces: tools/scenarios/README.md.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -45,10 +45,10 @@
 
 namespace {
 
-constexpr float kFlickPower  = 14.0f;  // times the Bulborb's TPF_UpperFlickPower
+constexpr float kFlickPower  = 14.0f;  // times the Bulborb's TPF_UpperFlickPower: a distance scale, enough to carry the Pikmin past p41 during the authored JHit flight
 constexpr float kApproachS   = 10.0f; // to reach attack mode
 constexpr float kWatchS      = 6.0f;  // printed after the flick (at least)
-constexpr float kGetUpS      = 8.0f;  // flight plus knock-down (disc up to 3.83 s, stand-ins 2.23 s)
+constexpr float kGetUpS      = 8.0f;  // flight plus knock-down
 constexpr float kReturnS     = 5.0f;  // to reach the Bulborb again after getting up
 
 // ActAttack keeps the enemy it fights in the protected mOther; a pointer to that member taken in a

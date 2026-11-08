@@ -25,13 +25,48 @@ AnimKeyRecord loopKey(int animKeyIndex, int type)
 	return k;
 }
 
+struct AuthoredTiming {
+	std::vector<std::int32_t> animKeys;
+	std::vector<std::pair<int, int>> infoKeys;
+};
+
+// The authored schedules of the motions the game's state machines wait on. Frame counts and key
+// frames are chosen here (round numbers) from the key each consumer reads; see standin_anims.h.
+const AuthoredTiming* authoredTiming(int info)
+{
+	// Hit cycle shared by gate work: LoopStart and Action0 at 10, Action1 at 15, LoopEnd at 30.
+	static const AuthoredTiming kHitCycle { { 0, 10, 15, 30, 39 }, { { 1, 0 }, { 1, 2 }, { 2, 3 }, { 3, 1 } } };
+	static const AuthoredTiming kPickLoop { { 0, 12, 16, 28, 39 }, { { 1, 2 }, { 2, 0 }, { 3, 1 } } };
+	static const AuthoredTiming kKizuku { { 0, 3, 10, 18 }, { { 1, 2 }, { 2, 3 } } };
+	static const AuthoredTiming kAttack { { 0, 6, 9, 23 }, { { 1, 2 }, { 2, 3 } } };
+	static const AuthoredTiming kWait { { 0, kStandInDefaultFrames - 1 }, { { 0, 0 }, { 1, 1 } } };
+	static const AuthoredTiming kFinite20 { { 0, 19 }, {} };
+	static const AuthoredTiming kStillJump { { 0, 31 }, {} };
+	static const AuthoredTiming kGetUp { { 0, 14 }, {} };
+	static const AuthoredTiming kGakkari { { 0, 59 }, {} };
+	switch (info) {
+	case kAnimInfoKuttuku:
+	case kAnimInfoJob2: return &kHitCycle;
+	case kAnimInfoPickLoop: return &kPickLoop;
+	case kAnimInfoKizuku: return &kKizuku;
+	case kAnimInfoAttack: return &kAttack;
+	case kAnimInfoWait: return &kWait;
+	case kAnimInfoJHit:
+	case kAnimInfoJKoke: return &kFinite20;
+	case kAnimInfoStillJump: return &kStillJump;
+	case kAnimInfoGetUp: return &kGetUp;
+	case kAnimInfoGakkari: return &kGakkari;
+	}
+	return nullptr;
+}
+
 StandInAnimSet buildPikiSet()
 {
 	StandInAnimSet s;
 	s.tablePath  = "dataDir/pikis/animMgr.bin";
 	s.bundlePath = "dataDir/pikis/bluModel.anm";
-	// AnimMgr 'a01' on the disc is also pikis/motion; the string only has to
-	// match the bundle entry names, which this file chooses.
+	// AnimMgr 'a01': the base dir string only has to match the bundle entry names,
+	// which this file chooses.
 	s.baseDir = "pikis/motion";
 	s.parents.assign(kPikiRigParents, kPikiRigParents + kPikiRigJointCount);
 
@@ -63,43 +98,19 @@ StandInAnimSet buildPikiSet()
 			a.info.speed     = 30.0f;
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
-		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari || i == kAnimInfoPickLoop || i == kAnimInfoKizuku || i == kAnimInfoFlick
-		           || i == kAnimInfoWait || i == kAnimInfoAttack || i == kAnimInfoStillJump || i == kAnimInfoJKoke || i == kAnimInfoGetUp) {
-			// Disc timing (standin_anims.h): anim keys, then info keys as (anim-key
+		} else if (const AuthoredTiming* t = authoredTiming(i)) {
+			// Authored schedule (standin_anims.h): anim keys, then info keys as (anim-key
 			// index, type) with 0 loop start, 1 loop end, 2 KEY_Action0, 3 KEY_Action1.
-			struct Timing {
-				std::vector<std::int32_t> animKeys;
-				std::vector<std::pair<int, int>> infoKeys;
-				int effectFrame; ///< event key of type 1 (action: ActBreakWall's hit effect), or -1
-				int flags = 5;
-			};
-			const Timing t = i == kAnimInfoKuttuku  ? Timing { { 0, 11, 17, 30, 34 }, { { 1, 0 }, { 1, 2 }, { 2, 3 }, { 3, 1 } }, 11 }
-			               : i == kAnimInfoJob2     ? Timing { { 0, 10, 12, 24 }, { { 0, 0 }, { 1, 2 }, { 2, 3 }, { 3, 1 } }, 11 }
-			               : i == kAnimInfoPickLoop ? Timing { { 0, 10, 13, 18, 20, 29 }, { { 1, 2 }, { 2, 0 }, { 3, 1 }, { 4, 3 } }, -1 }
-			               : i == kAnimInfoKizuku   ? Timing { { 0, 1, 11, 15 }, { { 1, 2 }, { 2, 3 } }, -1 }
-			               : i == kAnimInfoFlick    ? Timing { { 0, 1, 9 }, { { 1, 2 } }, -1, 6 }
-			               : i == kAnimInfoWait     ? Timing { { 0, 19 }, { { 0, 0 }, { 1, 1 } }, -1 }
-			               : i == kAnimInfoAttack   ? Timing { { 0, 3, 5, 19 }, { { 1, 2 }, { 2, 3 } }, 5 }
-			               : i == kAnimInfoStillJump ? Timing { { 0, 6, 26, 34 }, { { 1, 2 }, { 2, 3 } }, -1, 6 }
-			               : i == kAnimInfoJKoke    ? Timing { { 0, 15 }, {}, -1 }
-			               : i == kAnimInfoGetUp    ? Timing { { 0, 10 }, {}, -1 }
-			                                        : Timing { { 0, 21, 38, 69 }, { { 1, 0 }, { 2, 1 } }, -1 };
-			a.frameCount    = t.animKeys.back() + 1;
-			a.measured      = true;
-			a.info.flags    = t.flags;
+			a.frameCount    = t->animKeys.back() + 1;
+			a.scheduled     = true;
+			a.info.flags    = 5;
 			a.info.speed    = 30.0f;
-			a.info.animKeys = t.animKeys;
-			for (const auto& [key, type] : t.infoKeys) {
+			a.info.animKeys = t->animKeys;
+			for (const auto& [key, type] : t->infoKeys) {
 				AnimKeyRecord k;
 				k.frame   = key;
 				k.keyType = std::uint8_t(type);
 				a.info.infoKeys.push_back(k);
-			}
-			if (t.effectFrame >= 0) {
-				AnimKeyRecord e;
-				e.frame     = t.effectFrame;
-				e.eventType = 1;
-				a.info.eventKeys.push_back(e);
 			}
 		} else if (i == kAnimInfoMizunomi) {
 			// Loop window frames 10 to 20 (anim keys 1 and 2): info keys loop start, loop end.
@@ -114,9 +125,9 @@ StandInAnimSet buildPikiSet()
 				a.info.infoKeys.push_back(k);
 			}
 		} else if (i == kAnimInfoFue) {
-			// Disc timing (standin_anims.h): loop start at anim key 1, loop end at anim key 2.
+			// Authored (standin_anims.h): loop start at anim key 1, loop end at anim key 2.
 			a.frameCount    = kFueFrames;
-			a.measured      = true;
+			a.scheduled     = true;
 			a.info.animKeys = { 0, kFueLoopStart, kFueLoopEnd, kFueFrames - 1 };
 			a.info.flags    = 5;
 			a.info.speed    = 30.0f;
@@ -190,7 +201,7 @@ bool checkStandInAnims(const StandInAnimSet& set, std::string& error)
 		const StandInAnim& a = set.anims[std::size_t(i)];
 		if (!names.insert(a.info.name).second) return fail(i, "name is not unique");
 		if (a.frameCount < 1) return fail(i, "frame count below 1 (startAnim errors on counter >= N)");
-		if (!a.measured && a.frameCount < kStandInMinForcedCounterFrames) {
+		if (!a.scheduled && a.frameCount < kStandInMinForcedCounterFrames) {
 			return fail(i, "shorter than the largest counter the game forces (30)");
 		}
 		if (i == kAnimInfoNigeru && a.frameCount < 11) return fail(i, "Navi::enableMotionBlend forces counter 10.0 on Nigeru");
@@ -235,16 +246,16 @@ bool checkStandInAnims(const StandInAnimSet& set, std::string& error)
 				if (k.keyType == 0 && f == kFueLoopStart) starts++;
 				if (k.keyType == 1 && f == kFueLoopEnd) ends++;
 			}
-			if (starts != 1 || ends != 1) return fail(i, "needs one KEY_LoopStart at the recorded frame and one KEY_LoopEnd after it");
+			if (starts != 1 || ends != 1) return fail(i, "needs one KEY_LoopStart at the authored frame and one KEY_LoopEnd after it");
 		}
 		if (i == kAnimInfoWait) {
-			// The disc's Wait loops: a one-shot ends in KEY_Finished, which PikiLookAtState takes as Kizuku's end (#145).
+			// Wait loops: a one-shot ends in KEY_Finished, which PikiLookAtState takes as Kizuku's end (#145).
 			int starts = 0, ends = 0;
 			for (const AnimKeyRecord& k : a.info.infoKeys) {
 				if (k.keyType == 0 && k.frame == 0) starts++;
 				if (k.keyType == 1 && k.frame == std::int32_t(a.info.animKeys.size()) - 1) ends++;
 			}
-			if (starts != 1 || ends != 1) return fail(i, "needs the disc's loop: KEY_LoopStart at the first anim key, KEY_LoopEnd at the last");
+			if (starts != 1 || ends != 1) return fail(i, "needs the loop: KEY_LoopStart at the first anim key, KEY_LoopEnd at the last");
 		}
 	}
 	return true;

@@ -1,29 +1,21 @@
 // bulborb_fight: ten blue Pikmin against a Dwarf Bulborb, with the real enemy AI and no state poked
 // (issue #136: during the hand play-test a squad died to the Bulborb and Pikmin thrown off its back
-// stopped attacking). Run on the stand-in object stage and on a disc install (the stage's first Dwarf
-// Bulborb) the same way, then compare.
+// stopped attacking). Run on the stand-in object stage; the same scenario can be run by hand on a
+// user-supplied disc install (the stage's first Dwarf Bulborb) to compare, see below.
 //
 // The captain stands 90 units from the Bulborb and the Pikmin are born 60 units from it on his side,
 // then handed to actOnSituaton (what a thrown Pikmin does on landing). Every second the scenario prints
 // the Bulborb's health and the Pikmin by state, and counts, over the run: Pikmin lost, Flick entries
 // (a Pikmin shaken off) and, for each Flick, whether that Pikmin attacks again before the end.
 //
-// Asserted: the Bulborb is found and dies within 10 s, and a Flick lasts 4 s at most on average. Measured
-// 2026-11-02 at 30 Hz, ten Pikmin: the disc kills it in 4 s with 0 lost, 3 flicks and a Flick of 2.9 s on
-// average; the stand-ins (before the Flick motion, info 58, carried the disc's timing, #136) took 14 s with
-// 2 lost, 9 flicks and a Flick of 4.6 s, and now take 5 s with 0 lost, 5 flicks and 3.6 s. Everything else is
-// printed.
+// Asserted: the Bulborb is found and dies within 10 s, and a Flick lasts 4 s at most on average. Those
+// are smoke limits for the authored fixtures (Attack, StillJump, JHit, JKoke and GetUp have the authored
+// schedules of standin_anims.h, the parameters are the source defaults); they do not establish parity
+// with the original game. Everything else is printed.
 //
-// Issue #154 (2026-11-04): Attack, StillJump, JKoke and GetUp carry the disc's timing as well
-// (standin_anims.h). Disc on this branch: dead at 3.4 s (30 Hz) and 2.5 s (60 Hz), Flick 2.9 s and 2.8 s.
-// Stand-ins before: 4.3 s and 4.5 s, Flick 3.6 s (5 flicks at 30 Hz, 1 at 60 Hz). After: 2.2 s and 1.5 s,
-// Flick 1.8 s (5 flicks at 30 Hz, none at 60 Hz).
-//
-// The stand-in parms/pikiMgr.bin now carries every disc value (standin-piki-parms.md), among them the
-// knock-down time of 1 to 3 s (p74, p43; the code's is 0.7 s) and health 30 (p03; code 100). Stand-ins:
-// dead at 2.4 s (30 Hz) and 1.6 s (60 Hz), Flick 3.3 s (5 flicks at 30 Hz, none at 60 Hz); the disc 3.4 s
-// and 2.5 s, Flick 2.9 s. They still win sooner than the disc; the open lead is the stand-in Bulborb's
-// collision spheres, which sit lower than the disc's (#154).
+// Combat timing against the original game (issues #154 and #180) is a local exact-lane question: it
+// needs the original motions and parameters, which only a user-supplied install has, and it is
+// measured at 30 and 60 Hz in games/pikmin1/tools/scenarios/combat-timing.md.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -70,7 +62,7 @@ public:
 		carry::spawnRow(navi, Blue, kPikmin, at.x + 36.0f, at.z, mLanding);
 		for (Piki* p : mLanding) mPiki.push_back(p);
 		carry::land(mLanding);
-		mHealth0 = mBulb->mHealth;
+		mHealth0 = mPrevHealth = mBulb->mHealth;
 	}
 
 	void providePads(unsigned, PcInputPad&) override {}
@@ -124,6 +116,12 @@ public:
 			}
 			mState[i] = state;
 		}
+		if (mBulb->mHealth < mPrevHealth) {
+			int onBack = 0;
+			for (Piki* p : mPiki) onBack += p->isAlive() && attacking(p);
+			std::printf("[scenario] bulborb_fight: HIT t=%.3f s damage %.2f health %.2f (on its back %d)\n", t / float(rate), mPrevHealth - mBulb->mHealth, mBulb->mHealth, onBack);
+		}
+		mPrevHealth = mBulb->mHealth;
 		if (!mKillTick && mBulb->mHealth <= 0.0f) mKillTick = t;
 		if (t % rate == 0) census(t, rate);
 		if (t >= unsigned(kRunS * rate)) finish(t, rate);
@@ -161,7 +159,7 @@ private:
 		}
 		if (flick > 4.0f) {
 			mDone = true;
-			scenarioFailf(t, "a shaken-off Pikmin is down 4 s or less on average (the disc: 2.9 s)", "%.2f s", flick);
+			scenarioFailf(t, "a shaken-off Pikmin is down 4 s or less on average", "%.2f s", flick);
 			return;
 		}
 		std::printf("[scenario] bulborb_fight: PASS at tick %u (Bulborb dead at %.1f s)\n", t, killS);
@@ -170,6 +168,7 @@ private:
 	}
 
 	Teki* mBulb = nullptr;
+	float mPrevHealth = 0.0f;
 	std::vector<Piki*> mLanding, mPiki;
 	bool mDone = false, mDead[kPikmin] = {}, mFlicked[kPikmin] = {}, mAttackedAfter[kPikmin] = {};
 	int mState[kPikmin] = {};

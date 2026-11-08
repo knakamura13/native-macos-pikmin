@@ -1,14 +1,17 @@
 // Onion boot-then-carry regression (#100 W2-4): do not skip the boot,
 // call pcSnapLanded, or write waypoint flags. Start the original boot API and
 // let the real animator/GoalAI emit the first seed and return to Wait. Its route
-// must then be open and two Pikmin must deliver a pellet. The separate red
-// comparison runs the same checks with the red boot's known waypoint effect key.
+// must then be open and two Pikmin must deliver a pellet. On the stand-in tree the
+// boot motion is the authored one (nectar/standin_onion_boot.h). The local exact lane
+// (the _disc entries, PIKMIN_ONION_BOOT_EXACT=1 on a user-supplied install) checks the
+// original game's route-effect and seed frames instead, per colour.
 // This isolates animation/routing, not the discovery trigger or movie replay.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
 
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 #include "Demo.h"
@@ -22,6 +25,7 @@
 #include "PlayerState.h"
 #include "Route.h"
 #include "gameflow.h"
+#include "nectar_assets/standin_onion_boot.h"
 #include "scenarios/scenario_carry_common.h"
 
 namespace {
@@ -57,6 +61,11 @@ public:
 		mOnion->startBoot();
 	}
 
+	// Measured expected outputs of the original game, used only by the local exact lane.
+	static bool exact() { const char* v = std::getenv("PIKMIN_ONION_BOOT_EXACT"); return v && v[0] == '1' && v[1] == '\0'; }
+	float routeFrameFor() const { return exact() ? (mColour == Red ? 221.0f : 194.0f) : float(nectar::kOnionBootRouteFrame); }
+	float seedFrameFor() const { return exact() ? (mColour == Red ? 270.0f : 240.0f) : float(nectar::kOnionBootSeedFrame); }
+
 	void providePads(unsigned t, PcInputPad& pad) override
 	{
 		// Close unrelated first-seed tutorial text, without skipping a movie.
@@ -72,9 +81,9 @@ public:
 			const float frame = mOnion->mItemAnimator.getCounter();
 			if (mOnion->mItemAnimator.getCurrentMotionIndex() == mColour + 3) {
 				// PaniAnimator dispatches effects over [oldFrame, newFrame).
-				const float routeFrame = mColour == Red ? 221.0f : 194.0f;
+				const float routeFrame = routeFrameFor();
 				if (mWay->mIsOpen != (frame > routeFrame)) {
-					scenarioFailf(t, "route closed through the disc effect frame, then open", "colour %d motion frame %.2f, effect %.0f, open %d", mColour, frame, routeFrame, int(mWay->mIsOpen));
+					scenarioFailf(t, "route closed through the effect frame, then open", "colour %d motion frame %.2f, effect %.0f, open %d", mColour, frame, routeFrame, int(mWay->mIsOpen));
 					return;
 				}
 				if (mWay->mIsOpen && !mSawOpen) {
@@ -82,9 +91,9 @@ public:
 					std::printf("[scenario] %s: route opened at motion frame %.2f, %.3f s\n", name(), frame, t / float(rate));
 				}
 				if (seeds && !mSawSeed) {
-					const float seedFrame = mColour == Red ? 270.0f : 240.0f;
+					const float seedFrame = seedFrameFor();
 					if (frame < seedFrame || frame > seedFrame + 2.0f) {
-						scenarioFailf(t, "first seed at the disc Action0 frame (within two animation frames for AI dispatch)", "frame %.2f expected %.0f", frame, seedFrame);
+						scenarioFailf(t, "first seed at the boot motion's Action0 frame (within two animation frames for AI dispatch)", "frame %.2f expected %.0f", frame, seedFrame);
 						return;
 					}
 					mSawSeed = true;

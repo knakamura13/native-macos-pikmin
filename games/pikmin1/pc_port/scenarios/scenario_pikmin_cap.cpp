@@ -262,6 +262,14 @@ public:
 			if (span < rate / 2) return;
 			const int flag = mStage + DEMOFLAG_PikminLimitOffset;
 			if (!mEmitted) {
+				// An enemy on the stage can kill a Pikmin of the crowd between emissions; the
+				// limit is the precondition of this phase, so restore it before each emission
+				// and check it.
+				topUpToLimit(navi);
+				if (GameStat::mapPikis != mLimit) {
+					fail(t, "EC-04: the field is at the limit before the emission", "mapPikis %d, limit %d", (int)GameStat::mapPikis, mLimit);
+					return;
+				}
 				mBefore    = snap();
 				mSeedCount = itemMgr->getPikiHeadMgr()->getSize();
 				mTexts0    = pc_scenario_text_windows_opened(nullptr);
@@ -273,8 +281,9 @@ public:
 				const Snap a    = snap();
 				const int seeds = itemMgr->getPikiHeadMgr()->getSize() - mSeedCount;
 				const std::vector<int> fresh = freshFlags();
-				std::printf("[scenario] %s: seed at the limit on stage %d (%s): sprouts +%d, Onion +%d (leaf +%d), born +%d, new flags %s\n", mName, mStage,
-				            mRepeat ? "again" : "first", seeds, a.container - mBefore.container, a.held - mBefore.held, a.born - mBefore.born, list(fresh).c_str());
+				std::printf("[scenario] %s: seed at the limit on stage %d (%s): sprouts +%d, Onion +%d (leaf +%d), born +%d, new flags %s (mapPikis %d, live Pikmin %d)\n", mName, mStage,
+				            mRepeat ? "again" : "first", seeds, a.container - mBefore.container, a.held - mBefore.held, a.born - mBefore.born, list(fresh).c_str(),
+				            (int)GameStat::mapPikis, liveCount(Blue));
 				const bool wantFlag = !mRepeat;
 				if (seeds != 0 || a.container != mBefore.container + 1 || a.held != mBefore.held + 1 || a.born != mBefore.born + 1
 				    || (wantFlag ? (fresh.size() != 1 || fresh[0] != flag) : !fresh.empty())) {
@@ -332,6 +341,15 @@ private:
 	Snap snap() const { return { (int)GameStat::bornPikis[Blue], (int)GameStat::containerPikis[Blue], (int)mOnion->mHeldPikis[Leaf] }; }
 
 	/// One seed from the Onion as GoalAI::EmitPiki gives it, with the stage id `stage` for the call.
+	// Births Pikmin into the party until the field is full again (a no-op at the limit).
+	void topUpToLimit(Navi* navi)
+	{
+		int born = 0;
+		while (born < 8 && spawnPiki(navi, Blue, PikiMode::FormationMode, 20.0f + 4.0f * float(born), 60.0f)) born++;
+		GameStat::update();
+		if (born) std::printf("[scenario] %s: %d Pikmin lost to the stage's enemies since the last emission, replaced\n", mName, born);
+	}
+
 	void emit(int stage)
 	{
 		const int saved                     = flowCont.mCurrentStage->mStageID;

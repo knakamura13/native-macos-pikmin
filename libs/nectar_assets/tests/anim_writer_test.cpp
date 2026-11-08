@@ -22,7 +22,7 @@
 //     bundle entry names and the joint count and parents.
 //
 // Usage: nectar_anim_writer_test [boot-manifest.txt]. With the manifest, the
-// stand-in file paths are checked against the disc-run list from #64.
+// stand-in file paths are checked against the boot-manifest list from #64.
 #include "nectar_assets/anim.h"
 #include "nectar_assets/bundle.h"
 #include "nectar_assets/piki_rig.h"
@@ -486,7 +486,7 @@ void testAnimMgrTable()
 	bad("non-finite speed rejected", [](nectar::AnimMgrTable& x) { x.infos[0].speed = std::nanf(""); });
 	{
 		nectar::AnimMgrTable x = t;
-		x.infos[0].infoKeys    = { { 1, 0, 0, 2 }, { 1, 0, 0, 0 }, { 2, 0, 0, 3 }, { 2, 0, 0, 1 } }; // equal frames in a row are fine (disc ThrowWait does this)
+		x.infos[0].infoKeys    = { { 1, 0, 0, 2 }, { 1, 0, 0, 0 }, { 2, 0, 0, 3 }, { 2, 0, 0, 1 } }; // equal frames in a row are fine (authored loops may share a frame with the grab)
 		Bytes o;
 		check(nectar::writeAnimMgrTable(x, o, err), "info keys at equal frames accepted");
 	}
@@ -515,7 +515,7 @@ void testStandInSet()
 		s.anims[9].info.animKeys = { 0, 19 };
 	});
 	breaks("Nigeru shorter than 11", [](nectar::StandInAnimSet& s) {
-		s.anims[nectar::kAnimInfoNigeru].measured = true;
+		s.anims[nectar::kAnimInfoNigeru].scheduled = true;
 		s.anims[nectar::kAnimInfoNigeru].frameCount = 10;
 		s.anims[nectar::kAnimInfoNigeru].info.animKeys = { 0, 9 };
 	});
@@ -531,7 +531,7 @@ void testStandInSet()
 	check(set.anims[nectar::kAnimInfoFue].frameCount == nectar::kFueFrames
 	          && set.anims[nectar::kAnimInfoFue].info.animKeys == std::vector<std::int32_t>({ 0, nectar::kFueLoopStart, nectar::kFueLoopEnd, nectar::kFueFrames - 1 })
 	          && set.anims[nectar::kAnimInfoFue].info.eventKeys.empty(),
-	      "Fue has the disc's 20 frames, anim keys [0, 1, 3, 19] and no event keys");
+	      "Fue has the authored frame count, anim keys [0, loop start, loop end, last] and no event keys");
 	breaks("info key past the anim-key list", [](nectar::StandInAnimSet& s) { s.anims[3].info.infoKeys = { { 2, 0, 0, 2 } }; });
 	breaks("17 info keys", [](nectar::StandInAnimSet& s) { s.anims[3].info.infoKeys.assign(17, { 1, 0, 0, 2 }); s.anims[3].info.animKeys = { 0, 5, 39 }; });
 	breaks("duplicate names", [](nectar::StandInAnimSet& s) { s.anims[8].info.name = s.anims[9].info.name; });
@@ -595,8 +595,8 @@ void testStandInSet()
 		for (const AnimKey& k : info.infoKeys) check(k.mFrameIndex < int(info.animKeys.size()), label + ": info key points into the anim-key list");
 		check(info.infoKeys.size() <= 16, label + ": at most 16 info keys");
 		if (i == nectar::kAnimInfoNigeru) check(hit->anim.frames >= 11, label + ": long enough for the forced counter 10.0");
-		// Measured infos have the disc's length (checkStandInAnims exempts them too).
-		if (!set.anims[std::size_t(i)].measured) check(hit->anim.frames > 30, label + ": longer than the largest forced counter");
+		// Infos with an authored schedule have their own length (checkStandInAnims exempts them too).
+		if (!set.anims[std::size_t(i)].scheduled) check(hit->anim.frames > 30, label + ": longer than the largest forced counter");
 	}
 
 	// ThrowWait and Throw: the type-2 info key and its frame.
@@ -626,7 +626,7 @@ void testStandInSet()
 		check(info.flags == 5 && info.speed == 30.0f, std::string(w.label) + ": authored flags 5 (constant speed) and speed 30");
 	}
 
-	// PickLoop (info 68): the disc's timing, read back as the game reads it. ActTransport lifts on its KEY_Action0.
+	// PickLoop (info 68): the authored schedule, read back as the game reads it. ActTransport lifts on its KEY_Action0.
 	{
 		const LoadedInfo& info = m.infos[std::size_t(nectar::kAnimInfoPickLoop)];
 		int action0 = -1, action1 = -1, loopStart = -1, loopEnd = -1;
@@ -637,10 +637,10 @@ void testStandInSet()
 			if (k.mKeyType == 0) loopStart = frame;
 			if (k.mKeyType == 1) loopEnd = frame;
 		}
-		check(loaded[std::size_t(nectar::kAnimInfoPickLoop)].anim.frames == 30 && info.animKeys == std::vector<int>({ 0, 10, 13, 18, 20, 29 }),
-		      "PickLoop (68): 30 frames, anim keys [0, 10, 13, 18, 20, 29] (the disc's)");
-		check(action0 == 10 && loopStart == 13 && loopEnd == 18 && action1 == 20 && info.flags == 5 && info.speed == 30.0f,
-		      "PickLoop (68): KEY_Action0 at 10, loop 13 to 18, KEY_Action1 at 20, flags 5, speed 30 (the disc's)");
+		check(loaded[std::size_t(nectar::kAnimInfoPickLoop)].anim.frames == 40 && info.animKeys == std::vector<int>({ 0, 12, 16, 28, 39 }),
+		      "PickLoop (68): 40 frames, anim keys [0, 12, 16, 28, 39]");
+		check(action0 == 12 && loopStart == 16 && loopEnd == 28 && action1 == -1 && info.flags == 5 && info.speed == 30.0f,
+		      "PickLoop (68): KEY_Action0 at 12 (before the loop), loop 16 to 28, flags 5, speed 30");
 	}
 
 	// Key timing: PaniAnimator at speed 30 (navi->mMotionSpeed with throwSpeedPct 100).

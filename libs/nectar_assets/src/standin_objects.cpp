@@ -37,8 +37,8 @@ const StandInModelSpec* findAnyModel(const std::string& path)
 }
 
 /// A joint list for a set whose model is not written: the root and a flat fan.
-/// Only the count is the disc's. The parents are never read back by the game
-/// (AnimDck::read stores them), and a model written later brings its own.
+/// The parents are never read back by the game (AnimDck::read stores them),
+/// and a model written later brings its own.
 std::vector<int> flatParents(int joints)
 {
 	std::vector<int> p(std::size_t(joints), 0);
@@ -63,19 +63,12 @@ StandInAnimSet buildSet(const ObjectAnimProfile& p)
 		a.info.flags    = in.flags;
 		a.info.speed    = in.speed;
 		a.info.animKeys.assign(in.keys.begin(), in.keys.end());
-		// checkConstantKeys walks the info keys in order and stops at the first
-		// one not yet reached. The disc has one info whose list is not ascending
-		// by frame (goal info 0: loop start, loop end, then an Action0 on an
-		// earlier frame), so that key fires on the same animate call as the one
-		// before it. The writer wants ascending lists, so such a key is pointed at
-		// the previous key's frame, which fires on the same tick.
-		int previousKey = -1;
+		// checkConstantKeys walks the info keys in order and stops at the first one
+		// not yet reached, and the writer wants them ascending by frame.
 		for (const auto& k : in.infoKeys) {
 			AnimKeyRecord r;
 			r.frame   = k.first;
 			r.keyType = std::uint8_t(k.second);
-			if (previousKey >= 0 && in.keys[std::size_t(r.frame)] < in.keys[std::size_t(previousKey)]) r.frame = previousKey;
-			previousKey = r.frame;
 			a.info.infoKeys.push_back(r);
 		}
 		for (const auto& e : in.effectKeys) {
@@ -86,7 +79,6 @@ StandInAnimSet buildSet(const ObjectAnimProfile& p)
 			a.info.eventKeys.push_back(r);
 		}
 		a.frameCount = in.frames;
-		a.measured   = true; // length and keys come from the disc
 		s.anims.push_back(std::move(a));
 	}
 	return s;

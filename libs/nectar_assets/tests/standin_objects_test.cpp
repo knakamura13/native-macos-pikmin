@@ -330,7 +330,7 @@ void testProfiles()
 			for (std::size_t k = 0; k < l.infoKeys.size() && k < p.infos[i].infoKeys.size(); k++) {
 				check(l.infoKeys[k].mKeyType == p.infos[i].infoKeys[k].second, who + ": info key type");
 				// The same animate call fires the key: the frame it points at is the profile's, or the one before for
-				// the disc's one descending list.
+				// a descending list.
 				check(l.infoKeys[k].mFrameIndex >= 0 && l.infoKeys[k].mFrameIndex < int(l.animKeys.size()), who + ": info key points into the anim keys");
 			}
 			// Sound and effect cues are not stand-in data, except the profile's own effect events (the three Onion boots').
@@ -383,11 +383,10 @@ void testProfiles()
 		}
 	}
 
-	// Specific disc-measured shapes the objects' code leans on.
+	// Authored shapes the objects' code leans on (standin_object_profiles.cpp).
 	for (const auto& p : profiles) {
 		if (std::string(p.id) == "goal") {
-			check(p.joints == 13 && p.infos.size() == 13, "goal (the Onion): 13 joints, 13 infos");
-			// All three boots retain measured disc effects (standin-onion-boot.md).
+			check(p.infos.size() == 13, "goal (the Onion): 13 infos");
 			for (std::size_t i = 0; i < p.infos.size(); i++) {
 				const bool boot = i >= 3 && i <= 5;
 				if (!boot) {
@@ -395,19 +394,19 @@ void testProfiles()
 					continue;
 				}
 				const auto& info = p.infos[i];
-				const int routeFrame = i == 4 ? 221 : 194;
-				bool waypoint = false;
-				for (auto k : info.effectKeys) waypoint = waypoint || (k.first == routeFrame && k.second == 2);
-				check(waypoint && info.effectKeys.size() == 5, "goal boot: five disc effects including the measured waypoint cue");
-				check(info.frames == (i == 4 ? 472 : 360), "goal boot: measured disc payload length");
+				check(info.effectKeys.size() == 1 && info.effectKeys[0].first == nectar::kOnionBootRouteFrame && info.effectKeys[0].second == 2,
+				      "goal boot: one effect, the route-opening cue (value 2) at the authored frame");
+				check(info.frames == nectar::kOnionBootFrames && info.keys == std::vector<int>({ 0, nectar::kOnionBootSeedFrame, nectar::kOnionBootFrames - 1 }),
+				      "goal boot: the authored payload length with KEY_Action0 at the authored seed frame");
+				check(nectar::kOnionBootRouteFrame < nectar::kOnionBootSeedFrame, "goal boot: the route opens before the seed is born");
 				const auto& ev = nectar::standInObjectAnims()[2].anims[i].info.eventKeys;
-				check(ev.size() == 5 && ev[2].frame == routeFrame && ev[2].eventType == 1 && ev[2].keyType == 2,
+				check(ev.size() == 1 && ev[0].frame == nectar::kOnionBootRouteFrame && ev[0].eventType == 1 && ev[0].keyType == 2,
 				      "goal boot: waypoint cue written as an Action event with value 2");
 			}
 		}
-		if (std::string(p.id) == "pikihead") check(p.joints == 4 && p.infos.size() == 7, "pikihead (the sprout): 4 joints, 7 infos");
-		if (std::string(p.id) == "chappy") check(p.joints == 17 && p.infos.size() == 15, "chappy: 17 joints, 15 infos");
-		if (std::string(p.id) == "ufo0705") check(p.joints >= nectar::kStandInShipMinJoints && p.infos.size() == 17, "ufo0705: the ship's 57 joints, 17 infos");
+		if (std::string(p.id) == "pikihead") check(p.infos.size() == 7, "pikihead (the sprout): 7 infos");
+		if (std::string(p.id) == "chappy") check(p.infos.size() == 15, "chappy: 15 infos");
+		if (std::string(p.id) == "ufo0705") check(p.infos.size() == 17, "ufo0705: 17 infos");
 	}
 }
 

@@ -7,17 +7,17 @@
 // in Formation and out of LookAt (it joined). The delay is the difference; LookAt's own duration
 // (the random 0 to 0.3 s wait, then the Kizuku motion, then the return) is most of it.
 //
-// Asserted: every Pikmin is called, plays Kizuku in LookAt, and joins 0.45 to 1 s after the call (the
-// disc: 0.50 to 0.75 s at 30 and 60 Hz; the stand-ins' Kizuku motion carries the disc's timing since
-// #133, standin_anims.h). The delays are printed; the disc run is made by hand, with
-// PIKMIN_SCENARIO_DATA_DIR on a disc install.
+// Asserted: every Pikmin is called, plays Kizuku in LookAt, and joins 0.55 to 1 s after the call
+// (the authored Kizuku motion is 19 frames, 0.6 s, standin_anims.h). The delays are printed; a run
+// on a user-supplied disc install is made by hand, with PIKMIN_SCENARIO_DATA_DIR on it, and is
+// not asserted here.
 //
 // Issue #145: LookAt takes any KEY_Finished as Kizuku's end, including one from the motion the
 // Pikmin was already playing when called (PikiLookAtState::procAnimMsg sets LAS_Returning during
-// the random delay, and the leftover delay then ends LookAt). On the disc an idle Free Pikmin plays
-// Wait, which loops and never sends one; the stand-in Wait was a 40-frame one-shot until #145, and
-// at 30 Hz three of six Pikmin had it end inside the delay, skipped Kizuku and joined in 0.07 to
-// 0.20 s. Kizuku alone is 15 frames (0.5 s), so the lower bound and the Kizuku check catch that.
+// the random delay, and the leftover delay then ends LookAt). An idle Free Pikmin plays Wait, which
+// must loop and never send one; a one-shot Wait would end inside the delay, so the Pikmin would skip
+// Kizuku and join almost at once. Kizuku alone is 0.6 s, so the lower bound and the Kizuku check
+// catch that.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -41,7 +41,7 @@ namespace {
 
 constexpr int kCount     = 6;
 constexpr float kMaxJoin = 1.0f;
-constexpr float kMinJoin = 0.45f; // Kizuku is 15 frames at speed 30: 0.5 s, less one tick of rounding
+constexpr float kMinJoin = 0.55f; // Kizuku is 19 frames at speed 30: 0.6 s, less one tick of rounding
 
 class WhistleDelay : public PcScenario {
 public:
