@@ -133,9 +133,16 @@ for a Pikmin off the reference-motion path) leaves the counts and the mean kill 
 3.17 s over 96 starts). The animation clock is not the cause either: `pc_anim_dt` returns the raw frame time in deterministic
 scenario runs, and key events fire once on crossing.
 
-Next: find which code attaches the extra Pikmin (a tick-rate-dependent path other than that handler, or contact geometry
-that differs because a finer step samples positions the 30 Hz step skips) by logging each `startStick`/`startStickObject`
-call with its caller and tick at both rates for one start.
+Stick-call trace (one start, shift 7, with a temporary env-gated log in `Creature::startStick` and `startStickObject`,
+not kept): both rates make the same 7 calls, all from the jump-contact path (Pikmin in attack mode, airborne,
+`mWantToStick` set), so the number and path of sticks do not differ. What differs is when the Pikmin attach relative to the
+hits: at 30 Hz the first two hits come with nobody on the Bulborb (ground attacks), at 60 Hz the first hit already has one
+Pikmin on its back. So at 60 Hz Pikmin choose the jump, and stick, earlier instead of the ground attack, in the state-0
+decision of `ActJumpAttack::exec` (the ground attack needs `angle < PI/10` and `dist3D < size + 10`; the jump-adjust roll and
+the turn rate are already scaled), or they reach those distances at different times.
+
+Next: log the state-0 decision (distance, angle, chosen branch) per Pikmin per tick at both rates for one start, to see why
+the ground attack is chosen less often at 60 Hz.
 
 ## Public stand-in fixture
 
