@@ -306,6 +306,11 @@ bool pc_gfx_write_scene_png(const char* path, unsigned int sourceFramebuffer, in
 void pc_gfx_scenario_prepare_capture(int renderW, int renderH);
 // Netplay presentation pass after a capture-tick resize (GX mapping + clear).
 void pc_gfx_scenario_presentation_pass_begin(void);
+// No-render mode (PIKMIN_SCENARIO_NO_RENDER): draws, clears, the window blit and
+// the swap are skipped; everything else the frame does still runs. Set before
+// the first tick; a run in this mode has no picture to capture or show.
+void pc_gfx_scenario_set_no_render(int on);
+int pc_gfx_scenario_no_render(void);
 #endif
 
 /**

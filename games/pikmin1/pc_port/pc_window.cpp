@@ -1995,17 +1995,27 @@ void pc_window_poll_events(PADStatus* pad) {
 
 unsigned int pc_gfx_begin_swap_framebuffer(void);
 void pc_gfx_end_swap_framebuffer(unsigned int bound);
+#if PIKI_SCENARIOS
+extern "C" int pc_gfx_scenario_no_render(void);
+#endif
 
 void pc_window_swap_buffers(void) {
     if (sWindow) {
-#if defined(__APPLE__) || defined(_WIN32)
-        // Bind the default framebuffer for presentation, then restore the render target.
-        const unsigned int renderTarget = pc_gfx_begin_swap_framebuffer();
+#if PIKI_SCENARIOS
+        const bool swap = !pc_gfx_scenario_no_render();
+#else
+        const bool swap = true;
 #endif
-        SDL_GL_SwapWindow(sWindow);
+        if (swap) {
 #if defined(__APPLE__) || defined(_WIN32)
-        pc_gfx_end_swap_framebuffer(renderTarget);
+            // Bind the default framebuffer for presentation, then restore the render target.
+            const unsigned int renderTarget = pc_gfx_begin_swap_framebuffer();
 #endif
+            SDL_GL_SwapWindow(sWindow);
+#if defined(__APPLE__) || defined(_WIN32)
+            pc_gfx_end_swap_framebuffer(renderTarget);
+#endif
+        }
         pc_button_prompt_frame_end();
         // VSync Off must not retain the software presentation limiter. Game
         // simulation uses the fixed-step scheduler independently. Netplay's
