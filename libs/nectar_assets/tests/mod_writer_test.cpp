@@ -392,6 +392,73 @@ void testStandIns(const std::string& manifestPath)
 
 	std::vector<nectar::StandInModelFile> files;
 	std::string err;
+	// Blender art: every binding names exported art made for the spec's rig.
+	check(nectar::checkStandInArtBindings(specs, err), "Blender art bindings: " + err);
+	for (const nectar::StandInArtBinding& b : nectar::standInArtBindings()) {
+		const nectar::StandInModelSpec* spec = nectar::findStandInModel(b.path);
+		if (!spec) continue;
+		const nectar::Model m = nectar::buildStandInModel(*spec);
+		check(!m.colours.empty(), std::string(b.path) + ": drawn from its Blender art (vertex colours)");
+		// A tinted joint draws with material 0 (the one the game recolours), made
+		// white, and its art is authored white: grey vertex colours (the baked
+		// shading), so the runtime colour is the colour.
+		for (int tj : b.tintJoints) {
+			const std::string where = std::string(b.path) + " joint " + std::to_string(tj);
+			const auto& mp = m.joints[std::size_t(tj)].matPolys;
+			check(mp.size() == 1 && mp[0].first == 0, where + ": the tinted joint uses material 0");
+			const nectar::Rgba8 c = m.materials[0].colour;
+			check(c.r == 255 && c.g == 255 && c.b == 255, std::string(b.path) + ": material 0 is white under the tint");
+			int spread = 0;
+			std::size_t corners = 0;
+			for (const nectar::ModTriangle& t : m.meshes[std::size_t(tj)].groups[0].tris) {
+				for (const auto& v : t.v) {
+					const nectar::Rgba8 vc = m.colours[std::size_t(v.col)];
+					spread = std::max(spread, std::max({ int(vc.r), int(vc.g), int(vc.b) }) - std::min({ int(vc.r), int(vc.g), int(vc.b) }));
+					corners++;
+				}
+			}
+			check(corners > 0, where + ": the tinted joint has art");
+			check(spread <= 16, where + ": the tinted art is authored white (vertex colour spread " + std::to_string(spread) + ")");
+		}
+	}
+	// The walking folk: ViewPiki::demoDraw sets the type colour,
+	// the idle pastel and the white damage flash on material 0, so the body
+	// (joint 0), arms (7, 8) and feet (10, 11) draw with it; the eyes and the
+	// trait (joint 1) keep their own material.
+	for (const char* path : { "dataDir/pikis/redModel.mod", "dataDir/pikis/yelModel.mod", "dataDir/pikis/bluModel.mod", "dataDir/pikis/kinModel.mod" }) {
+		const nectar::StandInArtBinding* folk = nullptr;
+		for (const nectar::StandInArtBinding& b : nectar::standInArtBindings()) {
+			if (std::string(b.path) == path) folk = &b;
+		}
+		check(folk != nullptr, std::string(path) + ": has Blender art");
+		if (!folk) continue;
+		for (int j : { 0, nectar::kPikiRigRightHandJoint, nectar::kPikiRigLeftHandJoint, 10, 11 }) {
+			check(std::find(folk->tintJoints.begin(), folk->tintJoints.end(), j) != folk->tintJoints.end(),
+			      std::string(path) + ": joint " + std::to_string(j) + " takes the game's folk colour");
+		}
+		const nectar::Model m = nectar::buildStandInModel(*nectar::findStandInModel(path));
+		const auto& eyes = m.joints[1].matPolys;
+		check(eyes.size() == 1 && eyes[0].first != 0, std::string(path) + ": the eyes and trait (joint 1) keep their own colours");
+	}
+	// Ship parts must have readable coloured equipment art, while retaining the
+	// model spec's gameplay structure (the art exporter must never own it).
+	for (const char* path : { "dataDir/objects/ufoparts/soto5.mod", "dataDir/objects/ufoparts/fuzoku1.mod" }) {
+		const auto* spec = nectar::findStandInModel(path);
+		check(spec != nullptr, std::string(path) + ": model spec exists");
+		if (!spec) continue;
+		const auto model = nectar::buildStandInModel(*spec);
+		check(!model.colours.empty(), std::string(path) + ": coloured ship-part art replaces the grey primitive");
+		check(model.trailingIni == spec->collInfo, std::string(path) + ": collision spheres stay byte-identical");
+		check(model.joints.size() == spec->parents.size(), std::string(path) + ": joint count is unchanged");
+		for (std::size_t j = 0; j < model.joints.size(); j++) {
+			check(model.joints[j].parent == spec->parents[j], std::string(path) + ": parent is unchanged");
+			const float h = j == 0 ? spec->halfSize : spec->halfSize * 0.5f;
+			const auto& joint = model.joints[j];
+			check(joint.boundsMin.x == -h && joint.boundsMin.y == -h && joint.boundsMin.z == -h
+			      && joint.boundsMax.x == h && joint.boundsMax.y == h && joint.boundsMax.z == h,
+			      std::string(path) + ": joint bounds stay unchanged");
+		}
+	}
 	check(nectar::writeStandInModels(files, err), "writeStandInModels: " + err);
 	check(files.size() == specs.size(), "one file per spec");
 

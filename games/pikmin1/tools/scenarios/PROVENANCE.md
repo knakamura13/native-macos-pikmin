@@ -44,6 +44,7 @@ against retail data are opt-in local lanes (last section). The README's
 | Golden screenshots | `golden/<os>/*.png` | Renders of the stand-in tree (outputs, not inputs) | macOS `boot_smoke_tick100.png` regenerated locally for the authored HUD; Linux and Windows `boot_smoke_tick100.png` need a hosted refresh (`refresh_goldens.sh`) |
 | Synthetic throw expectations | `check_throw_flight.py` `SYNTHETIC_EXPECTED` | The port's own results on the authored fixtures | Kept (public CI profile) |
 | Model rigs and collision spheres | `standin_models.cpp`, `piki_rig.h`, `standin_objects.cpp` (naka, chappy), `standin_world*.cpp` | Authored: flat rigs (root plus a fan), round-number spheres; only the ids the code looks up (`cent`, `slot`, `lleg`, `rleg`, `rhnd`, `ante`, `cont`, `piki`, ship parts) are required | Replaced |
+| Model art (pellets, folk and captain, hives, ship and ship parts, nectar, bomb rock, first enemy) | `libs/nectar_assets/art/` (Blender sources and committed exports), `standin_art.cpp` bindings | Original designs authored in Blender (`art/ART_DIRECTION.md`); nothing traced, copied or extracted from retail art. Each model declares only the joints its art hangs from; the authored rigs above own the structure | Replaced |
 | Pellet and Main Engine configuration, `pelAnim` override joints | `standin_objects.cpp` | Authored: carriers 12 to 24, source defaults elsewhere, every override joint -1 | Replaced |
 | Enemy and boss parameters (`tekipara/*.bin`, boss `parms.bin`) | `standin_world.cpp`, `standin_world_data.cpp` | Not written (enemies) or empty lists (bosses): `TekiMgr` falls back to constructor defaults; `check_synthetic_parameters.py` enforces | Replaced |
 | Sandbox gate, dressing path | `standin_sandbox.cpp`, `standin_map_dressing.cpp` | Authored placements and a 100-unit panel half-width | Replaced |
@@ -82,7 +83,6 @@ payload and none is shipped here:
 | Retail parameter tables, per-frame retail measurements, disc run logs and personal decision records | Not needed by any public check; the local lanes (above) assert measured expected outputs against the user's own install |
 | `onion_day3_disc_courses.inc` (Onion generator placements of a user's install) | Included by `scenario_onion_day3.cpp` only when present; without it the `_disc` entries of that scenario skip |
 | Combat timing measurements against the retail game | A local exact-lane question; the public `bulborb_fight` asserts smoke limits only |
-| `libs/nectar_assets/art/` (Blender sources, exports and rig metadata) and the art-export workflow | Fork art pipeline; the stand-in models are authored in C++ |
 
 ## Measured expected outputs (kept separate from fixtures)
 

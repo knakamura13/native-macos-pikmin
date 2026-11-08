@@ -68,6 +68,10 @@ protected:
 		p.setContainer(Red);
 		p.setContainer(Blue);
 		p.setContainer(Yellow);
+		// Blue Pikmin are in the Onion (the day-end run), so the blue count is shown: a save that
+		// hides the count of a colour in use is repaired on load, and the scenario compares the
+		// loaded game with the saved one as they are.
+		p.mDisplayPikiFlag |= 1 << Blue;
 		mDriver.setPlan({}); // Yes, A everywhere
 		return true;
 	}
