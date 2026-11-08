@@ -2,6 +2,7 @@
 #include "DebugLog.h"
 #include "Graphics.h"
 #include "sysNew.h"
+#include "system.h"
 
 UpdateMgr* pikiUpdateMgr;
 UpdateMgr* searchUpdateMgr;
@@ -84,6 +85,16 @@ UpdateMgr::UpdateMgr()
  */
 void UpdateMgr::update()
 {
+#if defined(PIKI_PC_PORT)
+	// The slot index counts original 30 Hz frames: advance it once per 30 Hz step, and report
+	// the slot as updatable only on the tick it advanced, so a client runs once per rotation.
+	if (++mPcSubTick < PC_TICKS30) {
+		mPcFresh = false;
+		return;
+	}
+	mPcSubTick = 0;
+	mPcFresh   = true;
+#endif
 	if (++mCurrentIndex >= mSlotCount) {
 		mCurrentIndex = 0;
 	}
@@ -98,7 +109,7 @@ bool UpdateMgr::updatable(UpdateContext* client)
 		return false;
 	}
 
-	if (client->mMgrSlotIndex == mCurrentIndex) {
+	if (client->mMgrSlotIndex == mCurrentIndex && mPcFresh) {
 		return true;
 	}
 

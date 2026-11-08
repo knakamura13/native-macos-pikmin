@@ -55,8 +55,8 @@ Contact sampling alone moved 60 Hz from 2.20 s to 2.80 s; the smoothing and roll
 to 2.93 s. A divergence of about 0.2 s per doubling of the rate remains (mean Flick 3.19 s at 30 Hz, 3.68 s at 60 Hz;
 the knock-down time is a random draw), unexplained: the other per-tick behaviours of the Pikmin and enemy AI were not
 audited. The exact-lane test `scenario_combat_rate_disc` records the measured bounds (kill within 0.35 s, damage in
-the first 1.5 s within 20, equal flick count) so the gap cannot grow back; it does not claim parity. At 30 Hz every value is the original literal (`PC_ATTACK_RATE`), so all 30 Hz state-hash logs stay byte-identical; 17 stand-in logs at 60 and 120 Hz change (ballistic fixtures, `bulborb_fight`, `flick_out_of_range`, `pikmin_cap_999`), identical across macOS, Linux and Windows. The change alters
-gameplay at 60 and 120 Hz and those logs, so it is not in the upstream package and needs Kyle's decision.
+the first 1.5 s within 20, equal flick count) so the gap cannot grow back; it does not claim parity. The change alters
+gameplay at 60 and 120 Hz and its stand-in hash logs, so it is not in the upstream package and needs Kyle's decision.
 The 120 Hz abort after the kill is explained: it is the original `ERROR("zannnen")` in `ActTransport::decideGoal` (an lldb break on `_Error`), raised when the Pikmin carrying the corpse are blue and the stage has no blue Onion. The scenario puts blue Pikmin on the Day-1 disc stage, so this is a scenario artifact reached sooner because the kill comes sooner; it is not a tick-rate bug.
 
 ## Sampling over start positions (2026-11-08, corrects the single-start numbers above)
@@ -85,6 +85,33 @@ look is the walk and approach before and between attacks (`ActAttack`, `ActFree`
 `Piki`/`Creature::moveVelocity`, whose velocity lag `v += (target - v) * dt / acceleration` is an explicit Euler step and
 so differs between 30 and 60 Hz), and what the Bulborb does in the same time. Not tested.
 
+## Residual bisect (2026-11-08, disc install, parity fix plus each experiment)
+
+Mean kill time over 16 starts (`--seeds 16 --shift-step 3`), 30 Hz = 3.44 s throughout:
+
+| Experiment | 60 Hz mean | Result |
+| --- | --- | --- |
+| Parity fix alone | 2.84 s | baseline for the rows below |
+| `Creature::moveVelocity` velocity lag compounded per 30 Hz step | 2.83 s | refuted: no effect |
+| Hit test in `ActJumpAttack` states 4 and 5 only on 30 Hz ticks (retries inside the attack window) | 2.93 s | refuted: inside the noise (se about 0.12 s) |
+| `UpdateMgr` slot rotation advanced once per 30 Hz step (see below) | 3.18 s | real effect: gap 0.60 s to 0.26 s |
+
+`UpdateMgr::update()` advances its slot index once per tick. Pikmin decisions that are spread over slots
+(`pikiUpdateMgr` has 10 slots, so a Pikmin's target search in `ActFree::exec` runs once per 10 frames; the look manager 20,
+the optimisation managers 2) therefore ran twice as often in real time at 60 Hz and four times at 120 Hz. This is the
+"approach is 0.13 s shorter" effect above. The change advances the index once per `PC_TICKS30` ticks and reports a slot
+updatable only on the tick it advanced, so each client still runs once per rotation; at 30 Hz both are the original code.
+Evidence it leaves 30 Hz alone: all 114 `_30` state-hash logs are byte-identical with and without the change, and
+`scenario_combat_rate_disc` passes. The patch is on the parity branch (not in the package).
+
+Wider sample, 48 starts (`--seeds 48 --shift-step 1`) with the `UpdateMgr` change: kill 3.64 s (sd 1.18) at 30 Hz, 3.19 s
+(sd 0.70) at 60 Hz, 2.86 s (sd 0.54) at 120 Hz. The 60 Hz gap is 0.45 s (12%), the 120 Hz gap 0.78 s (21%); standard error
+of a difference is about 0.19 s, so the 60 Hz gap is about 2.4 standard errors. Parity is **not** reached. New and
+unexplained: the Flick count per kill is 2.8 at 30 Hz but 4.2 at 60 Hz and 4.1 at 120 Hz (Flick needs a damage count,
+which is event-based, so a rate effect in who is on the Bulborb or in the Flick window is suspected). There is no 48-start
+baseline without the `UpdateMgr` change, so the improvement is quoted from the 16-start table only. The 120 Hz runs end
+non-zero in 32 of 48 cases from the scenario artifact above (blue Pikmin, no blue Onion), not from the kill.
+
 ## Public stand-in fixture
 
 The authored fixture (source-default parameters, authored attack schedules, `standin_anims.h`)
@@ -93,7 +120,7 @@ is a characterisation of the fixture, not a measurement of the game.
 
 ## Next steps
 
-1. Bisect the residual with the same per-hit trace: Pikmin walk smoothing first, then the stick path.
+1. Explain the Flick count difference (4.2 against 2.8), then re-measure the gap with a 48-start baseline taken before and after the `UpdateMgr` change.
 2. When the 30 and 60 Hz disc runs agree within an agreed bound, add an exact-lane test with that
    bound (the disc-relative limits are a measured expected output and stay out of the public
    fixtures), then port the same scaling to the other per-tick rolls and smoothing in the AI.
