@@ -55,8 +55,8 @@ Contact sampling alone moved 60 Hz from 2.20 s to 2.80 s; the smoothing and roll
 to 2.93 s. A divergence of about 0.2 s per doubling of the rate remains (mean Flick 3.19 s at 30 Hz, 3.68 s at 60 Hz;
 the knock-down time is a random draw), unexplained: the other per-tick behaviours of the Pikmin and enemy AI were not
 audited. The exact-lane test `scenario_combat_rate_disc` records the measured bounds (kill within 0.35 s, damage in
-the first 1.5 s within 20, equal flick count) so the gap cannot grow back; it does not claim parity. The change alters
-gameplay at 60 and 120 Hz and its stand-in hash logs, so it is not in the upstream package and needs Kyle's decision.
+the first 1.5 s within 20, equal flick count) so the gap cannot grow back; it does not claim parity. At 30 Hz every value is the original literal (`PC_ATTACK_RATE`), so all 30 Hz state-hash logs stay byte-identical; 17 stand-in logs at 60 and 120 Hz change (ballistic fixtures, `bulborb_fight`, `flick_out_of_range`, `pikmin_cap_999`), identical across macOS, Linux and Windows. The change alters
+gameplay at 60 and 120 Hz and those logs, so it is not in the upstream package and needs Kyle's decision.
 The 120 Hz abort in `ActTransport::crInit` after the kill is a separate finding.
 
 ## Public stand-in fixture
