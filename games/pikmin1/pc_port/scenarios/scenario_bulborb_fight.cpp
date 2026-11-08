@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <vector>
 
+#include "AIConstant.h"
 #include "GameStat.h"
 #include "MapMgr.h"
 #include "Navi.h"
@@ -62,6 +63,11 @@ public:
 		carry::spawnRow(navi, Blue, kPikmin, at.x + 36.0f, at.z, mLanding);
 		for (Piki* p : mLanding) mPiki.push_back(p);
 		carry::land(mLanding);
+		// The source defaults of AIConstant p08 and p10 send a Pikmin back to the captain after one
+		// attack. This fight is about Pikmin fighting until the enemy dies (and, after a Flick,
+		// returning to the fight), so the scenario sets both off, as a test control.
+		AICONST._A4() = 0;
+		AICONST._C4() = 0;
 		mHealth0 = mPrevHealth = mBulb->mHealth;
 	}
 
