@@ -25,7 +25,7 @@ Short answer:
 
 No game code changed. A fix would change normal-play results (see Decision).
 
-Measured 2026-10-28 on macOS arm64 (M3 Max, RelWithDebInfo, Unix Makefiles,
+Measured 2026-10-28 on macOS arm64 (Apple Silicon, RelWithDebInfo, Unix Makefiles,
 `PIKMIN_NATIVE_JAUDIO=OFF`, `PIKMIN_BUILD_SCENARIOS=ON`) at `ee769374`. Line
 numbers are from that commit; function names are the stable pointers.
 

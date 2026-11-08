@@ -1,6 +1,6 @@
 # RNG draw audit: sim-stream draws by class
 
-Base: `3c7d100b` (branch `knakamura/disc-free-gameplay-bfb538`). Line numbers are at that commit; the Action column says what this audit changed. Static read plus `rg`; no draw was traced at runtime except where noted.
+Base: `3c7d100b`. Line numbers are at that commit; the Action column says what this audit changed. Static read plus `rg`; no draw was traced at runtime except where noted.
 
 Scope: every call that reaches `pc_sim_rand` (`gsys->getRand`, `getHalfRand`, `zen::Rand`/`RandShift`, `NsMathF/I::getRand`, `NSystem::random`/`randomInt`, `NMathF/I::rangeRandom`/`rateRandom`/`occurred`, bare `rand()`), in `games/pikmin1/src`, `include` and `pc_port`.
 

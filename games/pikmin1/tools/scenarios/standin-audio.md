@@ -7,7 +7,7 @@ the original engine in `src/jaudio`. This note records what that engine needs to
 boot and play a stage with no disc data, what the stand-in tree supplies, and
 how to run the scenarios with it.
 
-Measured on macOS (M3 Max), RelWithDebInfo, `VERSION_GPIE01_01`, 2026-10-28.
+Measured on macOS (Apple Silicon), RelWithDebInfo, `VERSION_GPIE01_01`, 2026-10-28.
 
 ## What the native engine needs
 
@@ -116,10 +116,9 @@ CTest in the JAudio-ON build: `ctest -R '^scenario_' -E '_disc$'` passes 7 of 7
 (`ctest -R '_disc$'` with `PIKMIN_SCENARIO_DATA_DIR` set to a real install)
 pass 6 of 6 with real sound data and the title scene call.
 
-On disc data the native `boot_smoke` at 30 opens, under `SndData/`:
-`Seqs/pikiseq.arc`, `Banks/pikibank.bx` and the wave archives `pikise_0` to
-`pikise_3`, `demose_0`, `diary1_0`, `diary2_0`, `play3_0`, `jungle_0` and
-`boss2_0` (`.aw`). Paths only; nothing was copied.
+On disc data the native `boot_smoke` also opens the real sound bank and wave
+archives under `SndData/`; the stand-in tree writes only the sequence archive
+(`Seqs/pikiseq.arc`), from the game's own BARC table.
 
 ## Running it
 

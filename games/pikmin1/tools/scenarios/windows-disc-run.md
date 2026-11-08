@@ -1,6 +1,6 @@
 # Disc scenarios on Windows x86-64 (MinGW cross build, wine in Docker)
 
-Recorded 2026-10-28 on an M3 Max Mac, tree `91132b88` (with
+Recorded 2026-10-28 on an Apple Silicon Mac, tree `91132b88` (with
 `PIKMIN_SCENARIO_FLOAT_DET`, default ON in a scenario build). A Windows
 `nectar.exe` cross-built on macOS with MinGW-w64 ran `boot_smoke`,
 `throw_release` and `day30_clock` at 30 and 60 Hz under wine against a real disc

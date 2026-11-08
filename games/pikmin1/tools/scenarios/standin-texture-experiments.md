@@ -75,8 +75,9 @@ and `screen/eng_tex/screen.bun`) is written; none of them is on `standin-open-al
 paths absent from the tree were then 46 of the 47 `.anm` per-model animation bundles (all 47 are in the tree on 2026-10-28). They are #66's domain (animation bundles), a missing
 `.bun`/`.anm` is skipped silently by `StdSystem::loadBundle`, and the allowlisted ones are tolerated by the green
 `scenario_*` runs, so no stand-in is added here. Stand-ins that boot_smoke does not need (the 10 loose HUD
-textures, `intro/item_0_9.bti`, `intro/map1.bti`) stay because the disc boot opens them and the generator test
-requires every manifest texture to exist; deleting them is tolerated (rows above).
+textures, `intro/item_0_9.bti`, `intro/map1.bti`) stay because the game's boot path opens them on a story
+stage and the local boot-manifest check (`scenario_standin_manifest`) expects them; deleting them is
+tolerated (rows above).
 
 ## Since run
 
