@@ -2559,6 +2559,12 @@ if(PIKMIN_BUILD_SCENARIOS)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_ballistic.py
             ${CMAKE_CURRENT_BINARY_DIR}/scenario-logs)
     set_tests_properties(ballistic_cross_rate PROPERTIES DEPENDS "${ballistic_probe_tests}")
+    # Local exact lane: bulborb_fight kill time at 60 Hz against 30 Hz on a user-supplied install (#154).
+    add_test(NAME scenario_combat_rate_disc
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_disc_combat_rate.py
+            $<TARGET_FILE:${NECTAR_GAME}>)
+    set_tests_properties(scenario_combat_rate_disc PROPERTIES
+        LABELS "game-assets" SKIP_RETURN_CODE 77 TIMEOUT 900)
     # Local exact lane: the 30 Hz fall/flick against the original-disc evidence on a user-supplied install.
     add_test(NAME scenario_ballistic_disc_reference
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_disc_ballistic_reference.py

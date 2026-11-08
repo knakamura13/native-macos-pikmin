@@ -479,6 +479,16 @@ void ActJumpAttack::procCollideMsg(Piki* piki, MsgCollide* msg)
 		return;
 	}
 
+#if defined(PIKI_PC_PORT)
+	// At 60 and 120 Hz the contact test runs every tick, so a jumping Pikmin sticks to
+	// contacts that a 30 Hz tick moves past (more Pikmin on the enemy's back, damage
+	// sooner). Take the stick decision only on the original 30 Hz boundaries, where
+	// the position equals the 30 Hz one (the ballistic clock keeps it so).
+	if (PcBallisticClock::enabled(gsys->getFrameTime()) && !piki->mPcBallisticClock.boundary()) {
+		return;
+	}
+#endif
+
 	PRINT_KANDO("JUMP STICK ###\n");
 
 	if (msg->mEvent.mColliderPart == 0) {
@@ -592,7 +602,7 @@ int ActJumpAttack::exec()
 			break;
 		}
 
-		mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + 0.2f * angle);
+		mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + (1.0f - powf(0.8f, 1.0f / PC_TICKS30)) * angle);
 		break;
 	}
 	case 0:
@@ -611,15 +621,15 @@ int ActJumpAttack::exec()
 				mState       = 4;
 				mPiki->mTargetVelocity.set(0.0f, 0.0f, 0.0f);
 			}
-		} else if ((!mTargetCollider || mTargetCollider->isStickable()) && _2C && gsys->getRand(1.0f) > 0.9f) {
+		} else if ((!mTargetCollider || mTargetCollider->isStickable()) && _2C && gsys->getRand(1.0f) > 1.0f - 0.1f / PC_TICKS30) {
 			mState = 2;
 		} else {
-			if (dist2D < getAttackSize() + mPiki->getCentreSize() && gsys->getRand(1.0f) > 0.7f) {
+			if (dist2D < getAttackSize() + mPiki->getCentreSize() && gsys->getRand(1.0f) > 1.0f - 0.3f / PC_TICKS30) {
 				PRINT_KANDO("jump adjust : dist2d = %.1f d = %.1f\n", dist2D, dist3D);
 				mState = 2;
 			}
 
-			mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + 0.2f * angle);
+			mPiki->mFaceDirection = roundAng(mPiki->mFaceDirection + (1.0f - powf(0.8f, 1.0f / PC_TICKS30)) * angle);
 			mPiki->setSpeed(1.0f, direction);
 		}
 
