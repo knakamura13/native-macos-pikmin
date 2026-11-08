@@ -6,7 +6,7 @@
 // inválido pasa la carga y falla la primera vez que ese efecto dispara.
 //
 // Diseño, big-endian:
-//   0-3   versión ("1-02" en los .pcr del disco; el puerto no la comprueba)
+//   0-3   version tag (the port does not check it; the stand-ins write "0-00")
 //   4-5   u16 desplazamiento del bloque DDF
 //   6     no cero: billboard. 7 no se lee.
 //   billboard: bloque de color en 8. Si no: f32 escala de largo en 8, f32 desvío
@@ -45,7 +45,7 @@ struct PcrColourAnim {
 };
 
 struct PcrParticle {
-	std::string version = "1-02"; ///< 4 bytes
+	std::string version = "0-00"; ///< 4 bytes, an authored tag
 	bool billboard      = true;
 	float lengthScale = 0, pivotOffsetY = 0; ///< solo si no es billboard
 	PcrColourAnim colour;

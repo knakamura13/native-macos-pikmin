@@ -99,7 +99,7 @@ public:
 
 	void onStageReady() override
 	{
-		scenario_progress::applyDiscKeys();
+		scenario_progress::applyClassicKeys();
 		Navi* navi = naviMgr->getNavi();
 		if (navi == nullptr) {
 			scenarioFailf(0, "a captain", "none");

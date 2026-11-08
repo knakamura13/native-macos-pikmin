@@ -239,7 +239,7 @@ int main()
 		check(payload.size() == 172, "inert payload is 172 bytes, got " + std::to_string(payload.size()));
 		Parsed r = parse(payload);
 		check(r.ok, "reader walks the payload without leaving it");
-		check(r.version == "1-02", "version tag");
+		check(r.version == "0-00", "version tag");
 		check(r.ddfOffset == 36 && r.billboard == 1 && payload[7] == 0, "header: DDF at 36, billboard, byte 7 unused");
 		check(r.maxFrameAnim == 2 && r.duration >= 2 && r.thresholds.size() == 2 && r.thresholds[0] == 0.0f && r.thresholds[1] == 1.0f,
 		      "colour block: 2 frames, duration >= 2, thresholds 0 and 1");

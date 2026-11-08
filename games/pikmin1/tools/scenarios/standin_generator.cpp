@@ -4,6 +4,7 @@
 // boots the sandbox stage with no disc data:
 //
 //   nectar_standin_generator <out> [--manifest <boot-manifest.txt>]
+//   nectar_standin_generator --manifest-from-env
 //
 // <out> is the folder a scenario run uses as PIKMIN_SCENARIO_DATA_DIR (CTest
 // passes <build>/scenario-data). The tree omits assets/.pikmin-assets: only the
@@ -11,13 +12,18 @@
 //
 // Pass criteria owned here (#68): the tree is built twice in-process and the two
 // hashes must match (run-to-run identity on one machine; no cross-OS identity is
-// claimed), every writer error is fatal, and with --manifest every path of the
-// disc boot manifest (#64) is either in the tree or on the allowlist below with
-// its reason.
+// claimed), and every writer error is fatal.
 //
-// Fidelity (#62): nothing here is read from disc data. Numbers that only the
-// disc has are recorded where they are used, in the sibling stand-in lists and
-// below.
+// Local lane only: with --manifest, every path of a boot manifest is either in
+// the tree or on the allowlist below with its reason. A boot manifest is the
+// open log of a disc run (make_boot_manifest.py over PIKMIN_LOG_FILE_OPENS
+// logs, #64); it is generated on the user's machine from their own install and
+// never committed. --manifest-from-env reads its path from PIKMIN_BOOT_MANIFEST
+// and exits 77 (skipped) when that is unset: the CTest entry
+// scenario_standin_manifest (label game-assets) runs it that way.
+//
+// Provenance (#190): nothing here is read from disc data. Values are authored
+// fixtures or the game source's own defaults; PROVENANCE.md lists each class.
 
 #include "nectar_assets/archive.h"
 #include "nectar_assets/bundle.h"
@@ -44,6 +50,7 @@
 #include "standin_water_stage.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -111,9 +118,9 @@ bool sandboxSourceMod(Bytes& out, std::string& error)
 /// The stage .ini base that compileMap's buildIni rewrites: it only needs a
 /// map_file line. createMapObjects (newPikiGame.cpp) acts on map_file,
 /// day_multiply and an optional dayMgr block; with no dayMgr block DayMgr keeps
-/// TimeSetting's default white parallel lights. day_multiply 1.0 is the value of
-/// the disc's stages/stage1.ini (Forest of Hope, the disc-mode scenario stage),
-/// so the world clock runs at the same rate as the disc-mode runs.
+/// TimeSetting's default white parallel lights. day_multiply 1.0 is the
+/// source default (newPikiGame.cpp sets mTimeMultiplier to 1.0 before it reads
+/// the .ini), written out so the clock rate is explicit.
 std::string sandboxBaseIni()
 {
 	return "# Sandbox stage for the disc-free scenario tests (#68), written by nectar_standin_generator.\n"
@@ -184,13 +191,15 @@ bool sandboxMap(Tree& tree, std::string& error)
 // list nodes without a null check, #64), then the sandbox as the sixth. The
 // sandbox has no `id` line, so it is STAGE_TESTMAP (5): not the tutorial (the
 // clock runs), no zone banner, music falls back to stage 0. `hidden` keeps it out
-// of the in-game map select. Only `file` must match. Of the story stages only
-// the first, stages/practice.ini (id 0, index 0: the tutorial), has stand-in
-// files (standin_practice_stage.h); the other four are never opened.
+// of the in-game map select. Only `file` must match. stages/practice.ini and
+// stages/stage1.ini are code literals (game.cpp setStage); the other three story
+// files have authored names (course2..course4). practice has its own stand-in
+// files (standin_practice_stage.h); stage1 and course2..course4 are the world
+// map's courses (standin_objects_stage.cpp).
 bool stagesIni(Tree& tree, std::string& error)
 {
 	std::vector<nectar::StagesEntry> entries;
-	const char* const story[] = { "stages/practice.ini", "stages/stage1.ini", "stages/stage2.ini", "stages/stage3.ini", "stages/last.ini" };
+	const char* const story[] = { "stages/practice.ini", "stages/stage1.ini", "stages/course2.ini", "stages/course3.ini", "stages/course4.ini" };
 	for (int id = 0; id < 5; id++) {
 		nectar::StagesEntry e;
 		e.visible = true;
@@ -247,44 +256,44 @@ bool stagesIni(Tree& tree, std::string& error)
 // CreatureProp list followed by their own list. No retail parameter data is used.
 bool parmFiles(Tree& tree, std::string& error)
 {
-    struct File {
-        const char* path;
-        int lists;
-    };
-    const File files[] = {
-        { "dataDir/parms/gamePrms.bin", 1 },
-        { "dataDir/parms/aiconst.bin", 1 },
-        { "dataDir/parms/demo.bin", 1 },
-        { "dataDir/parms/cunit.bin", 1 },
-        { "dataDir/parms/naviMgr.bin", 2 },
-        { "dataDir/parms/pikiMgr.bin", 2 },
-    };
-    for (const File& f : files) {
-        nectar::ParmFile pf;
-        pf.lists.resize(f.lists);
-        Bytes bytes;
-        if (!nectar::writeParmFile(pf, bytes, error)) return fail(error, std::string(f.path) + ": " + error);
-        tree[f.path] = bytes;
-    }
-    // parms/key.bin: six big-endian ints, one per KeyConfig::Key::read (keyConfig.cpp):
-    // throw A, set cursor B, extract A, attack A, disband X, menu Y (KBBTN values are
-    // Controller.h). This is the Classic control scheme the scenarios drive (A throws
-    // and plucks, B whistles), written as an authored fixture: it is six button masks
-    // from the game's public controls, not a copied file. The constructor default
-    // binds extract to B, which would stop the shared-key pluck path being exercised.
-    {
-        const std::uint32_t binds[] = { 0x1000u, 0x2000u, 0x1000u, 0x1000u, 0x4000u, 0x8000u };
-        Bytes key;
-        key.reserve(sizeof binds);
-        for (std::uint32_t v : binds) {
-            key.push_back(std::uint8_t(v >> 24));
-            key.push_back(std::uint8_t(v >> 16));
-            key.push_back(std::uint8_t(v >> 8));
-            key.push_back(std::uint8_t(v));
-        }
-        tree["dataDir/parms/key.bin"] = std::move(key);
-    }
-    return true;
+	struct File {
+		const char* path;
+		int lists;
+	};
+	const File files[] = {
+		{ "dataDir/parms/gamePrms.bin", 1 },
+		{ "dataDir/parms/aiconst.bin", 1 },
+		{ "dataDir/parms/demo.bin", 1 },
+		{ "dataDir/parms/cunit.bin", 1 },
+		{ "dataDir/parms/naviMgr.bin", 2 },
+		{ "dataDir/parms/pikiMgr.bin", 2 },
+	};
+	for (const File& f : files) {
+		nectar::ParmFile pf;
+		pf.lists.resize(f.lists);
+		Bytes bytes;
+		if (!nectar::writeParmFile(pf, bytes, error)) return fail(error, std::string(f.path) + ": " + error);
+		tree[f.path] = bytes;
+	}
+	// parms/key.bin: six big-endian ints, one per KeyConfig::Key::read (keyConfig.cpp):
+	// throw A, set cursor B, extract A, attack A, disband X, menu Y (KBBTN values are
+	// Controller.h). This is the Classic control scheme the scenarios drive (A throws
+	// and plucks, B whistles), written as an authored fixture: it is six button masks
+	// from the game's public controls, not a copied file. The constructor default
+	// binds extract to B, which would stop the shared-key pluck path being exercised.
+	{
+		const std::uint32_t binds[] = { 0x1000u, 0x2000u, 0x1000u, 0x1000u, 0x4000u, 0x8000u };
+		Bytes key;
+		key.reserve(sizeof binds);
+		for (std::uint32_t v : binds) {
+			key.push_back(std::uint8_t(v >> 24));
+			key.push_back(std::uint8_t(v >> 16));
+			key.push_back(std::uint8_t(v >> 8));
+			key.push_back(std::uint8_t(v));
+		}
+		tree["dataDir/parms/key.bin"] = std::move(key);
+	}
+	return true;
 }
 
 // ── Archive pairs ───────────────────────────────────────────────────────────
@@ -322,8 +331,8 @@ bool siblingStandIns(Tree& tree, std::string& error)
 	if (!nectar::writeStandInObjectFiles(objects, error)) return fail(error, "stand-in objects: " + error);
 	for (auto& f : objects) tree[f.path] = std::move(f.bytes);
 
-	// Optional textures too: the game tolerates their absence, but the disc boot
-	// opens them, so writing them keeps the open log close to the disc's.
+	// Optional textures too: the game tolerates their absence, but its boot path
+	// opens them, so writing them keeps the open log free of tolerated misses.
 	std::vector<nectar::StandInFile> textures;
 	if (!nectar::standInTextureFiles(textures, error)) return fail(error, "stand-in textures: " + error);
 	for (auto& f : textures) tree["dataDir/" + f.path] = std::move(f.bytes);
@@ -384,10 +393,10 @@ std::uint64_t hashTree(const Tree& tree)
 {
 	std::uint64_t h = 1469598103934665603ull;
 	auto mix        = [&](const std::uint8_t* p, std::size_t n) {
-        for (std::size_t i = 0; i < n; i++) {
-            h ^= p[i];
-            h *= 1099511628211ull;
-        }
+		for (std::size_t i = 0; i < n; i++) {
+			h ^= p[i];
+			h *= 1099511628211ull;
+		}
 	};
 	for (const auto& [path, bytes] : tree) {
 		mix(reinterpret_cast<const std::uint8_t*>(path.data()), path.size() + 1);
@@ -399,8 +408,9 @@ std::uint64_t hashTree(const Tree& tree)
 }
 
 // ── Manifest check ───────────────────────────────────────────────────────────
-// Paths the disc boot manifest (#64, Forest of Hope on disc) lists that the
-// stand-in tree leaves out on purpose. A prefix covers every path under it.
+// Paths a local boot manifest (#64, a Forest of Hope run on the user's install)
+// lists that the stand-in tree leaves out on purpose. A prefix covers every
+// path under it.
 struct Allowed {
 	const char* prefix;
 	const char* why;
@@ -408,8 +418,8 @@ struct Allowed {
 };
 const Allowed kManifestAllowlist[] = {
 	// What the Forest of Hope loads and the sandbox (no generators) does not.
-	{ "dataDir/courses/stage1/", "the disc-mode stage's map; stand-ins boot the sandbox map" },
-	{ "dataDir/stages/stage1", "the disc-mode stage's .ini and generators; stand-ins boot stages/sandbox.ini" },
+	{ "dataDir/courses/stage1/", "the manifest run's course map; the stand-in stage1.ini uses the object sandbox map" },
+	{ "dataDir/stages/stage1", "the manifest run's stage .ini and generator files; the stand-in stage1 has its own .ini and one default.gen" },
 	// TekiMgr constructs each parameter type before CoreNode::load optionally
 	// reads an override. Missing files leave the source defaults in place.
 	{ "dataDir/tekipara/", "enemy parameter overrides, using source constructor defaults", ".bin" },
@@ -418,10 +428,13 @@ const Allowed kManifestAllowlist[] = {
 	{ "dataDir/parms/sound.bin", "sound constants, skipped when missing" },
 	{ "dataDir/camera/camepara.bin", "camera parameters, skipped when missing" },
 	{ "dataDir/ghost/record.gst", "ghost replay, null-checked" },
-	// The disc's naka1 table names three animations its bundle lacks, so the
-	// game opens loose .dck files that do not exist there either (FAILED in the
-	// manifest). The stand-in bundle has all five entries, so nothing is opened.
-	{ "dataDir/objects/ufoparts/mnaka1/", "loose animations the disc's naka1 bundle lacks (they fail on the disc too)" },
+	// Loose .dck files the game opens only when a part's bundle lacks an entry
+	// (FAILED in a manifest too). The stand-in bundle has every entry.
+	{ "dataDir/objects/ufoparts/mnaka1/", "loose part animations, opened only when the bundle lacks them" },
+	// The stand-in .cin files are the code's paths; their scenes have authored
+	// names (cinemas/standin/, standin_cinema.cpp), so no manifest scene name is
+	// expected in the tree.
+	{ "dataDir/cinemas/", "stand-in scenes have authored names under cinemas/standin/", ".dsk" },
 };
 
 int checkManifest(const Tree& tree, const std::string& manifestPath)
@@ -457,7 +470,7 @@ int checkManifest(const Tree& tree, const std::string& manifestPath)
 	}
 	int extra = 0;
 	for (const auto& kv : tree) extra += listed.count(kv.first) ? 0 : 1;
-	std::printf("[standin] manifest: %d in the tree, %d allowlisted, %d missing; %d tree files the disc boot does not open (sandbox stage, stand-in parameter files)\n", present, allowed, missing, extra);
+	std::printf("[standin] manifest: %d in the tree, %d allowlisted, %d missing; %d tree files the manifest run does not open (sandbox stage, stand-in parameter files)\n", present, allowed, missing, extra);
 	return missing == 0 ? 0 : 1;
 }
 
@@ -483,9 +496,18 @@ bool writeTree(const Tree& tree, const fs::path& out, std::string& error)
 int main(int argc, char** argv)
 {
 	std::string out, manifest;
+	bool manifestOnly = false;
 	for (int i = 1; i < argc; i++) {
 		const std::string a = argv[i];
-		if (a == "--manifest" && i + 1 < argc) {
+		if (a == "--manifest-from-env" && argc == 2) {
+			const char* env = std::getenv("PIKMIN_BOOT_MANIFEST");
+			if (!env || !*env) {
+				std::printf("[standin] PIKMIN_BOOT_MANIFEST is not set: skipping the local boot-manifest check\n");
+				return 77;
+			}
+			manifest     = env;
+			manifestOnly = true;
+		} else if (a == "--manifest" && i + 1 < argc) {
 			manifest = argv[++i];
 		} else if (out.empty() && !a.empty() && a[0] != '-') {
 			out = a;
@@ -494,8 +516,8 @@ int main(int argc, char** argv)
 			break;
 		}
 	}
-	if (out.empty()) {
-		std::fprintf(stderr, "usage: nectar_standin_generator <out> [--manifest <boot-manifest.txt>]\n");
+	if (out.empty() && !manifestOnly) {
+		std::fprintf(stderr, "usage: nectar_standin_generator <out> [--manifest <boot-manifest.txt>] | --manifest-from-env\n");
 		return 2;
 	}
 
@@ -515,6 +537,7 @@ int main(int argc, char** argv)
 	std::printf("[standin] %zu files, %zu bytes, hash %016llx (two builds identical)\n", first.size(), bytes, (unsigned long long)h1);
 
 	if (!manifest.empty() && checkManifest(first, manifest) != 0) return 1;
+	if (manifestOnly) return 0;
 
 	if (!writeTree(first, out, error)) {
 		std::fprintf(stderr, "[standin] %s\n", error.c_str());

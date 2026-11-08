@@ -65,7 +65,7 @@ public:
 	void onStageReady() override
 	{
 		pc_settings_scenario_set_blues_only_water(0);
-		scenario_progress::applyDiscKeys();
+		scenario_progress::applyClassicKeys();
 		mNavi = naviMgr->getNavi();
 		if (mNavi == nullptr) scenarioFailf(0, "a captain", "none");
 	}

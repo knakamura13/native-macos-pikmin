@@ -75,7 +75,7 @@ public:
 
 	void onStageReady() override
 	{
-		tutorial::applyDiscKeys();
+		tutorial::applyClassicKeys();
 		// The source defaults also enable the original cursor-pluck path in
 		// Navi::callPikis. Isolate the PC option for both rounds.
 		mOriginalCursorPluck = AICONST.mDoPluckWithCursor();

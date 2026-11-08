@@ -1157,7 +1157,7 @@ void scenarioHandOff(void)
 
 bool pc_scenario_handed_off(void) { return sHandedOff; }
 
-void scenarioApplyDiscKeyBindings(void)
+void scenarioApplyClassicKeyBindings(void)
 {
 	KeyConfig* k           = KeyConfig::_instance;
 	k->mThrowKey.mBind     = KBBTN_A;

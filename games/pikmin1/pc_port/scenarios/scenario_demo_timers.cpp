@@ -65,7 +65,7 @@ public:
 
 	void onStageReady() override
 	{
-		applyDiscKeys();
+		applyClassicKeys();
 		mOnion = itemMgr->getContainer(Red);
 		Iterator it(pelletMgr);
 		CI_LOOP(it)

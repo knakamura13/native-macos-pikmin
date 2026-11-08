@@ -88,7 +88,7 @@ public:
 
 	void onStageReady() override
 	{
-		applyDiscKeys();
+		applyClassicKeys();
 		pc_settings_scenario_set_infinite_day(0);
 		mOnion = itemMgr->getContainer(Red);
 		mUfo   = itemMgr->getUfo();

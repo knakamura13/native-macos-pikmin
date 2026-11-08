@@ -799,7 +799,7 @@ from `PcScenario` (`pc_scenario.h`):
 | `handsOff()` | True for a scenario that calls `scenarioHandOff()`; only those accept `--scenario-handoff`. |
 
 `scenarioHandOff()` marks the hand-off point: with `--scenario-handoff` the
-player takes over there, otherwise it is a pass. `scenarioApplyDiscKeyBindings()`
+player takes over there, otherwise it is a pass. `scenarioApplyClassicKeyBindings()`
 sets the disc's `parms/key.bin` bindings (pluck and throw on A). The stand-in
 generator writes that file; the call restores the same six binds.
 | `crossesDays()` | Default false. True lets the run continue past the soft reset that ends a day: the runner stops ticking the scenario from that tick (the stage's objects are gone), waits for the next stage, runs the intro gate again and calls `onStageReady()` once more; `pc_scenario_stage_number()` says which stage (1, 2, ...). Ticks keep counting across stages. Used by `onion_day3`. |
