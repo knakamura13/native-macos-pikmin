@@ -57,7 +57,7 @@ the knock-down time is a random draw), unexplained: the other per-tick behaviour
 audited. The exact-lane test `scenario_combat_rate_disc` records the measured bounds (kill within 0.35 s, damage in
 the first 1.5 s within 20, equal flick count) so the gap cannot grow back; it does not claim parity. At 30 Hz every value is the original literal (`PC_ATTACK_RATE`), so all 30 Hz state-hash logs stay byte-identical; 17 stand-in logs at 60 and 120 Hz change (ballistic fixtures, `bulborb_fight`, `flick_out_of_range`, `pikmin_cap_999`), identical across macOS, Linux and Windows. The change alters
 gameplay at 60 and 120 Hz and those logs, so it is not in the upstream package and needs Kyle's decision.
-The 120 Hz abort in `ActTransport::crInit` after the kill is a separate finding.
+The 120 Hz abort after the kill is explained: it is the original `ERROR("zannnen")` in `ActTransport::decideGoal` (an lldb break on `_Error`), raised when the Pikmin carrying the corpse are blue and the stage has no blue Onion. The scenario puts blue Pikmin on the Day-1 disc stage, so this is a scenario artifact reached sooner because the kill comes sooner; it is not a tick-rate bug.
 
 ## Public stand-in fixture
 
@@ -71,4 +71,4 @@ is a characterisation of the fixture, not a measurement of the game.
 2. When the 30 and 60 Hz disc runs agree within an agreed bound, add an exact-lane test with that
    bound (the disc-relative limits are a measured expected output and stay out of the public
    fixtures), then port the same scaling to the other per-tick rolls and smoothing in the AI.
-3. Investigate the 120 Hz `ActTransport::crInit` abort separately.
+3. The 120 Hz abort needs no port change; the scenario should carry the Onion colour the stage owns (or stop at the kill).
