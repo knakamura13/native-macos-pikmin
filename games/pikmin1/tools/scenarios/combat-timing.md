@@ -191,8 +191,20 @@ Better method (use it from here): the runs are deterministic per start, so compa
 exact growth compounding of the away turn; the change at 60 Hz is -0.106 s (se 0.085), not significant and in the wrong
 direction. Earlier unpaired comparisons of means (se about 0.12 to 0.19 each) could not resolve differences of 0.1 s.
 
-Next: apply the same paired comparison to a variant that scales the toward term (`Creature::moveRotation`) and the away term
-together, and to the jump-adjust and ground-attack distance tests, one at a time, each judged against the 0.1 s paired noise.
+Paired results for the turn terms (same 96 starts, 30 Hz identical in every variant, 60 Hz minus 30 Hz kill time; baseline
+-0.421 s, se 0.112): exact growth of the away turn -0.527 s (change -0.106, se 0.085); compounded `moveRotation` -0.552 s
+(change -0.131, se 0.076); both together -0.654 s (change -0.233, se 0.073, significant). Making the 60 Hz turning more
+faithful therefore makes 60 Hz kill faster and the gap bigger, in the wrong direction.
+
+Correction to the reading above: the alignment finding (70% against 51% of Pikmin aligned in the band) is real but it is
+not what drives the gap. 30 Hz is the more aligned rate and yet the slower one, and improving 60 Hz alignment speeds 60 Hz
+up further. The kill-time gap has its main source elsewhere. What is still unexplained is why more Pikmin are on the
+Bulborb at every hit at 60 Hz although the number of stick calls per fight is the same (7 and 7 in the traced start): the
+candidate is how long a Pikmin stays attached (shake-off by the Bulborb's flick, or detaching on its own), not how often
+it attaches.
+
+Next: log the end of each attachment (`endStick`/`endStickObject`) as well as the start, at both rates, and compare the mean
+attachment time and what ends it (flick, death of the target, the Pikmin's own state change).
 
 ## Public stand-in fixture
 
