@@ -1136,6 +1136,9 @@ if(ANDROID AND NOT TARGET nectar_launcher)
     add_library(nectar_launcher SHARED
         pc_port/launcher/launcher_android_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/install_directory.cpp
+        pc_port/launcher/install_note_layout.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/button_style.cpp
         pc_port/launcher/button_layout.cpp
         pc_port/launcher/crash_report.cpp
@@ -1207,6 +1210,8 @@ if(PIKMIN_BUILD_LAUNCHER)
     add_executable(pikmin_launcher
         pc_port/launcher/launcher_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/install_directory.cpp
+        pc_port/launcher/install_note_layout.cpp
         pc_port/launcher/gci_save_import.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/button_style.cpp
@@ -1287,9 +1292,42 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(gci_save_import_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME gci_save_import_test COMMAND gci_save_import_test)
 
+    add_executable(install_directory_test
+        pc_port/launcher/install_directory_test.cpp
+        pc_port/launcher/install_directory.cpp
+        pc_port/launcher/install_note_layout.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp)
+    target_include_directories(install_directory_test PRIVATE pc_port/launcher ${PC_PORT_DIR})
+    target_compile_options(install_directory_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME install_directory_test COMMAND install_directory_test)
+
+    add_executable(install_note_layout_test pc_port/launcher/install_note_layout_test.cpp
+        pc_port/launcher/install_note_layout.cpp)
+    target_include_directories(install_note_layout_test PRIVATE pc_port/launcher ${PC_PORT_DIR})
+    target_compile_options(install_note_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME install_note_layout_test COMMAND install_note_layout_test)
+
+    add_executable(install_dialog_snapshot
+        pc_port/launcher/install_dialog_snapshot.cpp
+        pc_port/launcher/install_note_layout.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp
+        pc_port/launcher/installer_ui.cpp
+        pc_port/pc_icon.cpp
+        ${LAUNCHER_PLATFORM_SOURCE})
+    target_include_directories(install_dialog_snapshot PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher
+        ${SDL2_INCLUDE_DIRS})
+    target_link_libraries(install_dialog_snapshot PRIVATE nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
+    if (WIN32)
+        target_link_libraries(install_dialog_snapshot PRIVATE comdlg32 ole32 shell32 uuid winhttp)
+    endif()
+    target_compile_options(install_dialog_snapshot PRIVATE ${NATIVE_COMPILE_OPTIONS})
+
     add_executable(installer_ui_test
         pc_port/launcher/installer_ui_test.cpp
         pc_port/launcher/installer_ui.cpp
+        pc_port/launcher/install_note_layout.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/pc_icon.cpp
         ${LAUNCHER_PLATFORM_SOURCE})
     target_include_directories(installer_ui_test PRIVATE
@@ -1305,6 +1343,10 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     add_executable(launcher_sidebar_layout_test pc_port/launcher/launcher_sidebar_layout_test.cpp)
     target_compile_options(launcher_sidebar_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME launcher_sidebar_layout_test COMMAND launcher_sidebar_layout_test)
+
+    add_executable(settings_row_layout_test pc_port/launcher/settings_row_layout_test.cpp)
+    target_compile_options(settings_row_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME settings_row_layout_test COMMAND settings_row_layout_test)
 
     add_executable(launcher_page_layout_test pc_port/launcher/launcher_page_layout_test.cpp)
     target_compile_options(launcher_page_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
@@ -1875,6 +1917,16 @@ if(PIKMIN_BUILD_TESTS)
         pc_port/timing/pc_visual_snapshot.cpp)
     target_compile_options(pc_visual_runtime_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_visual_runtime_test COMMAND pc_visual_runtime_test)
+
+    # Real replacement loader with GL dispatch stubs: no GPU, disc or pack download.
+    foreach(test pc_texpack_test pc_texpack_gles_test)
+        add_executable(${test} pc_port/gl/pc_texpack_test.cpp)
+        target_include_directories(${test} PRIVATE ${SDL2_INCLUDE_DIRS}
+            third_party/stb third_party/bcdec)
+        target_compile_options(${test} PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        add_test(NAME ${test} COMMAND ${test})
+    endforeach()
+    target_compile_definitions(pc_texpack_gles_test PRIVATE PIKI_USE_GLES=1)
 
     add_executable(pc_tev_shader_test
         pc_port/gl/pc_tev_shader_test.cpp
