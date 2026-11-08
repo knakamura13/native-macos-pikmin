@@ -119,6 +119,24 @@ is part of the gap. The residual is real and not explained. The Flick figures (2
 scenario's end-of-run summary, which aborted runs omit (5 against 11 runs), so they are not a clean comparison; the one-start
 trace at shift 7 shows 3 Flicks at both rates.
 
+## Where the gap sits after the slot-rotation fix (2026-11-08, 64 starts, disc install)
+
+Mean time of the n-th hit (`bulborb_fight` HIT trace; 30 Hz then 60 Hz): first 0.917 / 0.928 s, third 1.110 / 1.191 s,
+seventh 1.786 / 1.590 s, kill 3.115 / 2.971 s. The first hit is now equal, so the approach gap found earlier is closed.
+The gap opens in the middle of the fight: hits 3 to 7 take 0.68 s at 30 Hz and 0.40 s at 60 Hz.
+
+Pikmin with `mStickTarget == Bulborb` at each hit (the scenario's "on its back", hits 1 to 13): at 30 Hz 0.3 0.9 1.4 1.7 2.1
+2.1 2.0 2.3 2.5 2.5 2.9 2.6 4.0; at 60 Hz 1.8 2.2 2.6 2.8 3.2 3.6 3.8 3.8 3.4 3.3 3.1 2.8 2.5. So at 60 Hz more Pikmin are
+attached earlier and for longer, which is the mid-fight damage rate. Not the cause: gating the jump-contact decision in
+`ActJumpAttack::procCollideMsg` to a plain global 30 Hz tick cadence (instead of the ballistic clock, which never advances
+for a Pikmin off the reference-motion path) leaves the counts and the mean kill time unchanged (60 Hz mean 3.15 s against
+3.17 s over 96 starts). The animation clock is not the cause either: `pc_anim_dt` returns the raw frame time in deterministic
+scenario runs, and key events fire once on crossing.
+
+Next: find which code attaches the extra Pikmin (a tick-rate-dependent path other than that handler, or contact geometry
+that differs because a finer step samples positions the 30 Hz step skips) by logging each `startStick`/`startStickObject`
+call with its caller and tick at both rates for one start.
+
 ## Public stand-in fixture
 
 The authored fixture (source-default parameters, authored attack schedules, `standin_anims.h`)
