@@ -3,7 +3,7 @@ import json
 import re
 import tempfile
 import unittest
-from check_ballistic import CASES, compare, collect, check_disc_reference
+from check_ballistic import CASES, compare, collect, check_disc_reference, evidence_path
 
 
 class BallisticCheckerTests(unittest.TestCase):
@@ -38,8 +38,9 @@ class BallisticCheckerTests(unittest.TestCase):
         p = self.path(); p.write_text(p.read_text().replace('[scenario] PASS', '[scenario] FAIL'))
         with self.assertRaisesRegex(ValueError, 'missing PASS'): compare(self.directory)
 
+    @unittest.skipUnless(evidence_path().is_file(), 'local exact lane: needs the retained original-disc traces (PIKMIN_BALLISTIC_EVIDENCE)')
     def test_original_disc_anchor_and_negative_control(self):
-        evidence = json.loads((pathlib.Path(__file__).parent / 'evidence' / 'ballistic-gc-2026-11-06.json').read_text())
+        evidence = json.loads(evidence_path().read_text())
         for case in ('fall', 'flick'):
             trace = [line.replace(f'TRACE {case} ', f'TRACE ballistic_{case} ') + '\n'
                      for line in evidence['fixed_30hz_trace_lines'][case] if ' TRACE ' in line]
