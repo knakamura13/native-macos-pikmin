@@ -478,15 +478,18 @@ void testModels()
 			check(p.id.size() <= 4 && p.code.size() <= 4, spec.path + ": collinfo " + p.id + " has a four-character id and code");
 		}
 		if (spec.path.find("naka") != std::string::npos) {
-			check(parts.size() == 1 && parts[0].id == "cent" && parts[0].radius == 35.0f && parts[0].centre.y == 3.0f, spec.path + ": one 'cent' sphere");
+			check(parts.size() == 1 && parts[0].id == "cent" && parts[0].radius > 0.0f, spec.path + ": one 'cent' sphere (Pellet::getBottomRadius)");
 		} else if (spec.path.find("chappy") != std::string::npos) {
 			// chappy: the parts the enemy code looks up by id, and the Pikmin sticking code.
 			std::map<std::string, const CollRead*> byId;
 			for (const CollRead& p : parts) byId[p.id] = &p;
-			for (const char* id : { "cent", "head", "body", "slot", "lleg", "rleg" }) check(byId.count(id), spec.path + ": has '" + id + "'");
-			check(byId.count("head") && byId["head"]->code == "stik" && byId["head"]->joint == 4, spec.path + ": head sticks, joint 4");
-			check(byId.count("cent") && byId["cent"]->depth == 1, spec.path + ": 'cent' is a child of the body part");
-			check(parts.size() == 8, spec.path + ": eight parts, two of them without an id");
+			for (const char* id : { "cent", "slot", "lleg", "rleg" }) check(byId.count(id), spec.path + ": has '" + id + "'");
+			// BTeki::getFreeSlot swallows into the children of 'slot': the part after it is one level deeper.
+			bool slotChild = false, sticks = false;
+			for (std::size_t i = 0; i + 1 < parts.size(); i++) slotChild = slotChild || (parts[i].id == "slot" && parts[i + 1].depth == parts[i].depth + 1);
+			for (const CollRead& p : parts) sticks = sticks || (p.type == 1 && !p.code.empty() && p.code[0] == 's');
+			check(slotChild, spec.path + ": 'slot' has a child");
+			check(sticks, spec.path + ": a sphere Pikmin can stick to (code s***, CollPart::isStickable)");
 			// The art hangs each part from the joint that means it, so real animations would move
 			// the right part: the shell on the body (1), head and pincers on the head (4, 'head' and
 			// 'slot'), the eye stalks on 5 and 6, the legs on the shins (8 'rleg', 11 'lleg'). The
@@ -572,12 +575,17 @@ void testPelletTables()
 		check(ids.insert(model).second, "config id " + model + " is unique");
 		configShapes.insert(idString(c.shape));
 		if (model == "ust5") {
-			// The disc's Main Engine config (standin_objects.cpp): a ship part (type 3), no colour, 20 to 40 carriers,
-			// scale 1.65, ship joint 3, its own shape.
+			// The authored Main Engine config (standin_objects.h): a ship part (type 3), no colour, the authored carry
+			// range, the source-default scale, its own shape, and a repair joint inside the ship that is not -1 (with -1
+			// the collected part is invisible).
+			const nectar::StandInModelSpec* ship = nectar::findStandInModel("dataDir/objects/ufo/ufo0705.mod");
 			check(i == 12, "the Main Engine follows the coloured configs");
-			check(idString(c.shape) == "ust5" && idString(c.unused) == "none" && c.joint == 3, "Main Engine: shape ust5, no split, repair joint 3");
-			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == 20 && c.mCarryMax() == 40 && c.mScale() == 1.65f,
-			      "Main Engine: type 3, colour -1, 20 to 40 carriers, scale 1.65 (the disc's)");
+			check(idString(c.shape) == "ust5" && idString(c.unused) == "none" && c.joint == nectar::kStandInEngineRepairJoint && c.joint >= 0 && ship
+			          && c.joint < ship->jointCount(),
+			      "Main Engine: shape ust5, no split, a repair joint of the ship");
+			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == nectar::kStandInEngineCarryMin && c.mCarryMax() == nectar::kStandInEngineCarryMax
+			          && c.mCarryMin() >= 1 && c.mCarryMax() >= c.mCarryMin() && c.mScale() == 1.0f,
+			      "Main Engine: type 3, colour -1, the authored carry range, default scale");
 			continue;
 		}
 		if (model == "uf01") {
@@ -639,7 +647,7 @@ void testPelletTables()
 		check(hasTable, "shape " + id + ": " + table + " is a written AnimMgr table");
 	}
 	check(sh.getPending() == 0, "PelletMgr::readAnimInfos consumes every byte");
-	check(resident == 20, "20 resident shapes (the ones the disc boot loads), three loaded on use");
+	check(resident == 20, "20 resident shapes (the 20 models the game loads at boot), the three naka parts loaded on use");
 	for (const char* id : { "pe01", "pe05", "pe10", "pe20", "ust1", "uf01", "un01", "un04", "un07" }) check(shapeIds.count(id), std::string("shape ") + id + " exists");
 	for (const std::string& shape : configShapes) {
 		if (corpseShapes.count(shape)) continue; // drawn by the enemy itself (above)

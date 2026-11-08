@@ -141,7 +141,8 @@ def is_grass_pixel(r: int, g: int, b: int) -> bool:
 def is_terrain_pixel(r: int, g: int, b: int) -> bool:
     """Stand-in terrain: warm grey sandstone (map edge, cliffs) and brown soil.
 
-    ART_DIRECTION.md's stone (#8C8577, #5E574C) and soil (#8A6A45, #6B4F33):
+    The terrain palette's stone (#8C8577, #5E574C) and soil (#8A6A45, #6B4F33), from
+    standin_terrain.cpp:
     r >= g with g clearly above b. Model greys and browns either have g close to
     b (the Onion's mauve-brown legs, the darkest material (15, 15, 20)) or are
     brighter and more saturated (pellet gold, ship silver), so they still count.

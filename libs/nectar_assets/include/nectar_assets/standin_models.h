@@ -13,14 +13,14 @@
 // Los .mod propios de cada etapa (tekis, jefes, plantas, puentes, puertas,
 // mapas) no entran: un sandbox con .gen mínimos no los carga.
 //
-// Regla de fidelidad de #62: coincide con el disco solo lo que un escenario
-// toca. Eso es el NÚMERO y los PADRES de las articulaciones (las animaciones
-// de #66 tienen que tener las mismas, y el código lee algunas por número) y
-// las esferas de colisión con su id, su articulación, su radio y su centro (el
-// juego busca 'rhnd', 'gol1', 'bas1'... sin comprobar que existan). Esos
-// números SOLO LOS TIENE EL DISCO: se leyeron de los .mod del disco, que es de
-// solo lectura, y cada tabla de standin_models.cpp lo dice. No se copia
-// geometría ni texturas: cada articulación lleva una caja de un solo color.
+// Fixture contract (#190): every joint table and collision sphere is authored
+// for these fixtures. What the game source requires is kept and cited in
+// standin_models.cpp: the joint counts it indexes (ship, Onion, sprout, the
+// shared Pikmin rig, the cursor regression guard) and the sphere ids it looks up
+// without a null check ('rhnd', 'gol1', 'bas1'...). Parents are a flat fan, and
+// radii and centres are placed on the procedural art. No geometry, texture or
+// number is copied from the game disc; exact disc checks live in the opt-in
+// local lanes that read a user-supplied disc install.
 
 #include "nectar_assets/mod.h"
 

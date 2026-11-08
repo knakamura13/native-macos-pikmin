@@ -54,7 +54,7 @@ public:
 	{
 		if (KeyConfig::_instance == nullptr || KeyConfig::_instance->mThrowKey.mBind != KBBTN_A
 		    || KeyConfig::_instance->mExtractKey.mBind != KBBTN_A) {
-			scenarioFailf(0, "throw and extract bound to A (disc parms/key.bin)", "throw 0x%x extract 0x%x",
+			scenarioFailf(0, "throw and extract bound to A (parms/key.bin)", "throw 0x%x extract 0x%x",
 			              KeyConfig::_instance ? KeyConfig::_instance->mThrowKey.mBind : -1,
 			              KeyConfig::_instance ? KeyConfig::_instance->mExtractKey.mBind : -1);
 			return;

@@ -28,9 +28,10 @@
 //          DEMOFLAG_CollectFirstPellet when the pellet enters PelletGoalState
 //          with the Onion as its goal (PelletGoalState::init, stage Practice).
 //          The captain plucks the seed the Onion makes of it.
-//   DF12   Twenty free Pikmin at the Main Engine, the captain far away:
+//   DF12   Free Pikmin at the Main Engine, as many as its config's fewest
+//          carriers (p01, read from the loaded tree), the captain far away:
 //          Piki::demoCheck sets DEMOFLAG_ApproachEngine.
-//   DF13   They carry it to the ship (the disc's 20 carriers): when it enters
+//   DF13   They carry it to the ship: when it enters
 //          PelletGoalState with the ship as goal, DEMOFLAG_CollectEngine,
 //          gameflow.mShipTextType SHIPTEXT_CollectEngine and mShipTextPartID
 //          UFO_NOPART. The ship sucks it in (UfoItem::finishSuck): the engine is
@@ -79,8 +80,7 @@ namespace {
 
 using namespace tutorial;
 
-constexpr int kEngineCarriers = 20;    // the disc's p01 for ust5
-constexpr float kBoxSide      = 90.0f; // where the pushers are born, beyond the box's +z face
+constexpr float kBoxSide = 90.0f; // where the pushers are born, beyond the box's +z face
 
 class TutorialDay1 : public PcScenario {
 public:
@@ -264,7 +264,7 @@ public:
 						// SHIPTEXT_CollectEngine and UFO_NOPART are both -1; other values first, so DF13 must write them.
 						gameflow.mShipTextType   = SHIPTEXT_PartCollect;
 						gameflow.mShipTextPartID = 0;
-						spawnAt(kEngineCarriers, mEngine->mSRT.t.x, mEngine->mSRT.t.z + 60.0f);
+						spawnAt(mEngine->mConfig->mCarryMinPikis(), mEngine->mSRT.t.x, mEngine->mSRT.t.z + 60.0f);
 					}
 					enter(mAfter, t);
 				}

@@ -1,7 +1,6 @@
 #pragma once
 
-// Draw-only dressing for the stand-in stage maps (#115, ART_DIRECTION.md "Terrain,
-// map edge, gates and bridges"): sandstone rock faces with a grass-topped rim in
+// Draw-only dressing for the stand-in stage maps (#115): sandstone rock faces with a grass-topped rim in
 // front of the map's walls (the map edge) and of steep terrain steps, and packed-soil
 // paths on the floor. The meshes come from nectar_assets/standin_terrain.h and go
 // into the map as compileMap props with no collision.

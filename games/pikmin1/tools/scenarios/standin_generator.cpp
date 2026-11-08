@@ -15,9 +15,11 @@
 // disc boot manifest (#64) is either in the tree or on the allowlist below with
 // its reason.
 //
-// Fidelity (#62): nothing here is read from disc data. Numbers that only the
-// disc has are recorded where they are used, in the sibling stand-in lists and
-// below.
+// Fixture contract (#190): nothing here is read from disc data. Every value in
+// the tree is authored for these fixtures or is a game-source constructor
+// default; the per-file comments in libs/nectar_assets and the sibling stage
+// files say which. Exact disc comparisons are opt-in local tests that read a
+// user-supplied disc install.
 
 #include "nectar_assets/archive.h"
 #include "nectar_assets/bundle.h"
@@ -111,9 +113,8 @@ bool sandboxSourceMod(Bytes& out, std::string& error)
 /// The stage .ini base that compileMap's buildIni rewrites: it only needs a
 /// map_file line. createMapObjects (newPikiGame.cpp) acts on map_file,
 /// day_multiply and an optional dayMgr block; with no dayMgr block DayMgr keeps
-/// TimeSetting's default white parallel lights. day_multiply 1.0 is the value of
-/// the disc's stages/stage1.ini (Forest of Hope, the disc-mode scenario stage),
-/// so the world clock runs at the same rate as the disc-mode runs.
+/// TimeSetting's default white parallel lights. day_multiply 1.0 is the neutral
+/// day-rate multiplier: the world clock runs at the rate DayMgr's own timing sets.
 std::string sandboxBaseIni()
 {
 	return "# Sandbox stage for the disc-free scenario tests (#68), written by nectar_standin_generator.\n"
@@ -158,10 +159,11 @@ bool sandboxMap(Tree& tree, std::string& error)
 		return false;
 	};
 	// Draw-only dressing (standin_map_dressing.h): rock faces along the four walls
-	// and a soil path from the captain's start through the gate.
+	// and a soil path from the captain's start through the gate (sandboxGatePlacement,
+	// x 0, z -240), authored round points.
 	standin::MapDressing dressing;
 	standin::DressPath path;
-	path.points = { { 60.0f, 260.0f }, { 20.0f, 120.0f }, { -10.0f, 0.0f }, { -25.0f, -120.0f }, { -31.5f, -207.0f }, { -55.0f, -330.0f }, { -20.0f, -470.0f }, { 50.0f, -600.0f } };
+	path.points = { { 60.0f, 260.0f }, { 20.0f, 120.0f }, { 0.0f, 0.0f }, { 0.0f, -120.0f }, { 0.0f, -240.0f }, { -20.0f, -360.0f }, { 0.0f, -480.0f }, { 50.0f, -600.0f } };
 	dressing.paths.push_back(path);
 	nectar::CompiledMap compiled;
 	if (!standin::compileDressedMap(data, read, kSandboxMod, dressing, compiled, error)) return fail(error, "sandbox map: " + error);

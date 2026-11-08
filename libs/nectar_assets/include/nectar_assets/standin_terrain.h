@@ -1,7 +1,6 @@
 #pragma once
 
-// Terrain art for the disc-free stand-in stages (#115, ART_DIRECTION.md, "Terrain,
-// map edge, gates and bridges"). Everything is generated here; nothing comes from the
+// Terrain art for the disc-free stand-in stages (#115). Everything is generated here; nothing comes from the
 // disc.
 //
 // - Ground textures, tiling: grass with clumps and soil specks, packed soil for

@@ -126,7 +126,7 @@ struct Lcg {
 	float range(float a, float b) { return a + (b - a) * next(); }
 };
 
-// Palette (ART_DIRECTION.md): moss and grass 6E9E3A / 4F7A2A, soil and paths
+// Palette (authored here): moss and grass 6E9E3A / 4F7A2A, soil and paths
 // 8A6A45 / 6B4F33, stone 8C8577 / 5E574C.
 const Rgb kGrassLight = hex(0x6E9E3A), kGrassDark = hex(0x4F7A2A), kGrassWarm = hex(0x86A040);
 const Rgb kBladeBase = hex(0x45702A), kBladeTip = hex(0x8DB850);

@@ -13,7 +13,9 @@
 // follow the recipe in standin_object_profiles.cpp, designed from the key each state machine
 // reads. No retail frame counts, key frames, curves, names, event records or geometry are used.
 // The Onion boot motions carry one effect event, the route-opening cue the game requires
-// (ObjectAnimInfoProfile::effectKeys), at an authored frame.
+// (ObjectAnimInfoProfile::effectKeys), at an authored frame. The extra models (naka1/4/7,
+// chappy) and both pellet tables are authored fixture values too: every pelMgr.bin config,
+// the Main Engine's included, uses this file's own numbers or source defaults.
 
 #include "nectar_assets/mod.h"
 #include "nectar_assets/standin_anims.h"
@@ -82,6 +84,13 @@ const std::vector<StandInModelSpec>& standInObjectModelSpecs();
 bool writeStandInObjectModels(std::vector<StandInModelFile>& out, std::string& error);
 
 // ---------------------------------------------------------------- pellet tables
+
+/// The Main Engine ('ust5') config, authored: the fewest and most Pikmin that carry it.
+constexpr int kStandInEngineCarryMin = 12;
+constexpr int kStandInEngineCarryMax = 24;
+/// The ship joint the collected engine is drawn on (PlayerState::renderParts): any joint of the
+/// stand-in ship other than the ones UfoShapeObject and UfoItem animate or read by number.
+constexpr int kStandInEngineRepairJoint = 1;
 
 /// parms/pelMgr.bin (the pellet configs, PelletMgr::readConfigs) and
 /// objects/pelAnim.bin (the shape list, PelletMgr::readAnimInfos).

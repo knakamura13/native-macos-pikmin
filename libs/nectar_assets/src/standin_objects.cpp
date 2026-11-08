@@ -185,37 +185,42 @@ std::vector<StandInModelSpec> buildObjectModelSpecs()
 	std::vector<StandInModelSpec> s;
 	const Rgba8 grey { 160, 160, 160, 255 };
 
-	// The three ship parts the pellet tables load by id on the disc (un01, un04,
-	// un07): one joint, one collision sphere 'cent' at the part's centre. Radius
-	// 35 and centre (0, 3, 0) are the disc's, the same on all three.
+	// The three ship parts the pellet tables load by id (un01, un04, un07): one
+	// joint and one 'cent' sphere (Pellet::getBottomRadius), the same authored
+	// 10-unit sphere around the art's 8-unit box as the 16 boot ship parts.
 	for (const char* n : { "naka1", "naka4", "naka7" }) {
 		StandInModelSpec m;
 		m.path     = std::string("dataDir/objects/ufoparts/") + n + ".mod";
 		m.parents  = { -1 };
 		m.colour   = grey;
 		m.halfSize = 8.0f;
-		m.collInfo = objCollText("cent", "none", 0, 35.0f, { 0.0f, 3.0f, 0.0f }, n, 0) + "\t}\n\n";
+		m.collInfo = objCollText("cent", "none", 0, 10.0f, { 0.0f, 0.0f, 0.0f }, n, 0) + "\t}\n\n";
 		s.push_back(std::move(m));
 	}
 
-	// chappy (the Bulborb of the Forest of Hope): 17 joints and these parents
-	// are the disc's, as are the collision parts (id, code, joint, radius,
-	// centre). The code 'stik' marks where a Pikmin sticks while it attacks.
+	// chappy (the Dwarf Bulborb stand-in), authored. 12 joints in a flat fan: the
+	// art (standin_art.cpp buildChappy) draws on joints 0, 1, 4, 5, 6, 8 and 11.
+	// The game looks up 'cent' (TAIAmove.cpp:40), 'slot' with at least one child
+	// (BTeki::getFreeSlot, tekibteki.cpp:2174; one child is the fewest that lets it
+	// swallow), and 'lleg'/'rleg' (TaiJointEffectAction, taichappy.cpp:609). Pikmin
+	// stick to sphere parts whose code starts with 's' (CollPart::isStickable); the
+	// rest of each code is this file's own. Spheres sit on the art: body 10 up,
+	// head and mouth forward at joint 4, shins on joints 8 and 11.
 	{
 		StandInModelSpec m;
 		m.path     = "dataDir/tekis/chappy/chappy.mod";
-		m.parents  = { -1, 0, 1, 0, 3, 3, 3, 0, 7, 8, 0, 10, 11, 0, 13, 14, 15 };
+		m.parents  = { -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 		m.colour   = { 200, 70, 60, 255 };
 		m.halfSize = 12.0f;
 		std::string t;
-		t += objCollText("none", "none", 1, 20.0f, { -1.0f, -5.0f, 0.0f }, "body", 0);
-		t += "\n" + objCollText("cent", "none", 0, 10.0f, { 0.0f, 0.0f, 0.0f }, "kosi", 1) + "\t\t}\n";
-		t += "\n" + objCollText("head", "stik", 4, 9.0f, { 2.0f, 0.0f, 0.0f }, "hana", 1) + "\t\t}\n";
-		t += "\n" + objCollText("body", "stik", 1, 10.0f, { 1.0f, 0.0f, 0.0f }, "body", 1) + "\t\t}\n\t}\n\n";
-		t += objCollText("slot", "none", 4, 10.0f, { 0.0f, 0.0f, 0.0f }, "hana", 0);
-		t += "\n" + objCollText("none", "none", 16, 10.0f, { 0.0f, 0.0f, 0.0f }, "kamu_eff", 1) + "\t\t}\n\t}\n\n";
-		t += objCollText("lleg", "none", 11, 5.0f, { 0.0f, 0.0f, 0.0f }, "regL_sune", 0) + "\t}\n\n";
-		t += objCollText("rleg", "none", 8, 5.0f, { 0.0f, 0.0f, 0.0f }, "regR_sune", 0) + "\t}\n";
+		t += objCollText("none", "none", 0, 14.0f, { 0.0f, 10.0f, 2.0f }, "bounds", 0);
+		t += "\n" + objCollText("cent", "none", 0, 10.0f, { 0.0f, 10.0f, 0.0f }, "body", 1) + "\t\t}\n";
+		t += "\n" + objCollText("head", "shed", 4, 7.0f, { 0.0f, 10.0f, 6.0f }, "head", 1) + "\t\t}\n";
+		t += "\n" + objCollText("body", "sbod", 1, 8.0f, { 0.0f, 8.0f, 2.0f }, "belly", 1) + "\t\t}\n\t}\n\n";
+		t += objCollText("slot", "none", 4, 6.0f, { 0.0f, 10.0f, 9.0f }, "mouth", 0);
+		t += "\n" + objCollText("none", "none", 4, 3.0f, { 0.0f, 10.0f, 9.0f }, "swallow_slot", 1) + "\t\t}\n\t}\n\n";
+		t += objCollText("lleg", "none", 11, 3.0f, { 5.0f, 3.0f, 0.0f }, "left_shin", 0) + "\t}\n\n";
+		t += objCollText("rleg", "none", 8, 3.0f, { -5.0f, 3.0f, 0.0f }, "right_shin", 0) + "\t}\n";
 		m.collInfo = t;
 		s.push_back(std::move(m));
 	}
@@ -335,23 +340,21 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 	}
 	// The Main Engine ('ust5', the shape soto5 above), the one ship part the
 	// tutorial stand-in stage places (tools/scenarios/standin_practice_stage.h).
-	// Unlike the pellets above, every value is the disc's: the VERSION_GPIE01_01
-	// install's parms/pelMgr.bin, config 23 of 62, read once (read-only,
-	// 2026-10-28): type 3 (ship part), colour -1, 20 to 40 carriers, dynamics on
-	// with 10 / 4 / 4, seeds 1 / 1, scale 1.65, carry-info height 30, sounds 1 and
-	// 1, and ship joint 3 to repair. The carriers and the scale decide how many
-	// Pikmin carry it and how fast, which the tutorial scenarios depend on.
+	// This file's own numbers: type 3 (ship part), colour -1, kStandInEngineCarryMin
+	// to kStandInEngineCarryMax carriers; everything else is the PelletConfig
+	// constructor default (pelletMgr.cpp:113-135). The repair joint must not be -1:
+	// with -1 UfoItem::finishSuck collects the part as invisible (ufoItem.cpp:588),
+	// and the tutorial scenario checks it becomes a visible ship part.
 	if (!putParams(cfg,
-	               { parmString("x99", "ufo : soto5"), parmInt("p00", 3), parmInt("p09", -1), parmInt("p01", 20), parmInt("p02", 40),
-	                 parmInt("p03", 1), parmFloat("p04", 10.0f), parmFloat("p05", 4.0f), parmInt("p08", 4), parmInt("p06", 1), parmInt("p07", 1),
-	                 parmFloat("p10", 1.65f), parmFloat("p11", 30.0f), parmInt("p12", 1), parmInt("p13", 1) },
+	               { parmString("x99", "ufo : soto5"), parmInt("p00", 3), parmInt("p09", -1), parmInt("p01", kStandInEngineCarryMin),
+	                 parmInt("p02", kStandInEngineCarryMax) },
 	               error)) {
 		return false;
 	}
 	putReversedId(cfg, "ust5");
 	putReversedId(cfg, "ust5");
 	putReversedId(cfg, "none");
-	cfg.s32(3);
+	cfg.s32(kStandInEngineRepairJoint);
 	// The Whimsical Radar ('uf01', shape fuzoku1), a second ship part for the carry-to-ship
 	// scenario (ship_part_carry) and the shape the part-discovery scenario borrows for the
 	// other parts. This file's own numbers: 10 to 20 carriers, no dynamics, no repair joint
@@ -390,24 +393,25 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 	// joint to override (-1 or a joint index of the model) and the Parameters
 	// 'x00' folder and 'x01' file (objects/<folder>/<file>.mod). Only the shapes
 	// this tree has models for: the four pellets, the 16 ship parts the game
-	// always loads, and naka1, naka4 and naka7. The override joints are the
-	// disc's (they index the model's joints; 1 or none).
+	// always loads, and naka1, naka4 and naka7. Ids are the game's own (the ufo id
+	// table, pelletMgr.cpp getUfoIDFromIndex, and this file's pellet shapes). Every
+	// override joint is -1: the stand-in models have one joint and static poses, so
+	// a second animator on another joint would move nothing.
 	struct Shape {
 		const char* id;
 		int creation;
-		int overrideJoint;
 		const char* folder;
 		const char* file;
 	};
 	const Shape shapes[] = {
-		{ "ust1", 0, 1, "ufoparts", "soto1" },   { "ust2", 0, 1, "ufoparts", "soto2" },   { "ust3", 0, -1, "ufoparts", "soto3" },
-		{ "ust4", 0, -1, "ufoparts", "soto4" },  { "ust5", 0, 1, "ufoparts", "soto5" },   { "pe01", 0, -1, "pellets", "white1" },
-		{ "pe05", 0, -1, "pellets", "white2" },  { "pe10", 0, -1, "pellets", "white3" },  { "pe20", 0, -1, "pellets", "white4" },
-		{ "uf01", 0, 1, "ufoparts", "fuzoku1" }, { "uf02", 0, 1, "ufoparts", "fuzoku2" }, { "uf03", 0, 1, "ufoparts", "fuzoku3" },
-		{ "uf04", 0, -1, "ufoparts", "fuzoku4" }, { "uf05", 0, -1, "ufoparts", "fuzoku5" }, { "uf06", 0, 1, "ufoparts", "fuzoku6" },
-		{ "uf07", 0, -1, "ufoparts", "fuzoku7" }, { "uf08", 0, -1, "ufoparts", "fuzoku8" }, { "uf09", 0, -1, "ufoparts", "fuzoku9" },
-		{ "un01", 1, -1, "ufoparts", "naka1" },  { "uf11", 0, -1, "ufoparts", "fuzoku11" }, { "uf10", 0, -1, "ufoparts", "fuzoku10" },
-		{ "un04", 1, -1, "ufoparts", "naka4" },  { "un07", 1, -1, "ufoparts", "naka7" },
+		{ "ust1", 0, "ufoparts", "soto1" },   { "ust2", 0, "ufoparts", "soto2" },   { "ust3", 0, "ufoparts", "soto3" },
+		{ "ust4", 0, "ufoparts", "soto4" },  { "ust5", 0, "ufoparts", "soto5" },   { "pe01", 0, "pellets", "white1" },
+		{ "pe05", 0, "pellets", "white2" },  { "pe10", 0, "pellets", "white3" },  { "pe20", 0, "pellets", "white4" },
+		{ "uf01", 0, "ufoparts", "fuzoku1" }, { "uf02", 0, "ufoparts", "fuzoku2" }, { "uf03", 0, "ufoparts", "fuzoku3" },
+		{ "uf04", 0, "ufoparts", "fuzoku4" }, { "uf05", 0, "ufoparts", "fuzoku5" }, { "uf06", 0, "ufoparts", "fuzoku6" },
+		{ "uf07", 0, "ufoparts", "fuzoku7" }, { "uf08", 0, "ufoparts", "fuzoku8" }, { "uf09", 0, "ufoparts", "fuzoku9" },
+		{ "un01", 1, "ufoparts", "naka1" },  { "uf11", 0, "ufoparts", "fuzoku11" }, { "uf10", 0, "ufoparts", "fuzoku10" },
+		{ "un04", 1, "ufoparts", "naka4" },  { "un07", 1, "ufoparts", "naka7" },
 	};
 	BeWriter anim;
 	anim.s32(int(std::size(shapes)));
@@ -415,8 +419,8 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 		char id[5] = { s.id[0], s.id[1], s.id[2], s.id[3], 0 };
 		putReversedId(anim, id);
 		anim.s32(s.creation);
-		anim.s32(-1);
-		anim.s32(s.overrideJoint);
+		anim.s32(-1); // teki type
+		anim.s32(-1); // override joint
 		if (!putParams(anim, { parmString("x00", s.folder), parmString("x01", s.file) }, error)) return false;
 	}
 	out.push_back({ "dataDir/objects/pelAnim.bin", anim.b });
