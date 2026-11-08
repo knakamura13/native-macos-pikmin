@@ -235,9 +235,19 @@ inverts the mix the other way and does not slow the kill). The faithful-turning 
 makes the headline kill-time gap larger (paired 60 Hz minus 30 Hz -0.654 s against -0.421 s) while the cause of the hit-rate
 difference is unknown. The patch is kept outside the repository in the working notes.
 
-Next: explain the 13% higher hit rate at equal mix. Per attacker type, time from the decision to the hit (ground: attack
-animation start to the first key, stuck: attachment to the first hit) and the interval between consecutive hits of one
-Pikmin, at both rates, on the faithful-turning build.
+Interval trace on the faithful-turning build (temporary log, 64 starts, up to the kill, not kept): the gap between one
+Pikmin's consecutive hits is the same at both rates, ground to ground median 0.70 s at 30 Hz and 0.73 s at 60 Hz, stuck to stuck
+0.63 s at both. Only a change of attack mode (a Pikmin that hit from the ground and later from the Bulborb's back, or the
+reverse) is shorter at 60 Hz, mean 1.76 s against 1.45 s. State dwell times from a transition log agree with that: the major
+states are equal at both rates (the Flick state 3.09 s and 3.13 s, state 31 1.15 s and 1.16 s), while the normal state, where
+a Pikmin walks back, turns and decides, is shorter per visit at 60 Hz (0.33 s against 0.24 s, with the same number of visits).
+
+So the per-attack cycle and the knock-down and recovery times are faithful; the extra 13% hit rate comes from the return to the
+fight after being thrown off, in the normal state.
+
+Next: on the faithful-turning build, split the return into its parts at both rates: time from leaving the recovery state to
+the first decision in `ActJumpAttack` (target choice and `ActFree`/`ActAttack` start), the walk back (distance and speed),
+and the turn, each judged on the same starts.
 
 ## Public stand-in fixture
 
