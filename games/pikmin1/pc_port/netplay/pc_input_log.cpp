@@ -430,6 +430,42 @@ void capture_local(bool live)
 	}
 }
 
+PcInputProviderFn sProvider = nullptr;
+
+// Scenario input (--scenario): the provider fills all four pads and the yaw
+// and ext slots for this tick, after the slots are cleared and before the
+// record write, so a recording captures what was fed. It overrides any real
+// gamepad or keyboard read.
+void apply_provider()
+{
+	if (sProvider == nullptr) return;
+	PcInputPad scripted[4];
+	for (int p = 0; p < 4; ++p) {
+		scripted[p] = PcInputPad{};
+		scripted[p].err = (p == 0) ? pc_input_log::kErrConnected : pc_input_log::kErrNoController;
+	}
+	sProvider(scripted);
+	PADStatus* pads = pc_netplay_pad_status();
+	for (int p = 0; p < 4; ++p) {
+		pads[p].button       = scripted[p].button;
+		pads[p].stickX       = scripted[p].stickX;
+		pads[p].stickY       = scripted[p].stickY;
+		pads[p].substickX    = scripted[p].substickX;
+		pads[p].substickY    = scripted[p].substickY;
+		pads[p].triggerLeft  = scripted[p].triggerLeft;
+		pads[p].triggerRight = scripted[p].triggerRight;
+		pads[p].analogA      = scripted[p].analogA;
+		pads[p].analogB      = scripted[p].analogB;
+		pads[p].err          = scripted[p].err;
+		sYawRaw[p]           = scripted[p].controlYaw;
+		sYawFlags[p]         = pc_input_log::kFlagsNone;
+		sYawValid[p]         = true;
+		sExt[p]              = scripted[p].flags & pc_input_log::kExtKnown;
+		sRotate[p]           = scripted[p].cursorRotate;
+		sLocalFlags[p]       = scripted[p].local & pc_input_log::kLocalKnown;
+	}
+}
+
 const char* argvValue(int argc, char** argv, const char* flag)
 {
 	for (int i = 1; i + 1 < argc; ++i) {
@@ -451,6 +487,8 @@ bool pc_input_log_is_record_active(void) { return sRecordActive; }
 bool pc_input_log_is_replay_active(void) { return sReplayActive; }
 
 void pc_input_log_set_yaw_capture_fn(PcYawCaptureFn fn) { sYawCaptureFn = fn; }
+
+void pc_input_log_set_provider(PcInputProviderFn fn) { sProvider = fn; }
 
 // Only the hook runs; the tick index, replay and record are untouched.
 void pc_input_log_capture_yaw(void)
@@ -817,6 +855,7 @@ void pc_input_log_tick(void)
 	// for tick N runs. With no record, replay or sink this is all a tick
 	// does, so deterministic mode still gets fresh input every tick.
 	clear_tick_slots();
+	apply_provider();
 
 	const bool replaying = sReplayActive || sMemActive;
 	if (sReplayActive) {
@@ -843,8 +882,9 @@ void pc_input_log_tick(void)
 	// and is a no-op unless det mode or record mode needs it.
 	if (sYawCaptureFn != nullptr) sYawCaptureFn();
 	// Local inputs: live only without a replay (past its end they stay
-	// neutral, like the pads).
-	capture_local(!replaying);
+	// neutral, like the pads). A scenario provider owns the rotate, ext and
+	// local-flag slots it filled above, so live local input does not overwrite them.
+	capture_local(!replaying && sProvider == nullptr);
 
 	// Pre-sim record write: file the pads plus the yaw the sim will use, so
 	// the filed input is exactly what was fed (in-tick pad writers cannot

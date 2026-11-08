@@ -47,7 +47,7 @@
 // path from these per-pad slots only: whether the pad's cursor follows the
 // mouse this tick, the cursor delta, the wheel's colour-pick notches and
 // whether First Person pins the cursor, plus the Gyro Recenter press and
-// (pad 0) the photo mode toggle (kLocal* bits). The physical D-pad Down bit
+// (pad 0) the photo mode toggle and offline settings clock hold (kLocal* bits). The physical D-pad Down bit
 // is recorded only. Lie down reads the pad's Down button, and the sim does
 // not branch on that flag. A live tick fills the slots through the local
 // capture hook (the engine takes what the window gathered since the last
@@ -155,7 +155,8 @@ constexpr uint8_t kLocalFirstPerson = 0x02; // First Person is on: the cursor is
 constexpr uint8_t kLocalPadDpadDown = 0x04; // physical D-pad Down held on this player's gamepad. Recorded only: lie down uses the pad's Down button, and this is not the swarm button (issue #138).
 constexpr uint8_t kLocalGyroRecenter = 0x08; // Gyro Recenter pressed: the cursor goes back in front of the captain
 constexpr uint8_t kLocalPhotoToggle = 0x10; // photo mode toggled (pad 0 only): it freezes the sim
-constexpr uint8_t kLocalKnown       = 0x1F;
+constexpr uint8_t kLocalSettingsClockHold = 0x20; // offline F1 clock hold (pad 0); absent on network ticks
+constexpr uint8_t kLocalKnown       = 0x3F;
 } // namespace pc_input_log
 
 // Pure encode/decode API (no globals, no files).
@@ -209,6 +210,13 @@ void pc_input_log_tick(void);
 // live control camera.
 typedef void (*PcYawCaptureFn)(void);
 void pc_input_log_set_yaw_capture_fn(PcYawCaptureFn fn);
+
+// Scenario input provider (--scenario). Called every tick after the slots are
+// cleared and before the record write; fills pads 0-3 (pads 1-3 arrive neutral
+// with err = kErrNoController, pad 0 connected) plus controlYaw, and flags (ext
+// bits) and cursorRotate per pad. The provider overrides real input.
+typedef void (*PcInputProviderFn)(PcInputPad pads[4]);
+void pc_input_log_set_provider(PcInputProviderFn fn);
 
 // Runs the capture hook now, without any record/replay logic. The _fresh
 // variant clears the slots first so the hook refills them from the camera.

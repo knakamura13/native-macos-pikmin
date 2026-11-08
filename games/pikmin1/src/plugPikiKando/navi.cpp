@@ -13,6 +13,10 @@
 #include "mods/pc_hd_models.h"
 #include "mods/pc_pikmin_models.h"
 #include "gl/pc_gfx.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#include <cstring>
+#endif
 #include "timing/pc_anim_timing.h"
 #include "netplay/pc_netplay_camlead.h"
 #include "netplay/pc_netplay_present.h"
@@ -460,7 +464,12 @@ void Navi::startDamageEffect()
 	mDamageEfxC = ptclGenC;
 
 	int vibTypes[2] = { 0, 1 };
+#if defined(PIKI_PC_PORT)
+	// Camera-shake type is presentation, so the cosmetic stream.
+	f32 randIdx     = pc_cosmetic_randf(1.0f);
+#else
 	f32 randIdx     = gsys->getRand(1.0f);
+#endif
 	// int vib         = vibTypes[int(2.0f * randIdx * 0.9999999f)];
 #if defined(PIKI_PC_PORT)
 	// Daño propio: solo tiembla la cámara del Olimar golpeado.
@@ -4222,6 +4231,10 @@ bool Navi::pcDrawAsPikmin(Graphics& gfx)
 	gfx.mCamera->mLookAtMtx.multiplyTo(world, view);
 	obj->mShape->updateAnim(gfx, view, nullptr, this);
 
+#if PIKI_SCENARIOS
+	// Disc-free stand-ins: vertex-coloured, drawn unlit like the folk (#115).
+	pc_scenario_push_creature_unlit_draw();
+#endif
 	// Puffmin: su modelo ya lleva la seta y no hay versión HD; sin hoja.
 	if (color == PIKI_Kinoko) {
 		obj->mShape->mMaterialList->setColour(Piki::kinokoColors[Red]);
@@ -4251,6 +4264,9 @@ bool Navi::pcDrawAsPikmin(Graphics& gfx)
 			pikiMgr->mLeafModel[Leaf]->drawshape(gfx, *gfx.mCamera, nullptr);
 		}
 	}
+#if PIKI_SCENARIOS
+	pc_scenario_pop_creature_unlit_draw();
+#endif
 
 	Vector3f tip(6.0f, 0.0f, 0.0f);
 	obj->mShape->calcJointWorldPos(gfx, 6, tip);
@@ -4295,7 +4311,15 @@ void Navi::demoDraw(Graphics& gfx, immut Matrix4f* mtx)
 	}
 	if (!drawn)
 #endif
+	{
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+		pc_scenario_push_creature_unlit_draw();
+#endif
 		mNaviShapeObject->mShape->drawshape(gfx, *gfx.mCamera, nullptr);
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+		pc_scenario_pop_creature_unlit_draw();
+#endif
+	}
 #if defined(PIKI_PC_PORT)
 	if (tinted) pc_gfx_clear_mat_color_tint();
 #endif
@@ -4392,6 +4416,16 @@ void Navi::draw(Graphics& gfx)
 	STACK_PAD_VAR(7);
 }
 
+#if PIKI_SCENARIOS
+/// True in a --scenario-handoff run on a stand-in stage (stages/sandbox*.ini, stages/practice.ini).
+static bool pcStandInWhistleRing()
+{
+	if (!pc_scenario_handed_off()) return false;
+	const char* stage = pc_scenario_requested_stage_file();
+	return stage && (std::strncmp(stage, "stages/sandbox", 14) == 0 || std::strncmp(stage, "stages/practice", 15) == 0);
+}
+#endif
+
 /**
  * @todo: Documentation
  */
@@ -4435,6 +4469,36 @@ void Navi::renderCircle(Graphics& gfx)
 		pos.y               = mapMgr->getMinY(pos.x, pos.z, true);
 		mWhistleFxPosArr[i] = pos;
 	}
+
+#if PIKI_SCENARIOS
+	if (pcStandInWhistleRing()) {
+		// The whistle ring and cursor are particle effects, and the stand-in effects bundle emits
+		// none, so a hand-off player cannot see where a call lands (issue #131). Lines instead:
+		// a cross at the cursor always, the ring (three layers, off the ground) while whistling.
+		Matrix4f mtx;
+		gfx.calcViewMatrix(Matrix4f::ident, mtx);
+		gfx.useMatrix(mtx, 0);
+		const bool lighting = gfx.setLighting(false, nullptr);
+		const f32 cursorY   = mapMgr->getMinY(mCursorWorldPos.x, mCursorWorldPos.z, true) + 3.0f;
+		gfx.setColour(Colour(255, 255, 255, 255), true);
+		gfx.drawLine(Vector3f(mCursorWorldPos.x - 8.0f, cursorY, mCursorWorldPos.z), Vector3f(mCursorWorldPos.x + 8.0f, cursorY, mCursorWorldPos.z));
+		gfx.drawLine(Vector3f(mCursorWorldPos.x, cursorY, mCursorWorldPos.z - 8.0f), Vector3f(mCursorWorldPos.x, cursorY, mCursorWorldPos.z + 8.0f));
+		if (mWhistleCircleMode != 0) {
+			gfx.setColour(Colour(255, 230, 0, 255), true);
+			for (int layer = 0; layer < 3; layer++) {
+				const f32 lift = 3.0f + 3.0f * layer;
+				for (int i = 0; i < 24; i++) {
+					Vector3f a = mWhistleFxPosArr[i];
+					Vector3f b = mWhistleFxPosArr[(i + 1) % 24];
+					a.y += lift;
+					b.y += lift;
+					gfx.drawLine(a, b);
+				}
+			}
+		}
+		gfx.setLighting(lighting, nullptr);
+	}
+#endif
 }
 
 /**
