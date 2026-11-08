@@ -8,22 +8,12 @@
 // the Bulborb's health and the Pikmin by state, and counts, over the run: Pikmin lost, Flick entries
 // (a Pikmin shaken off) and, for each Flick, whether that Pikmin attacks again before the end.
 //
-// Asserted: the Bulborb is found and dies within 10 s, and a Flick lasts 4 s at most on average. Measured
-// 2026-11-02 at 30 Hz, ten Pikmin: the disc kills it in 4 s with 0 lost, 3 flicks and a Flick of 2.9 s on
-// average; the stand-ins (before the Flick motion, info 58, carried the disc's timing, #136) took 14 s with
-// 2 lost, 9 flicks and a Flick of 4.6 s, and now take 5 s with 0 lost, 5 flicks and 3.6 s. Everything else is
-// printed.
-//
-// Issue #154 (2026-11-04): Attack, StillJump, JKoke and GetUp carry the disc's timing as well
-// (standin_anims.h). Disc on this branch: dead at 3.4 s (30 Hz) and 2.5 s (60 Hz), Flick 2.9 s and 2.8 s.
-// Stand-ins before: 4.3 s and 4.5 s, Flick 3.6 s (5 flicks at 30 Hz, 1 at 60 Hz). After: 2.2 s and 1.5 s,
-// Flick 1.8 s (5 flicks at 30 Hz, none at 60 Hz).
-//
-// The stand-in parms/pikiMgr.bin now carries every disc value (standin-piki-parms.md), among them the
-// knock-down time of 1 to 3 s (p74, p43; the code's is 0.7 s) and health 30 (p03; code 100). Stand-ins:
-// dead at 2.4 s (30 Hz) and 1.6 s (60 Hz), Flick 3.3 s (5 flicks at 30 Hz, none at 60 Hz); the disc 3.4 s
-// and 2.5 s, Flick 2.9 s. They still win sooner than the disc; the open lead is the stand-in Bulborb's
-// collision spheres, which sit lower than the disc's (#154).
+// Asserted: the Bulborb is found and dies within 10 s, and a Flick lasts 4 s at most on average.
+// Everything else is printed. On the stand-in tree the fight's timing comes from the stand-in Flick,
+// Attack, StillJump, JKoke and GetUp motions (standin_anims.h; the Attack motion's KEY_Action0 is what
+// lets ground attacks hit, #154) and from the Pikmin parameters, which are the source defaults
+// (parms/pikiMgr.bin is an empty list: knock-down p74/p43 0.7 s, health p03 100). The bounds hold on
+// both trees; the stand-in and disc timings are not meant to match.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS

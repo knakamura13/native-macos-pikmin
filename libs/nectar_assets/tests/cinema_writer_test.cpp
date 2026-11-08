@@ -11,9 +11,6 @@
 // constant-track read of CamDataInfo::update. DRIFT NOTE: if loadCin,
 // SceneData::parse, getAnimInfo or DataChunk::getData change, update the copies.
 // The scenario runs (scenario_*) load the stand-in demo60 through the real code.
-//
-// Optional argument: boot-manifest.txt. Every cinemas/ path it lists must be a
-// stand-in file.
 #include "nectar_assets/cinema.h"
 
 #include "CmdStream.h"
