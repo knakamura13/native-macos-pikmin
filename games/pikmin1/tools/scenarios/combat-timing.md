@@ -112,6 +112,13 @@ which is event-based, so a rate effect in who is on the Bulborb or in the Flick 
 baseline without the `UpdateMgr` change, so the improvement is quoted from the 16-start table only. The 120 Hz runs end
 non-zero in 32 of 48 cases from the scenario artifact above (blue Pikmin, no blue Onion), not from the kill.
 
+Largest sample, 96 starts (`--seeds 96 --shift-step 0.5`, same build): kill 3.59 s (sd 1.12, median 3.35) at 30 Hz and
+3.17 s (sd 0.73, median 3.12) at 60 Hz. The mean gap of 0.42 s (12%) is about 3.1 standard errors, the median gap 0.23 s
+(7%); damage in the first 1.5 s is 45.5 against 50.7 (11% higher at 60 Hz). The 30 Hz distribution has a heavy tail, which
+is part of the gap. The residual is real and not explained. The Flick figures (2.6 against 4.0 per run) come from the
+scenario's end-of-run summary, which aborted runs omit (5 against 11 runs), so they are not a clean comparison; the one-start
+trace at shift 7 shows 3 Flicks at both rates.
+
 ## Public stand-in fixture
 
 The authored fixture (source-default parameters, authored attack schedules, `standin_anims.h`)
