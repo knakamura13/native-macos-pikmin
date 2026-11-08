@@ -203,8 +203,22 @@ Bulborb at every hit at 60 Hz although the number of stick calls per fight is th
 candidate is how long a Pikmin stays attached (shake-off by the Bulborb's flick, or detaching on its own), not how often
 it attaches.
 
-Next: log the end of each attachment (`endStick`/`endStickObject`) as well as the start, at both rates, and compare the mean
-attachment time and what ends it (flick, death of the target, the Pikmin's own state change).
+Attachment trace (temporary log in `Creature::startStick` and `endStick`, 48 starts, up to the kill, not kept): the earlier
+"same number of sticks" was true only for the one traced start. Over 48 starts there are 268 attachments at 30 Hz (5.6 per
+fight) and 339 at 60 Hz (7.1 per fight, +26% in a shorter fight). An attachment lasts about the same (mean 0.64 s and 0.70 s,
+the length of one Kuttuku attack: the Pikmin attacks once, `mAttackState` reaches 4, the action succeeds and `cleanup`
+lets go). Re-attachment by the same Pikmin before the kill is rare (8 and 3 cases in 48 fights), so the gap is not a faster
+re-approach cycle but more of the ten Pikmin attaching at all within a fight at 60 Hz, which matches the fewer ground
+attackers (51% against 70%).
+
+That sits badly with the paired turn tests (a better-aligned 60 Hz, hence more ground attackers, kills faster rather than
+slower), which means the ground attackers and the stuck attackers contribute to the kill rate in a way the simple
+"ground is slower" reading does not capture. Open question, not guessed at: the damage rate of one ground attacker (repeated
+`ActAttack` re-init on the same target, about one hit per attack animation) against one stuck attacker (one hit per
+attachment, then a re-approach), and how the Bulborb's Flick, which throws sticking and nearby Pikmin off, changes each.
+
+Next: per-Pikmin damage accounting at both rates (hits per Pikmin per second split by ground and stuck attack), and the
+Flick's effect on each group, using the paired starts so each variant is judged against about 0.1 s of noise.
 
 ## Public stand-in fixture
 
