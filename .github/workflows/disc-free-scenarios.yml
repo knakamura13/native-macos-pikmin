@@ -325,8 +325,8 @@ jobs:
           RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j $JOBS -I $SHARD,,$SHARDS -R ^scenario_ -LE game-assets --output-junit shard/junit.xml"
           if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi
 
-      # Provenance next to the state-hash logs (scenario-evidence/), for the
-      # scenario-hash-compare job. Every shard writes the same file; the merge keeps one.
+      # Preserve each shard's raw build provenance. Hosted runner tool versions can differ;
+      # the merge keeps these under scenario-evidence/<shard-name>/ without normalising them.
       - name: Record RNG scenario provenance
         if: ${{ !cancelled() }}
         run: |
@@ -548,6 +548,9 @@ jobs:
           pattern: scenario-shard-${{ matrix.runner_os }}-*
           path: shards
 
+      - name: Verify shard merger regression and negative controls
+        run: python3 -m unittest discover -s games/pikmin1/tools/scenarios -p test_merge_scenario_shards.py
+
       - name: Merge shards (every scenario test exactly once)
         id: merge
         if: ${{ !contains(env.SCENARIO_SKIP_OS, matrix.runner_os) }}
@@ -576,7 +579,7 @@ jobs:
 
       # Every stand-in scenario's per-tick state-hash log, on every run, for the
       # scenario-hash-compare job (cross-OS determinism). Same name and layout as an
-      # unsharded run's: scenario-logs/ and scenario-evidence/.
+      # unsharded run's scenario-logs/; raw provenance is in scenario-evidence/<shard-name>/.
       - name: Upload scenario state-hash logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
