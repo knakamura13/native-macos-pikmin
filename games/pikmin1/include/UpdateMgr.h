@@ -49,6 +49,8 @@ public:
 	int* mActiveClientSlotList; // _0C, each slot holds up to 10000 clients
 	int mCurrentIndex;          // _10
 	u32 mUnused14;              // _14, just gets zeroed by create
+	int mPcSubTick = 0;         // PC port: ticks since the slot index last advanced
+	bool mPcFresh  = true;      // PC port: true only on the tick the slot index advanced
 };
 
 extern UpdateMgr* pikiUpdateMgr;
