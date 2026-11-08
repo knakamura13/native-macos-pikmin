@@ -159,8 +159,14 @@ and take the jump instead, which is the earlier sticking seen above. The two tur
 across rates (`Creature::moveRotation` is linear in the frame time with `faceDirAdjust` 0.25 by default, and the
 `PC_ATTACK_RATE` turn is compounded), so the 0.1 rad lag comes from somewhere not yet identified.
 
-Next: log the angle error per tick for one approaching Pikmin at both rates together with which term last changed
-`mFaceDirection` (`moveRotation`, the `ActJumpAttack` turn, or another writer), and compare the two angle-versus-time curves.
+Refuted after that: compounding `Creature::moveRotation`'s turn so that smaller ticks turn as far per 1/30 s as one 30 Hz
+tick (identical at 30 Hz) moves the 60 Hz mean kill time the wrong way, from 3.17 s to 3.04 s over 96 starts (30 Hz 3.59 s).
+The other turn writers in the Pikmin code (`aiCrowd` formation turns, the whistle look-at state, put, shoot, pullout, watch)
+are not on the Bulborb approach path.
+
+Next: log the angle error per tick for one approaching Pikmin at both rates and compare the two angle-versus-time curves, to
+see whether the extra lag is in the turn toward the walking direction or in the walking direction itself (the target
+velocity set by `ActGoto`, or the Bulborb's own movement during the approach).
 
 ## Public stand-in fixture
 
