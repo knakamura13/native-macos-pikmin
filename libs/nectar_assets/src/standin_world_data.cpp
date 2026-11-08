@@ -87,13 +87,13 @@ const std::vector<WorldModelProfile>& worldModelProfiles()
                 // Platform codes: CollPart matches only the first letter ('s' stickable,
                 // 'b' bouncy, collInfo.cpp isStickable/isBouncy); the rest is this file's
                 // own. The platform file names stay on the boot manifest's list.
-                m.parts.push_back({0, 0, "none", "sbod", 2, 0.0f, {}, "tekis/beatle/p_body.mod"});
-                m.parts.push_back({0, 1, "none", "bwng", 2, 0.0f, {}, "tekis/beatle/p_l_wing.mod"});
-                m.parts.push_back({0, 2, "none", "bwng", 2, 0.0f, {}, "tekis/beatle/p_r_wing.mod"});
-                m.parts.push_back({0, 3, "none", "none", 2, 0.0f, {}, "tekis/beatle/p_nozzle.mod"});
+                m.parts.push_back({0, 0, "none", "sbod", 2, 0.0f, {}, "tekis/beatle/plat_body.mod"});
+                m.parts.push_back({0, 1, "none", "bwng", 2, 0.0f, {}, "tekis/beatle/plat_wing_left.mod"});
+                m.parts.push_back({0, 2, "none", "bwng", 2, 0.0f, {}, "tekis/beatle/plat_wing_right.mod"});
+                m.parts.push_back({0, 3, "none", "none", 2, 0.0f, {}, "tekis/beatle/plat_nozzle.mod"});
             } else if (model == "dataDir/tekis/swallow/swallow.mod") {
-                m.parts.push_back({0, 0, "pla1", "sbod", 2, 0.0f, {}, "tekis/swallow/swalcolb.mod"});
-                m.parts.push_back({0, 1, "pla2", "shed", 2, 0.0f, {}, "tekis/swallow/swalcolh.mod"});
+                m.parts.push_back({0, 0, "pla1", "sbod", 2, 0.0f, {}, "tekis/swallow/plat_body.mod"});
+                m.parts.push_back({0, 1, "pla2", "shed", 2, 0.0f, {}, "tekis/swallow/plat_head.mod"});
             } else {
                 for (const char* id : {"head", "tube", "look", "flwr", "hana", "bomb", "lleg", "rleg"})
                     m.parts.push_back(sphere(id, 0, 0, {0.0f, 8.0f, 0.0f}));

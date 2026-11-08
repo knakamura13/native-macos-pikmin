@@ -75,7 +75,7 @@ with a collinfo text from authored parts (`worldCollInfo`):
 | Soft gate | `objects/gate/gt_soft.mod` and `gt_soft.anm` |
 | Bosses | `bosses/{mizu,snake}/*.mod`, `parms.bin` (empty lists) |
 | Enemies | `tekis/{beatle,iwagon,kabekuiA,kabekuiB,otama,palm,swallow}/*.mod` |
-| Collision platforms | `tekis/beatle/p_{body,l_wing,nozzle,r_wing}.mod`, `tekis/swallow/swalcol{b,h}.mod`: a box whose triangles are also the collision (`writePlatformMod`) |
+| Collision platforms | `tekis/beatle/plat_{body,wing_left,wing_right,nozzle}.mod`, `tekis/swallow/plat_{body,head}.mod`: a box whose triangles are also the collision (`writePlatformMod`) |
 
 Notes:
 
