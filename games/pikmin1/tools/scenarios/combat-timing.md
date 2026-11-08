@@ -141,8 +141,17 @@ Pikmin on its back. So at 60 Hz Pikmin choose the jump, and stick, earlier inste
 decision of `ActJumpAttack::exec` (the ground attack needs `angle < PI/10` and `dist3D < size + 10`; the jump-adjust roll and
 the turn rate are already scaled), or they reach those distances at different times.
 
-Next: log the state-0 decision (distance, angle, chosen branch) per Pikmin per tick at both rates for one start, to see why
-the ground attack is chosen less often at 60 Hz.
+State-0 decision trace (temporary env-gated log in `ActJumpAttack::exec`, 32 starts, first 1.5 s of decisions, not kept):
+the share of Pikmin that take at least one ground-attack decision is 70% at 30 Hz and 52% at 60 Hz, while the time spent in
+state 0 is the same (0.52 s and 0.53 s) and the angle error when a Pikmin first comes within range is similar (0.54 and
+0.59 rad). The branch choice therefore differs for a reason other than how long Pikmin spend there or how well they are
+aligned on arrival: the per-tick odds of the ground branch (`angle < PI/10` and `dist3D < size + 10`) against the jump-adjust
+roll (`dist2D < size`) change with the tick size. Two readings fit and are not yet separated: the ground test sees finer
+position samples at 60 Hz and a Pikmin can pass through the aligned band between samples, or the angle used for the test
+is turned by something other than the scaled `PC_ATTACK_RATE` line (for example the walking/facing code run before it).
+
+Next: log, per Pikmin per tick in state 0, the distance to the band and the angle just before the branch, plus what last
+wrote `mFaceDirection`, at both rates for the same start.
 
 ## Public stand-in fixture
 
