@@ -346,7 +346,7 @@ Sites are source lines (a line with two draws counts once). Of the EFFECT-ONLY l
 
 ## Notes
 
-**Moved (kept).** Captain damage camera-shake pick and bury smoke direction (navi), Spider spark shuffle and chance (spider), Beatle steam shuffle (beatle), the dead firework draw (itemAI), the ambient fish school (fish). None of these run in `throw_release` on the sandbox or Forest of Hope, so K and the hashes were unchanged before #92's GameCube draw-order pin (stand-ins 15 at 30 Hz and 18 at 60, disc 15 / 18; the control hash logs equal the pre-change ones). After #92, K on both trees is 13 / 22; see `standin-k-investigation.md`. That also means they were not exercised at runtime: the claim rests on the code read in the Why column.
+**Moved (kept).** Captain damage camera-shake pick and bury smoke direction (navi), Spider spark shuffle and chance (spider), Beatle steam shuffle (beatle), the dead firework draw (itemAI), the ambient fish school (fish). None of these run in `throw_release` on the sandbox or Forest of Hope, so K and the hashes were unchanged before #92's GameCube draw-order pin (stand-ins 15 at 30 Hz and 18 at 60, disc 15 / 18; the control hash logs equal the pre-change ones). After #92 the throw_release calibration K is unchanged on the stand-in tree (see the README entry for throw_release). That also means they were not exercised at runtime: the claim rests on the code read in the Why column.
 
 **Tried and reverted (K or the proof moved).** Throw_release K at 30 / 60 Hz on the disc tree, base 15 / 18 (pre-#92):
 

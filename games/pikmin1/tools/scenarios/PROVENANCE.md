@@ -43,8 +43,14 @@ against retail data are opt-in local lanes (last section). The README's
 | Open allowlist | `standin-open-allowlist.txt` | Policy file; paths are code literals or code-composed names | Kept; comments state what the chain needs, not retail contents |
 | Golden screenshots | `golden/<os>/*.png` | Renders of the stand-in tree (outputs, not inputs) | macOS `boot_smoke_tick100.png` regenerated locally for the authored HUD; Linux and Windows `boot_smoke_tick100.png` need a hosted refresh (`refresh_goldens.sh`) |
 | Synthetic throw expectations | `check_throw_flight.py` `SYNTHETIC_EXPECTED` | The port's own results on the authored fixtures | Kept (public CI profile) |
-| Models, model collision, object animation profiles, world models, `tekipara`, sandbox, Pikmin rig | `standin_models.cpp`, `standin_objects.cpp`, `standin_object_profiles.cpp`, `standin_anims.*`, `standin_world*.cpp`, `standin_sandbox.cpp`, `piki_rig.h` | Other #190 workers | Filled in at integration from their reports |
-| Onion boot profile and the frames tied to it | `standin_object_profiles.cpp`; demo04/05/06 cone frames; `check_onion_boot_negative.py` frame 194; `cinema_writer_test` demo05 `+240` relation | Lead's Onion boot item | Open until that profile is authored |
+| Model rigs and collision spheres | `standin_models.cpp`, `piki_rig.h`, `standin_objects.cpp` (naka, chappy), `standin_world*.cpp` | Authored: flat rigs (root plus a fan), round-number spheres; only the ids the code looks up (`cent`, `slot`, `lleg`, `rleg`, `rhnd`, `ante`, `cont`, `piki`, ship parts) are required | Replaced |
+| Pellet and Main Engine configuration, `pelAnim` override joints | `standin_objects.cpp` | Authored: carriers 12 to 24, source defaults elsewhere, every override joint -1 | Replaced |
+| Enemy and boss parameters (`tekipara/*.bin`, boss `parms.bin`) | `standin_world.cpp`, `standin_world_data.cpp` | Not written (enemies) or empty lists (bosses): `TekiMgr` falls back to constructor defaults; `check_synthetic_parameters.py` enforces | Replaced |
+| Sandbox gate, dressing path | `standin_sandbox.cpp`, `standin_map_dressing.cpp` | Authored placements and a 100-unit panel half-width | Replaced |
+| Pikmin and captain animation schedules | `standin_anims.{h,cpp}` | Authored from the key each state machine reads: throw 40 frames (release 10); ThrowWait grab 10, loop 10 to 34 (charge +1 per loop end); hit cycle 10/15/30; PickLoop 12/16/28; Kizuku 19; Fue 24; Wait 40 loop; Attack 24; JHit/JKoke 20; StillJump 32; GetUp 15; Gakkari 60 | Replaced |
+| Object animation profiles (45 bundles) | `standin_object_profiles.cpp` | Authored recipe (shared 40 frames; finish, loop and `KEY_Action0` infos from the code contracts) | Replaced |
+| Onion boot motion | `standin_onion_boot.h`, `standin_object_profiles.cpp`; demo04/05/06 cone frames; `check_onion_boot_negative.py`; the `cinema_writer_test` demo05 relation | Authored: 300 frames, route-effect (value 2) at 100, `KEY_Action0` seed at 150, the same for every colour | Replaced |
+| Scenario test controls | `scenario_ballistic.cpp` (flower glide scale 0.4, start height 100), `scenario_bulborb_fight.cpp` (AIConstant p08, p10 off), `scenario_pikmin_cap.cpp` (top-up to the limit before each emission) | Authored test controls, not fixture files; no retail value is used (0.4 was chosen so a glide reaches an apex and lands inside the two-second window) | Added
 
 ## Local lanes (opt-in; they read user-supplied data and skip, or do nothing, without it)
 
@@ -64,33 +70,24 @@ Local-lane tools that store no disc data and may ship with a local-only note:
 `make_boot_manifest.py`, `measure_onion_boot.py`, `run_disc_throw_fidelity.py`,
 `run_disc_ballistic_reference.py`, `record_rng_provenance.py`.
 
-## Excluded from the upstream package
+## Not part of this package
 
-Not deleted from this branch; the lead builds the package without them.
+Kept on the fork for the local exact lane and the tracker; none of it is a fixture
+payload and none is shipped here:
 
-| Path | Why |
+| Item | Why it stays out |
 |---|---|
-| `games/pikmin1/tools/scenarios/boot-manifest.txt` | A retail boot open-log (file-name table); the manifest lane generates one locally |
-| `games/pikmin1/tools/scenarios/evidence/ballistic-gc-2026-11-06.json` | Retail executable traces, disc image hashes and offsets; read only by `check_ballistic.py --disc-reference`, which then needs the file supplied locally |
-| `games/pikmin1/tools/scenarios/evidence/ballistic-hash-impact-205b7e393.csv` | Fork-specific generated build artifact |
-| `games/pikmin1/tools/scenarios/standin-onion-boot.md` | Disc paths, hashes and per-frame retail measurements (still linked from the README `*_onion_boot` row and `coverage/milestones.md`; replace those links with the authored Onion boot note) |
-| `games/pikmin1/tools/scenarios/standin-aiconst.md` | Table of retail parameter values |
-| `games/pikmin1/tools/scenarios/standin-piki-parms.md` | Table of retail parameter values, personal decision record |
-| `games/pikmin1/tools/scenarios/verification-log.md` | Retail parameter values, personal decision record (still cited by `scenario_container_menu.cpp`, `pc_scenario.cpp`, `standin-audio.md`, `standin-overlay-experiment.md`, `standin-texture-experiments.md`) |
-| `games/pikmin1/tools/scenarios/standin-k-investigation.md` | Retail run tables and gate fits (still cited by `scenario_throw_release.cpp` and `standin-particle-rng.md`) |
-| `games/pikmin1/tools/scenarios/ballistic-motion.md` | Retail executable hash and measured peaks, unless rewritten to the synthetic contract (ballistic item) |
-| `games/pikmin1/tools/scenarios/check_onion_boot_negative.py` | Patches the retail route-effect frame 194, until the Onion boot profile is authored |
-| `games/pikmin1/pc_port/scenarios/scenario_onion_day3.cpp` `Disc` rows (retail stage placements) | Read them from the user's `default.gen` at run time instead |
-| `libs/nectar_assets/art/`, `.github/workflows/standin-art-export.yml` | Already deleted on this branch; keep deleted |
-| This branch's commit history | Earlier commits hold the retail-derived values; package from a squashed tree |
+| A retail boot open-log (`boot-manifest.txt`) | A file-name table of a disc run; the manifest lane generates one locally with `make_boot_manifest.py` |
+| Retail executable traces for the ballistic arcs and their hashes | The `--disc-reference` half of `check_ballistic.py` reads them from `PIKMIN_BALLISTIC_EVIDENCE` |
+| Retail parameter tables, per-frame retail measurements, disc run logs and personal decision records | Not needed by any public check; the local lanes (above) assert measured expected outputs against the user's own install |
+| Combat timing measurements against the retail game (issues #154, #180) | A local exact-lane question; the public `bulborb_fight` asserts smoke limits only |
+| `libs/nectar_assets/art/` (Blender sources, exports and rig metadata) and the art-export workflow | Fork art pipeline; the stand-in models are authored in C++ |
 
-## Docs still to revise at integration
+## Measured expected outputs (kept separate from fixtures)
 
-- `standin-objects.md`, sections "What the disc was read for" through "World
-  models": they describe the pre-#190 object, world and animation fixtures.
-- `README.md`, the `blue_onion_boot` / `yellow_onion_boot` / `red_onion_boot` row
-  and the `onion_skip` notes: follow the authored Onion boot profile.
-- `scenario_onion_skip.cpp` header ("the measured Onion boot", "the disc's
-  360-frame duration"): follows the Onion boot profile.
-- `scenario_tutorial_day1.cpp` `kEngineCarriers` (20): equals the stand-in `ust5`
-  carrier count in `pelMgr.bin` (`standin_objects.cpp`); change both together.
+- `check_throw_flight.py` `EXPECTED` (profile `disc`): throw timing, peak and launch
+  speed of the original game, asserted only by `scenario_throw_fidelity_disc`.
+- `scenario_onion_boot_carry.cpp` `PIKMIN_ONION_BOOT_EXACT=1` frames: the original
+  game's route-effect and seed frames, asserted only by the `_disc` entries.
+- `SYNTHETIC_EXPECTED` and the cinema relations are the port's own results on the
+  authored fixtures.

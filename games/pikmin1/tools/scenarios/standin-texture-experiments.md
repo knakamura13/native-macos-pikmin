@@ -69,7 +69,7 @@ boots" result: exit 0, no crash. The negative-glyph-width claim is not observabl
 
 ## Fidelity decision for the manifest textures and bundles
 
-All 65 `.bti`, `.txe`, `.bun` and `.anm` paths marked OK in `boot-manifest.txt` were compared with the generated
+All 65 `.bti`, `.txe`, `.bun` and `.anm` paths marked OK in a local boot manifest (PROVENANCE.md, local lanes) were compared with the generated
 tree. Every `.bti`, `.txe` and `.bun` path (18 files, including `effects/pcr/effects.bun`, `effects/tex/effects.bun`
 and `screen/eng_tex/screen.bun`) is written; none of them is on `standin-open-allowlist.txt`. The only manifest
 paths absent from the tree were then 46 of the 47 `.anm` per-model animation bundles (all 47 are in the tree on 2026-10-28). They are #66's domain (animation bundles), a missing
@@ -82,6 +82,6 @@ tolerated (rows above).
 ## Since run
 
 The comparison against the real install (APFS clones, one file or bundle entry removed per run), the `halowhit.txe`,
-`rootRing.txe` and `intro/map1.bti` checks and the glyph-width measurement are in `verification-log.md`, item 3.
+`rootRing.txe` and `intro/map1.bti` checks and the glyph-width measurement were checked by hand and are not asserted.
 Still open: whether particle drawing tolerates a null child texture and null HUD textures generally (moot while every
 texture has a stand-in).

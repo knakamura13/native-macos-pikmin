@@ -39,7 +39,7 @@ constexpr unsigned kAwaySeconds = 4;
 // 30 and at 60 Hz), a stand-in tree's on the first (15). Holding the stand-in
 // run to the disc's 45 makes both trees start the calibration on the same
 // tick. On the disc the hold is 0, so the disc run is unchanged
-// (standin-k-investigation.md).
+// (see the README entry for throw_release).
 constexpr unsigned kWalkStartTicks = 45;
 // NaviThrowWaitState::init picks the thrown Pikmin from the plate within 80.
 constexpr float kSelectDistance = 80.0f;

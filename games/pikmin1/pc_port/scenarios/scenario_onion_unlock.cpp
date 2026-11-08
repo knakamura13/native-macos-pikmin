@@ -481,7 +481,7 @@ protected:
 		}
 		// Bury lasts p49 mSeedUpTime and Tane p50 mPluckWaitTime, each plus up to 2 s at random (PikiHeadAI, itemAI.cpp),
 		// then the Hatuga motion: the two parameters plus 4 s of random plus 4 s for the motions (10 s with the code's 1
-		// and 1 s, 13.1 s with the disc's 0.1 and 5 s).
+		// and 1 s).
 		PikiProp::Parms& pp      = pikiMgr->mPikiParms->mPikiParms;
 		const float limitS        = pp.mSeedUpTime() + pp.mPluckWaitTime() + 8.0f;
 		if (t - mPhaseTick > unsigned(limitS * rate)) {

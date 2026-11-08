@@ -252,4 +252,4 @@ without `pcSnapLanded`. Route state is checked before and after the measured
 effect frame. Disabling the generated blue/yellow route effect is the negative
 control. This covers boot animation/profile behavior, not the proximity
 discovery trigger, movies, or the full first-pluck progression (ON1/ON4).
-See [disc evidence and limits](../standin-onion-boot.md).
+The Onion boot motion is authored (`nectar_assets/standin_onion_boot.h`); see `PROVENANCE.md`.

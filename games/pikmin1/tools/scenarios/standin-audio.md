@@ -39,7 +39,7 @@ Measured on macOS (Apple Silicon), RelWithDebInfo, `VERSION_GPIE01_01`, 2026-10-
    scenario boot skips the title section (`ninLogo.cpp`), whose constructor
    ends with that call (`titles.cpp`). This is a scenario-boot gap, not a data
    gap: a native build hangs on disc data too without the call (run on
-   2026-10-28, stack in `Jac_SceneSetup`; `verification-log.md`, item 1). `pc_scenario_pre_stage` now makes the call in
+   2026-10-28, stack in `Jac_SceneSetup`). `pc_scenario_pre_stage` now makes the call in
    native builds (`#if PIKI_USE_JAUDIO`), standing in for the skipped section.
    The facade has no such wait, so OFF builds are unchanged.
 
@@ -103,7 +103,7 @@ Each run on the stand-in tree from the generator, with
 | Tree | Result |
 |------|--------|
 | Stand-in tree with an empty `SndData/` | Hang. Five `pikiseq.arc` and one `pikibank.bx` FAILED lines, then no progress; killed by the 60 s alarm (exit 142). Matches the prediction in #68. |
-| `pikiseq.arc` stand-in, without the title scene call | Passes `Jac_InitEventSystem`, then hangs after the map loads (in `Jac_SceneSetup(SCENE_Course)`); killed at 120 s. Re-run with `sample`: the main thread spins in `Jac_SceneSetup` under `NewPikiGameSetupSection`, and a disc clone hangs the same way (`verification-log.md`). |
+| `pikiseq.arc` stand-in, without the title scene call | Passes `Jac_InitEventSystem`, then hangs after the map loads (in `Jac_SceneSetup(SCENE_Course)`); killed at 120 s. Re-run with `sample`: the main thread spins in `Jac_SceneSetup` under `NewPikiGameSetupSection`, and a disc clone hangs the same way (observed by hand). |
 | `pikiseq.arc` stand-in, with the title scene call | `boot_smoke`, `throw_release`, `day30_clock` at 30 and 60: all exit 0. |
 
 The only new `FAILED to open` line is `SndData/Banks/pikibank.bx`, now in

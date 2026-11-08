@@ -1,7 +1,7 @@
 // whistle_gather_release: the real whistle and disband paths (coverage/edge-cases.md EC-32, EC-39
 // in part; issue #96), on the sandbox stand-in stage, with no state poked.
 //
-// The stand-in Fue motion (PIKIANIM_Fue, info 74) carries the disc's loop keys (standin_anims.h),
+// The stand-in Fue motion (PIKIANIM_Fue, info 74) has authored loop keys (standin_anims.h),
 // so NaviGatherState grows its circle after KEY_LoopStart and NaviReleaseState disbands on it.
 // The cursor is held at the captain's feet (mCursorWorldPos = mSRT.t), so distances are from the
 // captain. R is NAVI_WHISTLE_MAX_RADIUS, min mWhistleMinRadius, expand mWhistleExpandTime.
@@ -21,7 +21,7 @@
 //             0 (the port's allocator zeroes the state; on the GameCube it is whatever the heap
 //             held). Characterised, not fixed.
 //   Stay    The squad stays in Formation for 2 s of standing (control for the disband).
-//   Disband X (the disc's disband key) clicked once: NaviReleaseState within 2 ticks, every squad
+//   Disband X (the disband key of the classic bindings) clicked once: NaviReleaseState within 2 ticks, every squad
 //           Pikmin Free within 1 s (releasePikis on KEY_LoopStart), Walk again within 2 s
 //           (KEY_Finished after finishMotion), formationPikis back to 0, freePikis +2.
 //   Away    2 s sideways again, so every Pikmin left so far is outside R.
@@ -359,7 +359,7 @@ private:
 		}
 		if (id == NAVISTATE_Release && !mReleaseState) mReleaseState = t;
 		if (t > mPhaseTick + 3 && !mReleaseState) {
-			fail(t, "X (the disc's disband key) enters NaviReleaseState within 2 ticks", "state %d", id);
+			fail(t, "X (the disband key) enters NaviReleaseState within 2 ticks", "state %d", id);
 			return;
 		}
 		int free = 0;

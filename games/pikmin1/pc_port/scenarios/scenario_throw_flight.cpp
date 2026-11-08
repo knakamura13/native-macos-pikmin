@@ -111,7 +111,7 @@ public:
 		mHold                = intro < kWalkStartTicks ? kWalkStartTicks - intro : 0;
 		mTotal               = kDists * kYaws * mReps;
 		// PIKMIN_TF_FLOWER_GRAV=f (diagnostic only): set pikiMgr p48 mFlowerGravityScale for
-		// this run, to show what the stand-in's flower glide does with the disc's 0.5.
+		// this run, to show what the stand-in's flower glide does with another value.
 		if (const char* fg = std::getenv("PIKMIN_TF_FLOWER_GRAV")) {
 			pikiMgr->mPikiParms->mPikiParms.mFlowerGravityScale() = float(std::atof(fg));
 			std::printf("[scenario] %s: FLOWER_GRAV override %s\n", mName, fg);

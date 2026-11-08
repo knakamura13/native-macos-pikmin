@@ -47,4 +47,4 @@ texture; `P2DPicture::setTexture` does nothing with zero textures), so
 `DrawContainer::start` (`drawContainer.cpp:186-195`) finds every pane it
 dereferences. The writer test pins the type of each and that the window is the
 only one in the stand-in set. The `container_menu` scenario now opens and closes the menu on the
-stand-in tree at 30 and 60 (`verification-log.md`, item 2).
+stand-in tree at 30 and 60 (checked by hand).

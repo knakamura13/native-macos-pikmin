@@ -1,5 +1,5 @@
 // container_menu: the Onion's container menu opens, runs and closes on the
-// stand-in con01.blo (verification-log.md, item 2). Runs on the opt-in object
+// stand-in con01.blo. Runs on the opt-in object
 // stage, stages/sandbox_objects.ini, whose default.gen places a blue Onion.
 //
 // The captain is put on the Onion's 'cont' sphere and presses A. NaviWalkState

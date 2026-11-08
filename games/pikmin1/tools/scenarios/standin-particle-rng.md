@@ -1,6 +1,6 @@
 # Particle draws on the cosmetic RNG stream
 
-`standin-k-investigation.md` found that particle effects drew from the sim RNG
+An investigation of the throw_release calibration found that particle effects drew from the sim RNG
 stream. Effect content therefore changed squad and enemy behaviour in
 deterministic mode, and a tree with different `.pcr` data gave a different
 throw_release K. This change moves those draws to the cosmetic stream.

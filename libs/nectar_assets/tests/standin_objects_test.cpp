@@ -906,7 +906,7 @@ void testWorldGenerators()
 	specs[2].shape     = "bridge 13";
 	specs[3].kind      = Spec::Boss;
 	specs[3].bossType  = 8;
-	// A move stone with its own parameters, as the tutorial stand-in stage writes the disc's (10 pushers, speed 50).
+	// A move stone with its own parameters, as the tutorial stand-in stage writes it (authored pushers and speed).
 	specs[4].kind         = Spec::Work;
 	specs[4].name         = "move stone";
 	specs[4].shape        = "stone 10";

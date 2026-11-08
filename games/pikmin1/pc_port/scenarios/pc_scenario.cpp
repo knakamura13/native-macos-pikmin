@@ -344,7 +344,7 @@ void providerThunk(PcInputPad pads[4])
 // PIKMIN_SCENARIO_STATE_STATS (any value): per state id of the captain and of
 // the Pikmin, the longest uninterrupted stay in ticks and how often it was
 // entered, printed with the verdict. A state that waits on an animation key the
-// stand-in lacks shows up as a long stay (verification-log.md, item 5).
+// stand-in lacks shows up as a long stay.
 struct StateDwell {
 	unsigned longest = 0;
 	unsigned entries = 0;

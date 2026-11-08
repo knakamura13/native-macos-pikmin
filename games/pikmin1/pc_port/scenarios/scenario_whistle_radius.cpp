@@ -16,7 +16,7 @@
 //            radius. The last two are inside the full radius but outside the halved one, so they
 //            stay Free.
 // Every Pikmin is spawned at least kClear from the captain, so touching him does not call it.
-// Nothing is poked: the stand-in Fue motion carries the disc's loop keys (#96), so its
+// Nothing is poked: the stand-in Fue motion has authored loop keys (#96), so its
 // KEY_LoopStart sets NaviGatherState::mWhistleAnimPhase to 1 by itself. The hold requires Gather,
 // that phase, and the circle at mode 2 (full, callPikis(R) run) within it.
 //

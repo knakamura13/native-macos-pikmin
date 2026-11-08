@@ -16,8 +16,7 @@
 // Everything else is printed.
 //
 // Combat timing against the original game (issues #154 and #180) is a local exact-lane question: it
-// needs the original motions and parameters, which only a user-supplied install has, and it is
-// measured at 30 and 60 Hz in games/pikmin1/tools/scenarios/combat-timing.md.
+// needs the original motions and parameters, which only a user-supplied install has.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
