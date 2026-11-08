@@ -22,6 +22,7 @@
 #if PIKI_SCENARIOS
 
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 #include "AIConstant.h"
@@ -61,7 +62,11 @@ public:
 		const Vector3f at = mBulb->mSRT.t;
 		navi->mSRT.t.set(at.x + 90.0f, mapMgr->getMinY(at.x + 90.0f, at.z, true), at.z);
 		std::printf("[scenario] bulborb_fight: Bulborb at (%.0f, %.0f), health %.0f\n", at.x, at.z, mBulb->mHealth);
-		carry::spawnRow(navi, Blue, kPikmin, at.x + 36.0f, at.z, mLanding);
+		// PIKMIN_FIGHT_SHIFT=n (combat-timing sampling, #154): moves the squad's start n units along x, so a
+		// run explores a different trajectory; unset it is the fixed start.
+		float shift = 0.0f;
+		if (const char* sh = std::getenv("PIKMIN_FIGHT_SHIFT")) shift = float(std::atof(sh));
+		carry::spawnRow(navi, Blue, kPikmin, at.x + 36.0f + shift, at.z, mLanding);
 		for (Piki* p : mLanding) mPiki.push_back(p);
 		carry::land(mLanding);
 		// The source defaults of AIConstant p08 and p10 send a Pikmin back to the captain after one
