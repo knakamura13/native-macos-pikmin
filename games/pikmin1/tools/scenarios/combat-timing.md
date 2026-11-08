@@ -42,8 +42,7 @@ feature does not scale (the convention elsewhere is `PC_TICKS30`, for example `a
 2. the per-tick 10% roll to jump from a ground approach;
 3. the per-tick 30% roll to adjust the jump when close.
 
-Experiment (patch kept outside the package, `combat-rate-scaling-experiment.patch` in the
-session notes): scaling (1) with `1 - 0.8^(1/PC_TICKS30)` and (2), (3) to `p / PC_TICKS30` moves the
+Experiment (fork branch `knakamura/combat-rate-scaling-experiment-154`, one commit on `aiAttack.cpp`): scaling (1) with `1 - 0.8^(1/PC_TICKS30)` and (2), (3) to `p / PC_TICKS30` moves the
 60 Hz kill time from 2.20 s to 2.70 s (30 Hz: 3.10 s) and the hit mix from 9/4 to 7/7. The residual
 0.4 s is **unexplained**. Remaining candidates, none tested: Pikmin walk acceleration toward
 `mTargetVelocity`, the jump and stick sequence (`doClimb`, stick-to-part), and Bulborb-side AI
