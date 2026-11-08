@@ -164,9 +164,25 @@ tick (identical at 30 Hz) moves the 60 Hz mean kill time the wrong way, from 3.1
 The other turn writers in the Pikmin code (`aiCrowd` formation turns, the whistle look-at state, put, shoot, pullout, watch)
 are not on the Bulborb approach path.
 
-Next: log the angle error per tick for one approaching Pikmin at both rates and compare the two angle-versus-time curves, to
-see whether the extra lag is in the turn toward the walking direction or in the walking direction itself (the target
-velocity set by `ActGoto`, or the Bulborb's own movement during the approach).
+Angle-versus-time trace (temporary log, 32 starts, per 0.1 s since a Pikmin first reaches state 0, not kept): the walking
+direction is not the difference (target velocity points at the target at both rates, 0.00 to 0.05 rad). The facing error
+shrinks more slowly at 60 Hz in real time: 0.54 against 0.74 rad at 0.2 s and 0.39 against 0.54 rad at 0.4 s, from similar
+starts (1.12 and 1.19 rad).
+
+Original-game quirk found on the way (characterised, GameCube behaviour kept): in `ActJumpAttack::exec` state 0 the angle
+is `absF(angDist(...))`, so `mFaceDirection += 0.2 * |angle|` always turns the positive way. A target on the negative side is
+turned away from (the error grows by 1.2 per 30 Hz step) until `Creature::moveRotation` and the movement pull it back. The
+port's compounded turn rate `1 - 0.8^(1/T)` assumes decay, so for that case it overstates the growth (1.226 against 1.2 per
+1/30 s at 60 Hz). Using the exact growth factor `1.2^(1/T) - 1` for the away case did not close the gap either (60 Hz mean
+kill 3.07 s over 96 starts, 30 Hz 3.59 s), so the facing lag has more than one source and this one is not the main one.
+
+A consequence worth keeping in mind: ground attacks are slower damage than a stuck Pikmin attacking continuously, so a
+faster facing at 60 Hz would move the result towards 30 Hz only if it shifts Pikmin towards the ground attack, which is why
+tuning any single turn rate to force a match would be wrong without the cause.
+
+Next: attribute the facing change per Pikmin-second to each writer (the `ActJumpAttack` turn with its true sign,
+`Creature::moveRotation`, and anything else) at both rates; the attribution run so far only separated the `ActJumpAttack`
+turn using the signed error, which the quirk above makes the wrong comparison.
 
 ## Public stand-in fixture
 
