@@ -6,20 +6,10 @@
 // The gate is the game's own 'sluice bomb' item (a BuildingItem, the
 // reinforced wall that only bombs break), born from an item generator in
 // stages/sandbox/default.gen. Its model and collision are ours: a panel and
-// two posts made of boxes. It reproduces the mechanism the disc's
-// throw_release run shows on the Forest of Hope (standin-k-investigation.md):
-// the captain's walk away ends against the wall, the squad catches up, the
-// Pikmin in formation touch its 'gate' platform and switch to BreakwallMode
-// (piki.cpp), their attacks bounce off (InteractAttack::actItem returns false
-// for a bomb gate), and after 3 to 5 failed hits each gives up, Sad, and
-// comes back through PIKISTATE_Emotion (aiBreakWall.cpp).
-//
-// Fidelity (#62): no disc geometry, texture or animation is used. The item
-// type, the collinfo grammar, the joint the panel hangs from (1) and the file
-// paths the item loads (objects/gate/gt_hard.mod, which names its platform
-// .mod files) are the game's. Where the gate stands relative to the captain
-// is chosen to give the walk the shape the disc trace shows, and is noted in
-// standin_sandbox.cpp.
+// two posts made of boxes. The authored diagonal obstacle exercises the game's
+// collision, BreakwallMode, failed bomb-gate attacks and return-to-formation
+// behavior. It does not reproduce a retail stage or calibrate exact grab timing.
+// File paths and platform part names are required by the game's item loader.
 
 #include "nectar_assets/mod.h"
 

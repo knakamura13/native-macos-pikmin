@@ -9,13 +9,8 @@
 // trivial, and the game's only check on the joint count is a log line followed by
 // out-of-range reads.
 //
-// Fidelity (#62): a stand-in matches the disc only where a scenario depends on
-// it. That is the length and the grab/throw key frame of ThrowWait (info 63) and
-// Throw (info 54), which #61's throw_release waits on. Those numbers ONLY THE
-// DISC HAS; they were read from the disc install (read-only, a one-off parse of
-// pikis/animMgr.bin and pikis/bluModel.anm) and each is named and sourced in
-// standin_anims.cpp. No curves, names or other disc animation data are copied:
-// every other info is a plain one-shot of kStandInDefaultFrames frames.
+// ThrowWait and Throw use an authored test schedule. Other specialised
+// motions below retain their recorded provenance until replaced.
 
 #include "nectar_assets/anim.h"
 #include "nectar_assets/bundle.h"
@@ -42,16 +37,15 @@ constexpr int kAnimInfoThrowWait = 63; ///< PIKIANIM_ThrowWait (36): hangs the P
 constexpr int kStandInDefaultFrames = 40;
 constexpr int kStandInMinForcedCounterFrames = 31;
 
-// Measured on the disc (VERSION_GPIE01_01 install). Info 63 'trwwait': frame
-// count 21, anim keys [0, 1, 20], one info key per Action0. Info 54 'throw':
-// frame count 10, anim keys [0, 1, 9], one Action0 info key. Both p00 5 and spd 30.
-// The stand-ins use those flags (5: constant speed, not the code default 2) and
-// speed 30.0. That read did not record LoopStart, LoopEnd, Action1 or an event
-// key, so none of those are written (throw charge still needs a fresh AnimMgr dump).
-constexpr int kThrowWaitFrames    = 21;
-constexpr int kThrowWaitGrabFrame = 1; ///< K: anim-key frame of ThrowWait's KEY_Action0
-constexpr int kThrowFrames        = 10;
-constexpr int kThrowReleaseFrame  = 1; ///< anim-key frame of Throw's KEY_Action0
+// Authored test schedule (not retail timing): Throw releases at frame 10 of 40. ThrowWait
+// hangs the Pikmin at frame 10, then loops frames 10 to 34 while A is held. NaviThrowWaitState
+// raises the charge level by one on every KEY_LoopEnd (to a maximum of 3), so a held throw
+// charges naturally. The loop and the 40-frame length are chosen here, not copied.
+constexpr int kThrowWaitFrames    = 40;
+constexpr int kThrowWaitGrabFrame = 10; ///< K: anim-key frame of ThrowWait's KEY_Action0 and KEY_LoopStart
+constexpr int kThrowWaitLoopEnd   = 34; ///< anim-key frame of ThrowWait's KEY_LoopEnd
+constexpr int kThrowFrames        = 40;
+constexpr int kThrowReleaseFrame  = 10; ///< anim-key frame of Throw's KEY_Action0
 
 // The motions of a Pikmin working a gate and giving up (#68 sandbox gate,
 // standin_sandbox.h): ActBreakWall attacks on KEY_Action0 of Kuttuku (info 71)

@@ -151,21 +151,13 @@ const Rgba8 kPostColour { 120, 110, 100, 255 }, kPanelColour { 90, 90, 110, 255 
 
 SandboxGatePlacement sandboxGatePlacement()
 {
-	// The disc's throw_release trace (Forest of Hope, 30 Hz, temporary tracing,
-	// standin-k-investigation.md) has the captain walk about 185 units straight,
-	// slide off a reinforced gate and stop against it about 220 units from the
-	// start; that gate's generator stands 203 units ahead of him and 34 units to
-	// his left, turned 35 degrees. The sandbox gate takes that relation (a
-	// gameplay layout, not geometry: our wall has its own size), moved 6 units
-	// closer and turned. Re-fitted for #92 (GameCube RNG draw order): disc K is 13 /
-	// 22 at 30 / 60 Hz; the layout below matches on the stand-in tree (42 degrees,
-	// z -207, x -31.5, 222-unit panel, depth 16). K is a chaotic outcome of where
-	// each Pikmin stands when it gives up, so this is a chosen point, not a plateau
-	// (standin-k-investigation.md).
+	// Authored obstacle: centred across the walk direction with a diagonal face.
+	// Exercises collision, wall attacks and returning to formation; no exact
+	// retail grab timing is implied by this independent test layout.
 	SandboxGatePlacement p;
-	p.x    = -31.5f;
-	p.z    = -207.0f;
-	p.rotY = 42;
+	p.x    = 0.0f;
+	p.z    = -240.0f;
+	p.rotY = 30;
 	return p;
 }
 

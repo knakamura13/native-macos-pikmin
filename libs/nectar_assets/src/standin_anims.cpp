@@ -17,6 +17,14 @@ AnimKeyRecord actionKey(int animKeyIndex)
 	return k;
 }
 
+AnimKeyRecord loopKey(int animKeyIndex, int type)
+{
+	AnimKeyRecord k;
+	k.frame   = animKeyIndex;
+	k.keyType = std::uint8_t(type); // 0 KEY_LoopStart, 1 KEY_LoopEnd
+	return k;
+}
+
 StandInAnimSet buildPikiSet()
 {
 	StandInAnimSet s;
@@ -41,18 +49,16 @@ StandInAnimSet buildPikiSet()
 		if (i == kAnimInfoThrowWait) {
 			// Anim keys [0, K, N-1] and one info key pointing at the middle one.
 			// The first tick the counter reaches K, NaviThrowWaitState hangs the Pikmin.
-			// Flags 5 (standin_anims.h): without UseDynamicSpeed the throw plays at
-			// spd 30 while the captain is moving, not at his walk speed.
+			// Flags 5 (constant speed) at 30 frames a second: without UseDynamicSpeed the
+			// throw plays at the authored rate while the captain moves, not at his walk speed.
 			a.frameCount     = kThrowWaitFrames;
-			a.measured       = true;
 			a.info.flags     = 5;
 			a.info.speed     = 30.0f;
-			a.info.animKeys  = { 0, kThrowWaitGrabFrame, kThrowWaitFrames - 1 };
-			a.info.infoKeys  = { actionKey(1) };
+			a.info.animKeys  = { 0, kThrowWaitGrabFrame, kThrowWaitLoopEnd, kThrowWaitFrames - 1 };
+			a.info.infoKeys  = { actionKey(1), loopKey(1, 0), loopKey(2, 1) }; // grab and loop start at key 1, loop end at key 2
 		} else if (i == kAnimInfoThrow) {
 			// NaviThrowState calls throwPiki on this key; KEY_Finished ends the state.
 			a.frameCount     = kThrowFrames;
-			a.measured       = true;
 			a.info.flags     = 5;
 			a.info.speed     = 30.0f;
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
@@ -199,17 +205,27 @@ bool checkStandInAnims(const StandInAnimSet& set, std::string& error)
 		}
 
 		if (i == kAnimInfoThrowWait || i == kAnimInfoThrow) {
-			if (!a.info.flags || *a.info.flags != 5) return fail(i, "needs the disc's flags 5 (constant speed)");
-			if (a.info.speed && *a.info.speed != 30.0f) return fail(i, "speed is not the disc's 30");
+			if (!a.info.flags || *a.info.flags != 5) return fail(i, "needs the authored constant speed (flags 5)");
+			if (a.info.speed && *a.info.speed != 30.0f) return fail(i, "speed is not the authored 30");
 			const int want = i == kAnimInfoThrowWait ? kThrowWaitGrabFrame : kThrowReleaseFrame;
 			int actions    = 0;
 			for (const AnimKeyRecord& k : a.info.infoKeys) {
 				if (k.keyType != 2) continue;
 				actions++;
-				if (a.info.animKeys[std::size_t(k.frame)] != want) return fail(i, "KEY_Action0 is not at the recorded frame");
+				if (a.info.animKeys[std::size_t(k.frame)] != want) return fail(i, "KEY_Action0 is not at the authored frame");
 				if (want >= a.frameCount) return fail(i, "KEY_Action0 frame is not below the frame count");
 			}
 			if (actions != 1) return fail(i, "needs exactly one KEY_Action0 info key");
+		}
+		if (i == kAnimInfoThrowWait) {
+			// NaviThrowWaitState charges one level per KEY_LoopEnd: without it a held throw never charges.
+			int starts = 0, ends = 0;
+			for (const AnimKeyRecord& k : a.info.infoKeys) {
+				const std::int32_t f = a.info.animKeys[std::size_t(k.frame)];
+				if (k.keyType == 0 && f == kThrowWaitGrabFrame) starts++;
+				if (k.keyType == 1 && f == kThrowWaitLoopEnd) ends++;
+			}
+			if (starts != 1 || ends != 1) return fail(i, "needs one KEY_LoopStart at the grab frame and one KEY_LoopEnd at the authored loop end");
 		}
 		if (i == kAnimInfoFue) {
 			// NaviGatherState and NaviReleaseState wait on KEY_LoopStart: without it the whistle never grows and X never disbands.

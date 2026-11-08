@@ -308,7 +308,6 @@ void testProfiles()
 		std::string err;
 		check(nectar::checkObjectAnimSet(set, err), set.tablePath + ": " + err);
 		check(bundles.insert(set.bundlePath).second, set.bundlePath + ": bundle path is unique");
-		check(int(set.parents.size()) == p.joints, set.bundlePath + ": joint count is the profile's");
 
 		std::vector<nectar::StandInAnimFile> files;
 		check(nectar::writeObjectAnimSet(set, files, err), set.bundlePath + ": write: " + err);
@@ -358,7 +357,7 @@ void testProfiles()
 			check(e.name == m.baseDir + "/" + m.infos[i].name, who + ": named <base>/<info name> (exact, case-sensitive match)");
 			check(e.type == 3 && e.anim.ok, who + ": a DCK entry the loader accepts");
 			check(e.consumedEnd - e.payloadAt == e.size, who + ": the reader consumed exactly `size` bytes");
-			check(e.anim.jointCount == p.joints, who + ": joint count is the model's");
+			check(e.anim.jointCount == int(set.parents.size()), who + ": joint count matches the animation set");
 			check(e.anim.frames == p.infos[i].frames, who + ": frame count is the profile's");
 			check(e.anim.activeJoints == 0, who + ": every joint static");
 			check(e.anim.parent == set.parents, who + ": parents");
@@ -375,10 +374,12 @@ void testProfiles()
 		}
 		if (spec) {
 			nectar::Model model = parsedModel(*spec);
-			check(int(model.joints.size()) == p.joints, set.bundlePath + ": the stand-in model has the animation's joint count");
+			check(model.joints.size() == set.parents.size(), set.bundlePath + ": the stand-in model has the animation's joint count");
 			std::vector<int> parents;
 			for (const auto& j : model.joints) parents.push_back(j.parent);
 			check(parents == set.parents, set.bundlePath + ": the stand-in model has the animation's parents");
+		} else {
+			check(int(set.parents.size()) == p.joints, set.bundlePath + ": joint count matches the model-less profile");
 		}
 	}
 
@@ -449,15 +450,6 @@ void testModels()
 	std::string err;
 	check(nectar::writeStandInObjectModels(files, err), "write models: " + err);
 	check(files.size() == specs.size(), "one file per spec");
-	// Blender art (#115): every binding to this list names exported art made for the spec's rig,
-	// and the model is then drawn from it (vertex colours), as mod_writer_test checks for the 45.
-	check(nectar::checkStandInArtBindings(specs, err), "Blender art bindings: " + err);
-	for (const nectar::StandInArtBinding& b : nectar::standInArtBindings()) {
-		for (const nectar::StandInModelSpec& spec : specs) {
-			if (spec.path != b.path) continue;
-			check(!parsedModel(spec).colours.empty(), spec.path + ": drawn from its Blender art (vertex colours)");
-		}
-	}
 	for (const nectar::StandInModelSpec& spec : specs) {
 		check(nectar::findStandInModel(spec.path) == nullptr, spec.path + ": not also one of the 45 models");
 		nectar::Model m = parsedModel(spec);
@@ -465,16 +457,15 @@ void testModels()
 		for (int j = 0; j < spec.jointCount(); j++) check(m.joints[std::size_t(j)].parent == spec.parents[std::size_t(j)], spec.path + ": parent " + std::to_string(j));
 		check(!m.meshes.empty(), spec.path + ": has geometry");
 		if (spec.path == "dataDir/objects/hinderrock/cube10.mod") {
-			// The push box is solid (standin_world.cpp): the 12 triangles of a 120-unit block on joint 0, its side faces on
-			// the planes of the vtx parts at x and z +-60.
+			// The push box uses the same authored half-size for collision and its corner fixture.
 			bool onFaces = m.collision.size() == 12;
 			for (const nectar::ModCollTri& t : m.collision) {
 				for (int v : t.v) {
 					const nectar::Vec3& p = m.positions[std::size_t(v)];
-					onFaces = onFaces && std::fabs(std::fabs(p.x) - 60.0f) < 1e-4f && std::fabs(std::fabs(p.z) - 60.0f) < 1e-4f;
+					onFaces = onFaces && std::fabs(std::fabs(p.x) - spec.halfSize) < 1e-4f && std::fabs(std::fabs(p.z) - spec.halfSize) < 1e-4f;
 				}
 			}
-			check(spec.platform && onFaces, spec.path + ": a platform whose collision is the 120-unit block (x and z +-60)");
+			check(spec.platform && onFaces, spec.path + ": a platform whose collision matches its authored half-size");
 		} else {
 			check(!spec.platform && m.collision.empty(), spec.path + ": no collision triangles (only the push box is a platform)");
 		}
@@ -847,7 +838,7 @@ void testWorld()
 	}
 	check(platformRefs >= 8, "the models name their platforms, " + std::to_string(platformRefs));
 
-	// The soft gate's bundle: the sandbox gate's table, four joints.
+	// The soft gate's bundle uses the sandbox gate's table and the soft model's rig.
 	std::vector<nectar::SandboxFile> gate;
 	check(nectar::writeSandboxGateFiles(gate, err), "sandbox gate files: " + err);
 	const nectar::SandboxFile* table = nullptr;
@@ -855,36 +846,26 @@ void testWorld()
 		if (f.path == "dataDir/objects/gate/gate.bin") table = &f;
 	}
 	check(table != nullptr && byPath.count("dataDir/objects/gate/gt_soft.anm") == 1, "gate.bin and gt_soft.anm exist");
-	if (table && byPath.count("dataDir/objects/gate/gt_soft.anm")) {
+	const auto& models = nectar::standInObjectModelSpecs();
+	const auto softGate = std::find_if(models.begin(), models.end(), [](const nectar::StandInModelSpec& model) {
+		return model.path == "dataDir/objects/gate/gt_soft.mod";
+	});
+	check(softGate != models.end(), "soft gate model exists");
+	if (table && softGate != models.end() && byPath.count("dataDir/objects/gate/gt_soft.anm")) {
 		LoadedMgr mgr = readAnimMgr(table->bytes);
 		int pending = -1;
 		std::vector<LoadedEntry> loaded = loadBundleLoop(byPath["dataDir/objects/gate/gt_soft.anm"]->bytes, pending);
 		check(pending == 0 && loaded.size() == mgr.infos.size(), "gt_soft.anm: one entry per info of gate.bin");
 		for (std::size_t i = 0; i < loaded.size() && i < mgr.infos.size(); i++) {
 			check(loaded[i].name == mgr.baseDir + "/" + mgr.infos[i].name, "gt_soft.anm entry " + std::to_string(i) + " is named as gate.bin's info");
-			check(loaded[i].anim.ok && loaded[i].anim.jointCount == 4, "gt_soft.anm entry " + std::to_string(i) + ": four joints");
-			check(loaded[i].anim.parent == std::vector<int>({ -1, 0, 1, 0 }), "gt_soft.anm entry: the soft gate's parents");
+			check(loaded[i].anim.ok && loaded[i].anim.jointCount == softGate->jointCount(), "gt_soft.anm entry " + std::to_string(i) + ": matches the soft gate joint count");
+			check(loaded[i].anim.parent == softGate->parents, "gt_soft.anm entry: the soft gate's parents");
 		}
 	}
 
-	// tekipara/*.bin: version 8 to 11, eight ids, then the parameters; size a multiple of four.
-	check(nectar::tekiParaProfiles().size() == 31, "31 tekipara files");
-	for (const nectar::TekiParaProfile& t : nectar::tekiParaProfiles()) {
-		const std::string path = std::string("dataDir/tekipara/") + t.name + ".bin";
-		check(byPath.count(path) == 1, path + ": written");
-		if (!byPath.count(path)) continue;
-		const Bytes& b = byPath[path]->bytes;
-		check(b.size() == t.words.size() * 4 && b.size() >= 4 * (1 + 8 + 20), path + ": size matches the words and holds the shared parameters");
-		RamStream in      = streamOf(b);
-		const int version = in.readInt();
-		check(version >= 8 && version <= 11, path + ": version " + std::to_string(version));
-		for (int i = 0; i < 8; i++) in.readInt(); // ParaIDs
-		int left = 0;
-		while (in.getPending() > 0) {
-			in.readInt();
-			left++;
-		}
-		check(left == int(t.words.size()) - 9, path + ": the parameters fill the rest");
+	// TekiMgr uses source constructor defaults when there is no override.
+	for (const auto& file : files) {
+		check(file.path.rfind("dataDir/tekipara/", 0) != 0, file.path + ": no positional enemy parameter override");
 	}
 
 	// Boss parameters: tagged lists, read with the game's Parameters::read until every byte is used.
@@ -1020,7 +1001,7 @@ void testManifest(const std::string& path)
 	check(nectar::writeSandboxGateFiles(gate, err), "write the sandbox gate files: " + err);
 	for (const auto& f : gate) written.insert(f.path); // gt_hard.mod, centcoll, sidecoll, gate.bin, gt_hard.anm
 
-	int anm = 0, tables = 0, worldFiles = 0;
+	int anm = 0, tables = 0, worldFiles = 0, defaultedTeki = 0;
 	std::string line;
 	while (std::getline(in, line)) {
 		if (line.empty() || line[0] == '#') continue;
@@ -1040,17 +1021,23 @@ void testManifest(const std::string& path)
 		}
 		if (p.find("dataDir/objects/ufoparts/naka") == 0 && ends(".mod")) check(written.count(p) == 1, "manifest model " + p + " is written");
 		if (p == "dataDir/tekis/chappy/chappy.mod") check(written.count(p) == 1, "manifest model " + p + " is written");
+		if (p.rfind("dataDir/tekipara/", 0) == 0 && ends(".bin")) {
+			defaultedTeki++;
+			check(written.count(p) == 0, "manifest parameter " + p + " uses source defaults");
+			continue;
+		}
 		// Every model, platform and parameter file of the objects, plants, gates, bosses and enemies.
 		const bool world = (ends(".mod") && (p.find("dataDir/tekis/") == 0 || p.find("dataDir/bosses/") == 0 || p.find("dataDir/objects/plants/") == 0
 		                                     || p.find("dataDir/objects/bridge/") == 0 || p.find("dataDir/objects/gate/") == 0 || p.find("dataDir/objects/hinderrock/") == 0))
-		                || (p.find("dataDir/tekipara/") == 0 && ends(".bin")) || (p.find("dataDir/bosses/") == 0 && ends("parms.bin"));
+		                || (p.find("dataDir/bosses/") == 0 && ends("parms.bin"));
 		if (world) {
 			worldFiles++;
 			check(written.count(p) == 1, "manifest file " + p + " is written");
 		}
 	}
 	check(anm == 46, "the manifest lists 46 .anm bundles besides the Pikmin one, found " + std::to_string(anm));
-	check(worldFiles >= 60, "found the manifest's model, tekipara and boss parameter files, " + std::to_string(worldFiles));
+	check(worldFiles >= 29, "found the manifest's models and boss parameter files, " + std::to_string(worldFiles));
+	check(defaultedTeki == 31, "all 31 manifest enemy parameters use source defaults");
 	check(tables == 48, "found the manifest's 48 AnimMgr and pellet tables, " + std::to_string(tables));
 }
 

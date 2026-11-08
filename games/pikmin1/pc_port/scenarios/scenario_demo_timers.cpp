@@ -1,11 +1,10 @@
 // demo_timers: the demo flags the game sets from a timer or a stage rule rather than from a place
 // (coverage/milestones.md DF07, DF09, DF16, PL3; coverage/edge-cases.md EC-36), on the tutorial stand-in
-// stage stages/practice.ini (its demo radii and timers are the disc's parms/demo.bin: seed radius
-// 25, seed wait 40 s; demoParms _30, the pluck timer, keeps its 30 s code default).
+// stage stages/practice.ini with the source defaults for the demo radii and timers.
 //
 // In order, each within a bound in seconds:
 //   DF03  A red sprout is planted 15 units from the captain, away from the Onion and the engine.
-//         Navi::demoCheck sets DEMOFLAG_ApproachSeed and arms DemoFlags::setTimer(40 s,
+//         Navi::demoCheck sets DEMOFLAG_ApproachSeed and arms DemoFlags::setTimer(6 s,
 //         DEMOFLAG_NoPikminTimeout).
 //   DF07  Nothing is plucked. DemoFlags::update runs the timer down by the frame time and sets
 //         NoPikminTimeout (7) when it reaches 0: not in the first 39 s, by 41 s.
@@ -57,7 +56,7 @@ namespace {
 
 using namespace tutorial;
 
-constexpr float kDf07Seconds = 40.0f; // mSeedDemoWaitTime on the stand-in practice stage
+constexpr float kDf07Seconds = 6.0f; // DemoParms::Parms source default for mSeedDemoWaitTime
 constexpr float kDf09Seconds = 30.0f; // demoParms _30
 
 class DemoTimers : public PcScenario {
@@ -79,7 +78,7 @@ public:
 		            demoParms->mParms.mSeedDemoWaitTime(), demoParms->mParms._30(), setBits(demoFlags()).c_str());
 		if (!playerState->isTutorial() || !mOnion || !mEngine || df.mCurrentDemoIndex != DEMOFLAG_NULL
 		    || demoParms->mParms.mSeedDemoWaitTime() != kDf07Seconds || demoParms->mParms._30() != kDf09Seconds) {
-			fail(0, "the tutorial with a red Onion, the engine, no timer armed and the 40 s and 30 s timers", "tutorial %d, timer index %d",
+			fail(0, "the tutorial with a red Onion, the engine, no timer armed and the 6 s and 30 s timers", "tutorial %d, timer index %d",
 			     (int)playerState->isTutorial(), (int)df.mCurrentDemoIndex);
 			return;
 		}
@@ -150,7 +149,7 @@ public:
 			if (df.isFlag(DEMOFLAG_ApproachSeed)) {
 				if (!onlyNew({ DEMOFLAG_ApproachSeed }, t, "DF03")) return;
 				if (df.mCurrentDemoIndex != DEMOFLAG_NoPikminTimeout || df.mWaitTimer > kDf07Seconds || df.mWaitTimer < kDf07Seconds - 0.1f) {
-					fail(t, "DF03 arms NoPikminTimeout with 40 s", "index %d, %.3f s", (int)df.mCurrentDemoIndex, df.mWaitTimer);
+					fail(t, "DF03 arms NoPikminTimeout with 6 s", "index %d, %.3f s", (int)df.mCurrentDemoIndex, df.mWaitTimer);
 					return;
 				}
 				enter(Df07, t);

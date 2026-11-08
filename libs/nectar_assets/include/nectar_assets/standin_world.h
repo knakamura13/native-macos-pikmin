@@ -6,14 +6,9 @@
 // parameter files (tekipara/*.bin) and the boss parameter files, so a generator
 // can place any of them without the game aborting at a missing file.
 //
-// Fidelity (#62): colour-only boxes, no disc geometry or texture. What the game
-// dereferences comes from the models' structure, read once from the disc
-// (read-only): the joint count and hierarchy, and the collision parts (id, code,
-// joint, radius, centre, or the platform .mod a part names). The numbers of the
-// parameter files are the disc's, read once and carried as words: tekipara/*.bin
-// is a version int, eight ids and then the type's int and float parameters in
-// order, and bosses/*/parms.bin two tagged lists. They are in
-// standin_world_data.cpp.
+// Synthetic fixtures use authored simple geometry and source-required loader
+// names. Parameter files preserve source constructor defaults. Missing positional
+// enemy parameter files intentionally retain the per-type constructors.
 
 #include "nectar_assets/mod.h"
 #include "nectar_assets/standin_anims.h"
@@ -63,7 +58,7 @@ struct BossParmProfile {
 };
 const std::vector<BossParmProfile>& bossParmProfiles();
 
-/// The model specs of worldModelProfiles(): colour boxes on the disc's joints,
+/// The model specs of worldModelProfiles(): colour boxes on independently authored joints,
 /// collinfo text from the parts.
 std::vector<StandInModelSpec> worldModelSpecs();
 

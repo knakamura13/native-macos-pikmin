@@ -488,7 +488,7 @@ Other jobs of the workflow:
   JAudio on, no scenarios).
 - **`jaudio-scenarios`** (Linux, macOS, Windows): `PIKMIN_NATIVE_JAUDIO=ON` with
   `PIKMIN_BUILD_SCENARIOS=ON` in its own build directory, then
-  `ctest -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -E _disc` (the
+  `ctest -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -LE game-assets` (the
   generator plus six scenarios, as in `standin-audio.md`). Same dependencies,
   `-UWIN32`, Mesa DLLs and environment as the main job. Nothing is skipped on any OS.
 - **`gl-probe`** (Linux, Windows): the GL context probe described under [GL probe](#gl-probe).
@@ -497,7 +497,7 @@ Other jobs of the workflow:
 - **`scenarios-merge`** (one per OS, on Linux): the main job runs macOS in 2 shards and Linux
   and Windows in 3 (`ctest -I <shard>,,<shards>`); this job joins them with `merge_scenario_shards.py`, which fails
   unless every scenario test ran in exactly one shard, then runs `ci_k_summary.sh` and
-  `check_throw_flight.py` on the merged logs and uploads `scenario-hash-logs-<OS>`.
+  `check_throw_flight.py --profile synthetic` on the merged logs and uploads `scenario-hash-logs-<OS>`.
   Raw provenance is retained byte for byte under `scenario-evidence/<shard-name>/`;
   runner tool versions may differ. Scenario-log conflicts still fail the merge.
   Golden refresh: `golden-update-<OS>` comes from the shard that ran `scenario_screenshot_goldens`.
@@ -1185,3 +1185,15 @@ Unix Makefiles, `PIKMIN_NATIVE_JAUDIO=OFF`):
   `-G Ninja`.
 - `gl_probe.c`, built with the command above, printed `GL_PROBE_OK` (4.1 Metal,
   Apple M3 Max).
+
+### Local exact throw fidelity
+
+Provide a local GPIE01 revision 1 install through `PIKMIN_SCENARIO_DATA_DIR` and
+run `ctest --test-dir <scenario-build> -R '^scenario_throw_fidelity_disc$'`.
+This runs leaf, bud, flower and yellow throws at 30 Hz and 60 Hz and checks the
+retail calibration values. The 60 Hz results characterize the port with retail
+assets. Each run uses scratch state and keeps game assets on the local machine.
+
+The public workflow selects the synthetic profile. Its grab and release checks
+follow the authored Action0 schedule and its flight checks use the source
+parameter defaults. Both profiles fail on missing results or failed throws.

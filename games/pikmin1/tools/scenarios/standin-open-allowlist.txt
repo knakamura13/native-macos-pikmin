@@ -68,6 +68,40 @@ dataDir/stages/practice/plants.gen
 dataDir/parms/sound.bin
 dataDir/camera/camepara.bin
 
+# TekiMgr constructs each parameter type before CoreNode::load. These
+# optional positional overrides are omitted to exercise source defaults.
+dataDir/tekipara/beatle.bin
+dataDir/tekipara/chappb.bin
+dataDir/tekipara/chappy.bin
+dataDir/tekipara/collec.bin
+dataDir/tekipara/dororo.bin
+dataDir/tekipara/frog.bin
+dataDir/tekipara/frow.bin
+dataDir/tekipara/hibaA.bin
+dataDir/tekipara/hollec.bin
+dataDir/tekipara/iwagen.bin
+dataDir/tekipara/iwagon.bin
+dataDir/tekipara/kabekuiA.bin
+dataDir/tekipara/kabekuiB.bin
+dataDir/tekipara/kabekuiC.bin
+dataDir/tekipara/kinoko.bin
+dataDir/tekipara/mar.bin
+dataDir/tekipara/miurin.bin
+dataDir/tekipara/mizigen.bin
+dataDir/tekipara/namazu.bin
+dataDir/tekipara/napkid.bin
+dataDir/tekipara/otama.bin
+dataDir/tekipara/palm.bin
+dataDir/tekipara/pearl.bin
+dataDir/tekipara/qurione.bin
+dataDir/tekipara/rocpe.bin
+dataDir/tekipara/shell.bin
+dataDir/tekipara/swallob.bin
+dataDir/tekipara/swallow.bin
+dataDir/tekipara/tamago.bin
+dataDir/tekipara/tank.bin
+dataDir/tekipara/usuba.bin
+
 # The disc's naka1 table names three animations its bundle lacks, so the game
 # opens loose .dck files that do not exist there either (FAILED in the boot
 # manifest). The stand-in naka1 bundle holds all five entries, so these open

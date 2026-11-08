@@ -80,14 +80,17 @@ def check_disc_reference(directory):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory')
+    parser.add_argument('--disc-reference', action='store_true', help='also anchor 30 Hz fall/flick to the original-disc evidence (logs must come from a disc install)')
     args = parser.parse_args()
     try:
-        problems = compare(args.directory) + check_disc_reference(args.directory)
+        problems = compare(args.directory)
+        if args.disc_reference:
+            problems += check_disc_reference(args.directory)
     except (OSError, ValueError) as error:
         parser.exit(1, f'FAIL: {error}\n')
     if problems:
         parser.exit(1, '\n'.join('FAIL: ' + p for p in problems) + '\n')
-    print('ballistic trajectories match 30 Hz at 60/120 Hz; 30 Hz fall/flick match original disc within 0.001 units')
+    print('ballistic trajectories match 30 Hz at 60/120 Hz' + ('; 30 Hz fall/flick match original disc within 0.001 units' if args.disc_reference else ''))
 
 
 if __name__ == '__main__':

@@ -141,7 +141,7 @@ ctest --test-dir build/pikmin1-scenarios-jaudio --output-on-failure -R '^scenari
 `.github/workflows/ci.yml` job `jaudio-scenarios` is this configuration on
 Linux, macOS and Windows (MinGW-w64): the build above without
 `nectar_audio_writer_test` (the main jobs already run it), then
-`ctest -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -E _disc`
+`ctest -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -LE game-assets`
 (7 entries with the generator) with the same environment as the OFF scenario step.
 Each OS is its own build directory, since `PIKI_USE_JAUDIO` changes the compile
 definitions of every game file and ccache shares little with the OFF build. The

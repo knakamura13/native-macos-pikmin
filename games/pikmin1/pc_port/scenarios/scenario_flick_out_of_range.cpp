@@ -45,7 +45,7 @@
 
 namespace {
 
-constexpr float kFlickPower  = 10.0f;  // times the Bulborb's TPF_UpperFlickPower
+constexpr float kFlickPower  = 14.0f;  // times the Bulborb's TPF_UpperFlickPower
 constexpr float kApproachS   = 10.0f; // to reach attack mode
 constexpr float kWatchS      = 6.0f;  // printed after the flick (at least)
 constexpr float kGetUpS      = 8.0f;  // flight plus knock-down (disc up to 3.83 s, stand-ins 2.23 s)

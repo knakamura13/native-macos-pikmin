@@ -1,6 +1,5 @@
 // throw_levels: the throw at each charge level and A with nothing to throw (coverage/edge-cases.md
-// EC-28, EC-31, EC-40, EC-42), on the sandbox stand-in stage. Its naviMgr.bin carries the disc's
-// throw parms, where min and max are equal: distance 140..140 and height 75..75.
+// EC-28, EC-31, EC-40, EC-42), on the synthetic sandbox with source-default throw parameters.
 //
 // In order, each within a bound in seconds:
 //   Away   The captain walks sideways for 4 s, away from the ship (A beside it enters the ship)
@@ -11,8 +10,8 @@
 //   Throws Six blue Pikmin are born into the party. Each throw holds A until
 //          NaviThrowWaitState::mThrowChargeLevel is the wanted level, then releases, aimed 90 from
 //          the captain (the cursor offset is set each tick, as the stick would) and 60 degrees
-//          round from the last. The stand-in ThrowWait motion has no KEY_LoopEnd, so the level
-//          never rises by itself: the scenario sets it as KEY_LoopEnd would. Navi::throwPiki adds
+//          round from the last. The stand-in ThrowWait loop raises charge
+//          without manual assignment, one level at each KEY_LoopEnd. Navi::throwPiki adds
 //          the captain's whole velocity to the Pikmin's, the vertical part too, and a captain
 //          standing in ThrowWait sometimes carries a falling speed (seen down to -24.4 at y 0)
 //          that lowers the arc; the scenario zeroes his vertical speed so the peak shows the
@@ -20,25 +19,20 @@
 //          EC-28: the Pikmin is Hanged before Throw, Flying after it and Normal on landing.
 //          mThrowDistance follows the level and is never read: the landing point is the cursor.
 //          EC-40 in part: each Pikmin lands on the ground (y within 1 of MapMgr::getMinY).
-//          Throws 0-3 (levels 0, 1, 2, 3, the disc's parms): each lands within 15 of the cursor,
-//          and the peak above the launch is the same within 1 at every level (EC-42: with min ==
-//          max the charge changes nothing, so on the disc a charged throw is no higher).
-//          Throws 4-5 (control, mThrowMaxHeight raised by 40 and restored after): level 0 peaks
-//          as before (it throws at mThrowMinHeight) and level 3 peaks at least 2 higher, so the
-//          checks above would see a charge that did change the height. The raised arc lands past
-//          the cursor (23 at 30 Hz), so the cursor check is for the disc's parms only.
+//          Throws 0-3 use a test control that sets both height bounds to the source minimum.
+//          The peak must stay the same across charge levels, exercising the equal-bound case.
+//          Throws 4-5 restore the source maximum: level 0 stays at the same peak and level 3
+//          must rise. The distance parameter follows the source interpolation in both cases.
 //
 // Not covered: a cliff or wall in the flight (EC-40's main case; the stand-in sandbox is flat
 // where the captain stands), water (EC-41: piki_throw_water, on sandbox_water), Chain Actions timing (EC-43), and
 // a yellow Pikmin (its fixed mYellowThrowHeight).
 //
-// Each rate must reproduce the measured 30 Hz port peak (+61.29), which matches the
-// original-disc Dolphin capture (+61.22..61.28) within 0.1 world unit.
+// Each rate's throws are compared with the other levels of the same run. Cross-rate
+// parity with the 30 Hz arc is asserted on the complete log set by check_ballistic.py.
 //
 // Negative controls: Empty is the contrast to the throws (A with Pikmin does enter Throw), and
-// throws 4-5 are the contrast to EC-42's equal peaks. Manual (2026-10-31, local, not committed):
-// kRaise 40 -> 0 fails "EC-42 control: with mThrowMaxHeight raised the peak rises with the charge
-// level" at 30 Hz (level 3 +61.3, level 0 +61.3) and at 60 Hz (+68.0, +68.0).
+// throws 4-5 are the contrast to EC-42's equal peaks.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -62,11 +56,10 @@
 
 namespace {
 
-// The throws in order: the charge level, and whether mThrowMaxHeight is raised for it.
+// The throws in order: the charge level, and whether the source maximum height is restored for it.
 constexpr int kThrows                = 6;
 constexpr int kLevel[kThrows]        = { 0, 1, 2, 3, 0, 3 };
-constexpr bool kRaised[kThrows]      = { false, false, false, false, true, true };
-constexpr float kRaise               = 40.0f;
+constexpr bool kSourceRange[kThrows]      = { false, false, false, false, true, true };
 constexpr float kSamePeak            = 1.0f;
 constexpr float kSelect        = 80.0f; // NaviThrowWaitState::init's pick radius
 constexpr float kCursorSlack   = 15.0f;
@@ -95,11 +88,13 @@ public:
 		std::printf("[scenario] throw_levels: distance %.0f..%.0f, height %.0f..%.0f, hold max %.2f s, flight %.2f s, gravity %.0f\n",
 		            C_NAVI_PARM(navi, mThrowMinDistance), C_NAVI_PARM(navi, mThrowMaxDistance), hMin, hMax, C_NAVI_PARM(navi, mThrowHoldMaxTime),
 		            C_NAVI_PARM(navi, mThrowFlightTime), AICONST.mGravity());
-		if (hMax != hMin || C_NAVI_PARM(navi, mThrowMaxDistance) != C_NAVI_PARM(navi, mThrowMinDistance)) {
-			fail(0, "the disc's throw parms: min and max height equal, min and max distance equal", "height %.1f, %.1f", hMin, hMax);
+		mMinHeight = hMin;
+		mMaxHeight = hMax;
+		if (hMin != 80.0f || hMax != 100.0f || C_NAVI_PARM(navi, mThrowMinDistance) != 150.0f || C_NAVI_PARM(navi, mThrowMaxDistance) != 600.0f) {
+			fail(0, "source-default throw height and distance bounds", "height %.1f..%.1f, distance %.1f..%.1f", hMin, hMax,
+			     C_NAVI_PARM(navi, mThrowMinDistance), C_NAVI_PARM(navi, mThrowMaxDistance));
 			return;
 		}
-		mMaxHeight = hMax;
 		enter(Away, 0);
 	}
 
@@ -173,7 +168,8 @@ public:
 				mSawHanged = mSawFlying = false;
 				mThrown    = nullptr;
 				mLevel     = kLevel[mThrow];
-				C_NAVI_PARM(navi, mThrowMaxHeight) = mMaxHeight + (kRaised[mThrow] ? kRaise : 0.0f);
+				mLastCharge = 0;
+				C_NAVI_PARM(navi, mThrowMaxHeight) = kSourceRange[mThrow] ? mMaxHeight : mMinHeight;
 				// The idle cursor sits at the captain's feet, which throws straight up; aim
 				// kAim away from him instead, as the stick would.
 				// Each throw a different way (60 degrees apart), clear of the Pikmin
@@ -197,10 +193,14 @@ public:
 				fail(t, "the release tick at the wanted charge level", "level %d, want %d", wait->mThrowChargeLevel, mLevel);
 				return;
 			}
-			if (wait->mIsHoldingThrowPiki && wait->mThrowChargeLevel < mLevel) {
-				// The stand-in ThrowWait motion has no KEY_LoopEnd, so the level never
-				// rises by itself: set it as KEY_LoopEnd would. exec reads it next tick.
-				wait->mThrowChargeLevel = mLevel;
+			if (wait->mThrowChargeLevel != mLastCharge) {
+				if (wait->mThrowChargeLevel != mLastCharge + 1) {
+					fail(t, "charge rises one level at a time without manual assignment", "level %d after %d", wait->mThrowChargeLevel, mLastCharge);
+					return;
+				}
+				mLastCharge = wait->mThrowChargeLevel;
+				std::printf("[scenario] throw_levels: natural charge %d at %.2f s held\n", mLastCharge, s);
+				// The animation runs after exec: let exec consume the new charge before release.
 				return;
 			}
 			if (wait->mIsHoldingThrowPiki && wait->mThrowChargeLevel == mLevel) {
@@ -248,27 +248,20 @@ public:
 				std::printf("[scenario] throw_levels: throw %d, level %d after %.2f s held, max height %.0f: mThrowDistance %.0f, peak +%.1f, landed %.1f "
 				            "from the captain, %.1f from the cursor (%.1f from him), y %.2f over ground %.2f\n",
 				            mThrow, mLevel, mHeldSecs, C_NAVI_PARM(navi, mThrowMaxHeight), mDist[mThrow], rise, flat(at, mFrom), flat(at, mCursor), flat(mCursor, mFrom), at.y, ground);
-				// Only with the disc's parms: the raised arc flies past the cursor (23
-				// beyond at 115 high), as Navi::throwPiki aims for mThrowFlightTime and the
-				// Flying state's lighter gravity stretches a higher arc.
-				if ((!kRaised[mThrow] && flat(at, mCursor) > kCursorSlack) || std::fabs(at.y - ground) > kGroundSlack) {
+				if ((!kSourceRange[mThrow] && flat(at, mCursor) > kCursorSlack) || std::fabs(at.y - ground) > kGroundSlack) {
 					fail(t, "EC-40: the Pikmin lands on the ground at the cursor", "%.1f from the cursor, y %.2f, ground %.2f", flat(at, mCursor), at.y, ground);
 					return;
 				}
-                if ((!kRaised[mThrow] || mLevel == 0) && std::fabs(rise - 61.29f) > 0.1f) {
-                    fail(t, "cross-rate peak matches the disc-verified 30 Hz arc within 0.1", "rate %u, peak %.6f, reference 61.29", mRate, rise);
-                    return;
-                }
-				if (!kRaised[mThrow] && mThrow > 0 && std::fabs(rise - mRise[0]) > kSamePeak) {
-					fail(t, "EC-42: with the disc's parms the peak is the same at every charge level", "level %d +%.1f, level 0 +%.1f", mLevel, rise, mRise[0]);
+				if (!kSourceRange[mThrow] && mThrow > 0 && std::fabs(rise - mRise[0]) > kSamePeak) {
+					fail(t, "EC-42: equal height bounds produce the same peak at every charge level", "level %d +%.1f, level 0 +%.1f", mLevel, rise, mRise[0]);
 					return;
 				}
-				if (kRaised[mThrow] && mLevel > 0 && !(rise >= mRise[mThrow - 1] + kMinHeightStep)) {
-					fail(t, "EC-42 control: with mThrowMaxHeight raised the peak rises with the charge level", "level %d +%.1f, level 0 +%.1f", mLevel, rise,
+				if (kSourceRange[mThrow] && mLevel > 0 && !(rise >= mRise[mThrow - 1] + kMinHeightStep)) {
+					fail(t, "EC-42 control: with the source height range the peak rises with the charge level", "level %d +%.1f, level 0 +%.1f", mLevel, rise,
 					     mRise[mThrow - 1]);
 					return;
 				}
-				if (kRaised[mThrow] && mLevel == 0 && std::fabs(rise - mRise[0]) > kSamePeak) {
+				if (kSourceRange[mThrow] && mLevel == 0 && std::fabs(rise - mRise[0]) > kSamePeak) {
 					fail(t, "EC-42 control: level 0 throws at mThrowMinHeight whatever the max", "+%.1f, before +%.1f", rise, mRise[0]);
 					return;
 				}
@@ -283,7 +276,7 @@ public:
 		case Back:
 			if (cap == NAVISTATE_Walk) {
 				if (++mThrow == kThrows) {
-					std::printf("[scenario] throw_levels: EC-42: peaks +%.1f +%.1f +%.1f +%.1f (raised: +%.1f +%.1f), landing distance %.1f %.1f %.1f %.1f %.1f %.1f\n",
+					std::printf("[scenario] throw_levels: EC-42: peaks +%.1f +%.1f +%.1f +%.1f (source range: +%.1f +%.1f), landing distance %.1f %.1f %.1f %.1f %.1f %.1f\n",
 					            mRise[0], mRise[1], mRise[2], mRise[3], mRise[4], mRise[5], mLand[0], mLand[1], mLand[2], mLand[3], mLand[4], mLand[5]);
 					C_NAVI_PARM(navi, mThrowMaxHeight) = mMaxHeight;
 					mPhase = Done;
@@ -300,6 +293,7 @@ public:
 	}
 
 private:
+	int mLastCharge = 0;
 	enum Phase { Away, Empty, Settle, Held, Release, Flight, Back, Done };
 
 	void enter(Phase p, unsigned t)
@@ -361,7 +355,7 @@ private:
 	bool mSawAttack = false, mSawHanged = false, mSawFlying = false;
 	Piki* mThrown = nullptr;
 	Vector3f mAim, mCursor, mFrom;
-	float mLaunchY = 0, mPeak = 0, mHeldSecs = 0, mMaxHeight = 0;
+	float mLaunchY = 0, mPeak = 0, mHeldSecs = 0, mMinHeight = 0, mMaxHeight = 0;
 	float mDist[kThrows] = {}, mRise[kThrows] = {}, mLand[kThrows] = {};
 };
 

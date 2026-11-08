@@ -24,6 +24,12 @@
 #include "gameflow.h"
 #include "teki.h"
 namespace {
+// Flower-glide fixtures. The source default of Pikmin parameter p48 (mFlowerGravityScale, 0.01)
+// cancels almost all gravity, so a glide neither reaches an apex nor lands inside the two-second
+// trace window every case shares. The fixtures use a test control of 0.5 (the glide cancels half
+// of gravity) and start 100 above the ground; both are authored here, not read from any file.
+constexpr float kFlowerStartHeight  = 100.0f;
+constexpr float kFlowerGravityScale = 0.5f;
 enum Kind { Fall, Flick, Launch, Impulse, ZeroGravity, Drag, Volatile, GravityToggle, SubtickImpulse, FlowerNegative, FlowerApexImpulse };
 class Ballistic : public PcScenario {
 public:
@@ -48,7 +54,8 @@ public:
 			if (!mPiki) { scenarioFailf(t, "one born Pikmin", "birth returned null"); return; }
 			GameStat::workPikis.inc(Blue);
 			mPiki->init(navi);
-			at.y = mGround + (mKind == Flick ? 0.0f : 200.0f);
+			const bool flower = mKind == FlowerNegative || mKind == FlowerApexImpulse;
+			at.y = mGround + (mKind == Flick ? 0.0f : flower ? kFlowerStartHeight : 200.0f);
 			mPiki->Creature::init(at);
 			mPiki->initColor(Blue);
 			mPiki->setFlower(Leaf);
@@ -62,6 +69,7 @@ public:
 				}
 			}
 			if (mKind == FlowerNegative || mKind == FlowerApexImpulse) {
+				C_PIKI_PARM(mPiki, mFlowerGravityScale) = kFlowerGravityScale;
 				mPiki->setFlower(Flower);
 				mPiki->mFSM->transit(mPiki, PIKISTATE_Flying);
 			}

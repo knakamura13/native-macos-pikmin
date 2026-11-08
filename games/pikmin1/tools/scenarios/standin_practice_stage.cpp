@@ -44,7 +44,7 @@ bool sourceMod(Bytes& out, std::string& error)
 	return true;
 }
 
-/// The same base .ini as the sandboxes: map_file and the disc's day_multiply (the disc's practice.ini also has 1.0).
+/// Authored flat stage with neutral day-rate multiplier.
 std::string baseIni()
 {
 	return "# Tutorial (Impact Site) stand-in stage for the disc-free scenario tests, written by nectar_standin_generator.\n"
@@ -62,7 +62,7 @@ Spec at(Spec s, float x, float z, const char* memo, int face)
 	return s;
 }
 
-/// default.gen: the three Onions and the ship, as on the disc (generators named "    ", not "next").
+/// Source-required tutorial goals; default generators load only owned Onions.
 std::vector<Spec> defaultGen()
 {
 	std::vector<Spec> g;
@@ -70,15 +70,15 @@ std::vector<Spec> defaultGen()
 	onion.kind = Spec::Item;
 	onion.name = "goal";
 	onion.itemParam = 0;
-	g.push_back(at(onion, -150.0f, -500.0f, "blue goal", 180));
+	g.push_back(at(onion, -150.0f, -500.0f, "blue goal", 0));
 	onion.itemParam = 1;
-	g.push_back(at(onion, kPracticeRedOnionX, kPracticeRedOnionZ, "red goal", 100));
+	g.push_back(at(onion, kPracticeRedOnionX, kPracticeRedOnionZ, "red goal", 90));
 	onion.itemParam = 2;
-	g.push_back(at(onion, 150.0f, -650.0f, "yellow goal", 320));
+	g.push_back(at(onion, 150.0f, -650.0f, "yellow goal", 180));
 	Spec ufo;
 	ufo.kind = Spec::Item;
 	ufo.name = "ufo";
-	g.push_back(at(ufo, kPracticeUfoX, kPracticeUfoZ, "ufo goal", 256));
+	g.push_back(at(ufo, kPracticeUfoX, kPracticeUfoZ, "ufo goal", 270));
 	return g;
 }
 
@@ -95,13 +95,13 @@ std::vector<Spec> initGen()
 	box.name         = "move stone";
 	box.shape        = "stone 10";
 	box.stoneTo      = { kPracticeBoxX, 0.0f, kPracticeBoxZ - kPracticeBoxPush };
-	box.stonePushers = 10;    // the disc's p02 (also the code default)
-	box.stoneSpeed   = 50.0f; // the disc's p03 (code default 30)
+	box.stonePushers = 10;    // source default
+	box.stoneSpeed   = 30.0f; // source default
 	g.push_back(at(box, kPracticeBoxX, kPracticeBoxZ, "push box", 0));
 	return g;
 }
 
-/// 0.gen, the Day 1 file: one red 1-pellet (the disc's 0.gen has four of them and two 5-pellets).
+/// Day 1 includes one authored red 1-pellet exercise.
 std::vector<Spec> day1Gen()
 {
 	Spec pellet;

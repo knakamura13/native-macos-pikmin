@@ -242,243 +242,49 @@ bool stagesIni(Tree& tree, std::string& error)
 }
 
 // ── Parameter files ─────────────────────────────────────────────────────────
-// Every value not listed keeps its code default. gamePrms.bin must exist (it is
-// the scenario runner's data gate) and stays empty. naviMgr.bin and pikiMgr.bin
-// hold two lists each (CreatureProp, then NaviProp or PikiProp).
-//
-// throw_release touches how the captain and his Pikmin move, collide, aim and
-// throw, and how far a grab reaches, so those IDs carry the disc's values. With
-// the code defaults the captain grabs straight from 80 units (K = 1, the
-// ThrowWait key frame) where the disc walks the Pikmin to the hand first (K = 13
-// at 30 Hz). Only the disc has these numbers: they were read once from the
-// VERSION_GPIE01_01 install's parms/naviMgr.bin, pikiMgr.bin, aiconst.bin and
-// cunit.bin (read-only, decoded with the Parameters::read layout, 2026-10-27),
-// and each differs from the code default in NaviMgr.h, PikiMgr.h,
-// CreatureProp.h, AIConstant.h or CPlate.h (noted per line).
-// The other differing captain and game IDs (whistle, punch) are left at the
-// code defaults because no v1 scenario touches them. pikiMgr.bin is the
-// exception: since 2026-11-04 it carries every ID the disc file sets, with the
-// disc's value (standin-piki-parms.md). Every ID of the three disc files was
-// diffed against these and the code defaults on 2026-10-28 (verification-log.md,
-// item 4); the ones left at code defaults are:
-//  - gamePrms.bin (stays empty): p00 daySpeed (disc 27, code 20) is overwritten
-//    on PC from the day-length setting (27 by default) in GameCoreSection's
-//    constructor, so the file value never reaches the clock; t00 startHour,
-//    t01 endHour, p06 nightTimer and x99 equal the code defaults; p01-p04, s01,
-//    s03 only blend the lighting; p05 nightWarning (disc 18, code 16) is the
-//    Hurry Up message, which day30_clock passes either way (it starts Day 30 at
-//    18:48, after both). x98 is the unused title string.
-//  - naviMgr.bin: p01-p03 whistle, p29/p30 escape animation frames, p31/p33
-//    pressed and push timing, p42 pluck loop count, p49 impatience time, p51
-//    punch damage, p57-p59 Kinoko flick and bury escape, p61 pluck zoom. No v1
-//    scenario whistles, runs into the escape speed, is pressed, pushes, plucks,
-//    punches or is buried.
-//
-// CreatureProp: the captain's effective code defaults are 1.0, 0.5, 0.5, 0.2,
-// 0.3 (the NaviProp constructor, navi.cpp, overrides s00, s02 and s03 of the
-// CreatureProp 0.5, 0.5, 0.25, 0.1, 0.3) and the Pikmin's 0.1, 0.5, 0.25, 0.1,
-// 0.3 (PikiProp overrides s00). The disc differs in the captain's s03 and the
-// Pikmin's s02 and s03; the lists below carry all five disc values.
-//
-// With these values the walk to the hand and the grab run identically on both
-// trees: the same target speeds (240 beyond 2 x grab range, then 120), the
-// hand-over at 15 units, then ThrowWait's KEY_Action0 one frame later. K is set
-// by how far away the Pikmin is when the scenario presses A, and that comes
-// from the stage and the sim RNG, not from these files. These values stay the
-// disc's; the stand-in K comes from the sandbox gate the walk runs into
-// (standin_sandbox.h). Details are in standin-k-investigation.md.
+// Synthetic scenarios exercise the source-defined constructor defaults. Empty
+// tagged lists leave those defaults intact; NaviProp and PikiProp each read a
+// CreatureProp list followed by their own list. No retail parameter data is used.
 bool parmFiles(Tree& tree, std::string& error)
 {
-	using nectar::parmFloat;
-	using nectar::parmInt;
-	struct File {
-		const char* path;
-		std::vector<std::vector<nectar::ParmEntry>> lists;
-	};
-	const File files[] = {
-		{ "dataDir/parms/gamePrms.bin", { {} } },
-		// AIConstant (aiConstants.cpp). Every ID that differs from the code default carries the
-		// disc value (read-only, 2026-10-28); the full table is in standin-aiconst.md. The other
-		// 17 IDs equal the code default.
-		{ "dataDir/parms/aiconst.bin",
-		  { {
-		      parmFloat("p00", 560.0f), // mGravity (code 550): shapes the throw's flight
-		      parmInt("p01", 0),        // _34, Pikmin auto-attack (code 1)
-		      parmInt("p08", 0),        // _A4, return after attack (code 1)
-		      parmInt("p10", 0),        // _C4, attack once = 1, until death = 0 (code 1)
-		      parmInt("p13", 0),        // mDoPluckWithCursor (code 1)
-		      parmInt("p19", 5),        // _154, UFO level 2 part count (code 6)
-		  } } },
-		// CPlate (cPlate.cpp): where the squad stands behind the captain.
-		// DemoParms (gameDemo.cpp): the trigger radii and timers of the tutorial's
-		// demo flags. All five differ from the code default (150, 100, 6, 30, 150)
-		// except p03, so the file carries the disc's (parms/demo.bin, read-only,
-		// 2026-10-28). Only the tutorial scenarios reach them: the red Onion, seed and
-		// engine checks of Navi::demoCheck run on stage Practice (or in the tutorial)
-		// only, and p03 (the DEMOFLAG_Unk9 timer, onion_unlock) is the code default.
-		{ "dataDir/parms/demo.bin",
-		  { {
-		      parmFloat("p00", 60.0f), // mOnionBootTriggerRadius (code 150): DiscoverRedOnyon
-		      parmFloat("p01", 25.0f), // mSeedDemoTriggerRadius (code 100): ApproachSeed
-		      parmFloat("p02", 40.0f), // mSeedDemoWaitTime (code 6): the NoPikminTimeout timer
-		      parmFloat("p03", 30.0f), // _30, the DEMOFLAG_Unk9 timer (code 30)
-		      parmFloat("p04", 40.0f), // mDemoTriggerRadius (code 150): ApproachEngine, part discovery
-		  } } },
-		{ "dataDir/parms/cunit.bin",
-		  { {
-		      parmFloat("p00", 17.5f), // mStartOffset (code 30)
-		      parmFloat("p01", 90.0f), // mLengthLimit (code 150)
-		      parmFloat("p02", 7.0f),  // mMaxPosSize (code 12)
-		  } } },
-		{ "dataDir/parms/naviMgr.bin",
-		  {
-		      // CreatureProp, disc values (effective code defaults 1.0, 0.5, 0.5, 0.2, 0.3: only s03 differs).
-		      { parmFloat("s00", 1.0f), parmFloat("s01", 0.5f), parmFloat("s02", 0.5f), parmFloat("s03", 0.1f), parmFloat("s04", 0.3f) },
-		      {
-		          parmFloat("p00", 25.0f),   // mActionRadius (code 120)
-		          parmFloat("p04", 160.0f),  // mMoveSpeed (code 170)
-		          parmFloat("p56", 160.0f),  // mRunSpeed (code 210)
-		          parmFloat("p38", 1.2f),    // mDisplayScale (code 1)
-		          parmFloat("p10", 140.0f),  // mThrowMaxDistance (code 600)
-		          parmFloat("p11", 140.0f),  // mThrowMinDistance (code 150)
-		          parmFloat("p24", 75.0f),   // mThrowMaxHeight (code 100)
-		          parmFloat("p25", 75.0f),   // mThrowMinHeight (code 80)
-		          parmFloat("p54", 115.0f),  // mYellowThrowHeight (code 200)
-		          parmFloat("p37", 15.0f),   // mPluckGrabRange (code 80): beyond it the Pikmin walks to the hand first
-		          parmFloat("p39", 15.0f),   // mPikiWaitRange (code 30)
-		          parmFloat("p40", 40.0f),   // mPikiFormationChangeRange (code 60)
-		          parmFloat("p21", 8.0f),    // mBodyCollisionRadius (code 15)
-		          parmFloat("p41", 8.5f),    // mGroundCollisionRadius (code 16)
-		          parmFloat("p22", 1.0f),    // mInverseMass (code 4)
-		          parmFloat("p23", 0.03f),   // aiming rotation speed (code 0.04)
-		          parmFloat("p15", 8.0f),    // mWalkStartSpeed (code 35)
-		          parmFloat("p16", 20.0f),   // mRunStartSpeed (code 70)
-		          parmFloat("p17", 95.0f),   // mEscapeStartSpeed (code 160)
-		          parmFloat("p18", 60.0f),   // mWalkAnimMinFrames (code 30)
-		          parmFloat("p19", 90.0f),   // mWalkAnimMaxFrames (code 60)
-		          parmFloat("p27", 40.0f),   // mRunAnimMinFrames (code 30)
-		          parmFloat("p44", 0.65f),   // mCursorMoveStickThreshold (code 0.75)
-		          parmFloat("p45", 0.0f),    // mCursorMinRadius (code 50)
-		          parmFloat("p46", 100.0f),  // mCursorMaxRadius (code 300)
-		          parmFloat("p47", 300.0f),  // mCursorMoveSpeed (code 200)
-		          parmFloat("p48", 0.85f),   // mCursorMoveDelayTime (code 2)
-		      },
-		  } },
-		{ "dataDir/parms/pikiMgr.bin",
-		  {
-		      // CreatureProp, disc values (effective code defaults 0.1, 0.5, 0.25, 0.1, 0.3: s02 and s03 differ).
-		      { parmFloat("s00", 0.1f), parmFloat("s01", 0.5f), parmFloat("s02", 0.8f), parmFloat("s03", 0.14f), parmFloat("s04", 0.3f) },
-		      // PikiProp::Parms: all 77 IDs the disc file sets, in the disc file's order, with the disc
-		      // values (parms/pikiMgr.bin, read-only, 2026-11-04). The stand-in file is byte-identical to
-		      // the disc's. The full table, and what each differing ID changes, is in standin-piki-parms.md.
-		      {
-		          parmFloat("p00", 10.0f),    // mMinMoveSpeed (code 84.0)
-		          parmFloat("p01", 120.0f),   // mMaxLeafMoveSpeed (code 162.5)
-		          parmFloat("p54", 170.0f),   // mMaxFlowerMoveSpeed (code 220.0)
-		          parmFloat("p65", 140.0f),   // mMaxBudMoveSpeed (code 160.0)
-		          parmFloat("p38", 1.0f),     // mPikiDisplayScale, equals the code default
-		          parmFloat("p03", 30.0f),    // mPikiMaxHealth (code 100.0)
-		          parmFloat("p10", 10.0f),    // mSkinnyPikiHealth (code 150.0)
-		          parmFloat("p11", 10.0f),    // mFatPikiHealth (code 200.0)
-		          parmFloat("p04", 10.0f),    // mBlueAttackPower, equals the code default
-		          parmFloat("p12", 15.0f),    // mRedAttackPower, equals the code default
-		          parmFloat("p13", 10.0f),    // mYellowAttackPower, equals the code default
-		          parmInt("p05", 1),          // mBudEnergyRequirement, equals the code default
-		          parmInt("p06", 1),          // mFlowerEnergyRequirement (code 2)
-		          parmFloat("p07", 0.8f),     // mPluckStrength0, equals the code default
-		          parmFloat("p08", 1.5f),     // mPluckStrength1, equals the code default
-		          parmFloat("p09", 1.2f),     // mPluckStrength2, equals the code default
-		          parmFloat("p14", 2.5f),     // mPressDeathFactor (code 5.0)
-		          parmFloat("p15", 1.0f),     // mNormalPikiPressFactor (code 3.0)
-		          parmFloat("p16", 0.9f),     // mWildPikiPressFactor (code 1.0)
-		          parmFloat("p37", 35.0f),    // mFatPikiPressFactor (code 40.0)
-		          parmFloat("p17", 5.0f),     // mStepSpeedThreshold, equals the code default
-		          parmFloat("p18", 8.0f),     // mWalkSpeedThreshold (code 35.0)
-		          parmFloat("p19", 20.0f),    // mRunSpeedThreshold (code 70.0)
-		          parmFloat("p20", 95.0f),    // mEscapeSpeedThreshold (code 160.0)
-		          parmFloat("p21", 30.0f),    // mMinWalkAnimSpeed, equals the code default
-		          parmFloat("p22", 50.0f),    // mMaxWalkAnimSpeed (code 60.0)
-		          parmFloat("p23", 40.0f),    // mMinRunAnimSpeed (code 30.0)
-		          parmFloat("p24", 60.0f),    // mMaxRunAnimSpeed, equals the code default
-		          parmFloat("p25", 60.0f),    // mEscapeAnimSpeed (code 30.0)
-		          parmFloat("p26", 100.0f),   // mUnusedAnimSpeed (code 60.0)
-		          parmFloat("p27", 3.0f),     // mMinPikiSize (code 6.0)
-		          parmFloat("p34", 5.0f),     // mMaxPikiSize (code 10.0)
-		          parmFloat("p28", 100.0f),   // mInvMass, equals the code default
-		          parmFloat("p39", 8.5f),     // mCollisionRadius (code 8.0)
-		          parmFloat("p29", 600.0f),   // mFormationSlipRange, equals the code default
-		          parmFloat("p30", 1000.0f),  // mFormationBreakRange, equals the code default
-		          parmFloat("p31", 10.0f),    // mMaxLostChildTime, equals the code default
-		          parmFloat("p32", 50.0f),    // mUnusedWhiteFreeDistance (code 200.0)
-		          parmFloat("p33", 250.0f),   // mUnusedGrayFreeDistance (code 800.0)
-		          parmFloat("p35", 2.0f),     // mUnusedDynWallPushTime (code 0.6)
-		          parmFloat("p36", 2.0f),     // mUnusedStaticWallPushTime (code 0.6)
-		          parmFloat("p40", 120.0f),   // mDefaultFreeBoidTime (code 15.0)
-		          parmFloat("p41", 70.0f),    // mIdleAttackSearchRange (code 100.0)
-		          parmFloat("p42", 55.0f),    // mIdleWorkSearchRange (code 100.0)
-		          parmFloat("p43", 3.0f),     // mMaxFlickKnockDownTime (code 0.7)
-		          parmFloat("p74", 1.0f),     // mMinFlickKnockDownTime (code 0.7)
-		          parmFloat("p44", 2.0f),     // mUnusedLeafBudTime (code 10.0)
-		          parmFloat("p45", 2.0f),     // mUnusedBudFlowerTime (code 10.0)
-		          parmFloat("p46", 10.0f),    // mUnusedFlowerSeedTime, equals the code default
-		          parmFloat("p47", 10.0f),    // mUnusedSeedLeafTime, equals the code default
-		          // Flower Pikmin fall at this fraction of gravity after the peak of a throw. With the
-		          // code default the descent takes 1.75x (30 Hz) to 2.2x (60 Hz) as long as on the disc.
-		          parmFloat("p48", 0.5f),     // mFlowerGravityScale (code 0.01)
-		          parmFloat("p49", 0.1f),     // mSeedUpTime (code 1.0)
-		          parmFloat("p50", 5.0f),     // mPluckWaitTime (code 1.0)
-		          parmFloat("p51", 120.0f),   // mGrowUpTime (code 4.0)
-		          parmFloat("p52", 180.0f),   // mWiltTime (code 4.0)
-		          parmFloat("p53", 60.0f),    // mRebirthSeedTime (code 1.0)
-		          parmFloat("p55", 2.0f),     // mPanicTime (code 3.0)
-		          parmFloat("p56", 0.8f),     // mPikiLeaveSeedChance, equals the code default
-		          parmFloat("p57", 2.0f),     // mBombSetFuseTime, equals the code default
-		          parmFloat("p58", 50.0f),    // mBombExplodeRadius, equals the code default
-		          parmFloat("p59", 50.0f),    // mBombDamageBomb (code 200.0)
-		          parmFloat("p75", 20.0f),    // mBombDamageNavi (code 10.0)
-		          parmFloat("p76", 120.0f),   // mBombDamageEnemy, equals the code default
-		          parmFloat("p77", 765.0f),   // mBombDamagePiki, equals the code default
-		          parmFloat("p60", 300.0f),   // mSunsetSafetyRange (code 200.0)
-		          parmFloat("p61", 250.0f),   // mPostWorkJoinPartyRange, equals the code default
-		          parmInt("p62", 10),         // mMinStartDrownFrames (code 30)
-		          parmInt("p63", 10),         // mRandStartDrownFrames, equals the code default
-		          parmFloat("p64", 120.0f),   // mUnusedPushTime (code 5.0)
-		          parmFloat("p66", 170.0f),   // mBombTargetSearchRange (code 300.0)
-		          parmFloat("p67", 100.0f),   // mBombThrowMinDistance (code 110.0)
-		          parmFloat("p68", 130.0f),   // mBombThrowMaxDistance (code 160.0)
-		          parmFloat("p69", 1.5f),     // mBombThrowTimeoutTime, equals the code default
-		          parmFloat("p70", 150.0f),   // mBombThrowSpeed, equals the code default
-		          parmFloat("p71", 150.0f),   // mBombWarnPikiRange (code 300.0)
-		          parmFloat("p72", 0.65f),    // mBombAimTime, equals the code default
-		          parmFloat("p73", 50.0f),    // mBombSetDistance, equals the code default
-		      },
-		  } },
-	};
-	for (const File& f : files) {
-		nectar::ParmFile pf;
-		pf.lists = f.lists;
-		Bytes bytes;
-		if (!nectar::writeParmFile(pf, bytes, error)) return fail(error, std::string(f.path) + ": " + error);
-		tree[f.path] = bytes;
-	}
-	// parms/key.bin: six big-endian ints, one per KeyConfig::Key::read (keyConfig.cpp).
-	// The VERSION_GPIE01_01 file, read 2026-10-28 (scenario_progress.h): throw A,
-	// set cursor B, extract A, attack A, disband X, menu Y. The constructor's
-	// defaults match except extract, which is B, so throw and extract differ and
-	// NaviWalkState skips the shared-key pluck check. KBBTN values are Controller.h.
-	{
-		const std::uint32_t binds[] = { 0x1000u, 0x2000u, 0x1000u, 0x1000u, 0x4000u, 0x8000u };
-		Bytes key;
-		key.reserve(sizeof binds);
-		for (std::uint32_t v : binds) {
-			key.push_back(std::uint8_t(v >> 24));
-			key.push_back(std::uint8_t(v >> 16));
-			key.push_back(std::uint8_t(v >> 8));
-			key.push_back(std::uint8_t(v));
-		}
-		tree["dataDir/parms/key.bin"] = std::move(key);
-	}
-	return true;
+    struct File {
+        const char* path;
+        int lists;
+    };
+    const File files[] = {
+        { "dataDir/parms/gamePrms.bin", 1 },
+        { "dataDir/parms/aiconst.bin", 1 },
+        { "dataDir/parms/demo.bin", 1 },
+        { "dataDir/parms/cunit.bin", 1 },
+        { "dataDir/parms/naviMgr.bin", 2 },
+        { "dataDir/parms/pikiMgr.bin", 2 },
+    };
+    for (const File& f : files) {
+        nectar::ParmFile pf;
+        pf.lists.resize(f.lists);
+        Bytes bytes;
+        if (!nectar::writeParmFile(pf, bytes, error)) return fail(error, std::string(f.path) + ": " + error);
+        tree[f.path] = bytes;
+    }
+    // parms/key.bin: six big-endian ints, one per KeyConfig::Key::read (keyConfig.cpp):
+    // throw A, set cursor B, extract A, attack A, disband X, menu Y (KBBTN values are
+    // Controller.h). This is the Classic control scheme the scenarios drive (A throws
+    // and plucks, B whistles), written as an authored fixture: it is six button masks
+    // from the game's public controls, not a copied file. The constructor default
+    // binds extract to B, which would stop the shared-key pluck path being exercised.
+    {
+        const std::uint32_t binds[] = { 0x1000u, 0x2000u, 0x1000u, 0x1000u, 0x4000u, 0x8000u };
+        Bytes key;
+        key.reserve(sizeof binds);
+        for (std::uint32_t v : binds) {
+            key.push_back(std::uint8_t(v >> 24));
+            key.push_back(std::uint8_t(v >> 16));
+            key.push_back(std::uint8_t(v >> 8));
+            key.push_back(std::uint8_t(v));
+        }
+        tree["dataDir/parms/key.bin"] = std::move(key);
+    }
+    return true;
 }
 
 // ── Archive pairs ───────────────────────────────────────────────────────────
@@ -604,11 +410,9 @@ const Allowed kManifestAllowlist[] = {
 	// What the Forest of Hope loads and the sandbox (no generators) does not.
 	{ "dataDir/courses/stage1/", "the disc-mode stage's map; stand-ins boot the sandbox map" },
 	{ "dataDir/stages/stage1", "the disc-mode stage's .ini and generators; stand-ins boot stages/sandbox.ini" },
-	// Every model, platform, animation table and parameter file of the objects,
-	// plants, gates, bosses and enemies in the manifest is written by
-	// standin_objects.cpp and standin_world.cpp (and the sandbox gate), so none
-	// is allowlisted: objects/{tekis,bosses,plants,bridge,gate,hinderrock}/ and
-	// tekikeys/ and tekipara/ are all in the tree.
+	// TekiMgr constructs each parameter type before CoreNode::load optionally
+	// reads an override. Missing files leave the source defaults in place.
+	{ "dataDir/tekipara/", "enemy parameter overrides, using source constructor defaults", ".bin" },
 	// Silent when missing: CoreNode::load and the null-checked opens keep the
 	// code defaults (see standin-open-allowlist.txt for each).
 	{ "dataDir/parms/sound.bin", "sound constants, skipped when missing" },

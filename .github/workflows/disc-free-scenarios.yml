@@ -479,7 +479,7 @@ jobs:
         if: ${{ !cancelled() && matrix.extras && steps.build-jaudio.outcome == 'success' }}
         env:
           SDL_AUDIODRIVER: dummy
-        run: ctest --test-dir build/pikmin1-jaudio --output-on-failure --timeout 600 -j 3 -R "^scenario_(boot_smoke|throw_release|day30_clock)_" -E _disc
+        run: ctest --test-dir build/pikmin1-jaudio --output-on-failure --timeout 600 -j 3 -R "^scenario_(boot_smoke|throw_release|day30_clock)_" -LE game-assets
 
       - name: Scenario calibration summary (native JAudio)
         if: ${{ !cancelled() && matrix.extras && steps.build-jaudio.outcome == 'success' }}
@@ -566,14 +566,10 @@ jobs:
         if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, matrix.runner_os) }}
         run: python3 games/pikmin1/tools/scenarios/check_ballistic.py merged/scenario-logs
 
-      # The throw itself on the stand-in tree, held to the disc: every throw of
-      # throw_flight_{leaf,bud,flower,yellow} at 30/60/120 Hz must retain the measured grab,
-      # release and flight ticks exactly, its peak height within 0.05 and its launch
-      # speed within 0.1 (check_throw_flight.py has the values and where they come
-      # from). The 2.6 s hold and throw_cadence are not asserted yet.
-      - name: Throw flight against the disc (leaf, bud, flower, yellow)
+      # Each throw must match the authored fixture's timing and flight contract.
+      - name: Throw flight on synthetic fixtures (leaf, bud, flower, yellow)
         if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, matrix.runner_os) }}
-        run: python3 games/pikmin1/tools/scenarios/check_throw_flight.py merged/scenario-logs --label "(${{ matrix.name }})"
+        run: python3 games/pikmin1/tools/scenarios/check_throw_flight.py merged/scenario-logs --profile synthetic --label "(${{ matrix.name }})"
 
       # Every stand-in scenario's per-tick state-hash log, on every run, for the
       # scenario-hash-compare job (cross-OS determinism). Same name and layout as an
@@ -692,7 +688,7 @@ jobs:
           fi
           JOBS=4
           if [ "$RUNNER_OS" = "macOS" ]; then JOBS=3; fi
-          RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j $JOBS -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -E _disc"
+          RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j $JOBS -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -LE game-assets"
           if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi
 
       - name: Scenario calibration summary
