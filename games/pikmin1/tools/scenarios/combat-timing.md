@@ -150,8 +150,17 @@ roll (`dist2D < size`) change with the tick size. Two readings fit and are not y
 position samples at 60 Hz and a Pikmin can pass through the aligned band between samples, or the angle used for the test
 is turned by something other than the scaled `PC_ATTACK_RATE` line (for example the walking/facing code run before it).
 
-Next: log, per Pikmin per tick in state 0, the distance to the band and the angle just before the branch, plus what last
-wrote `mFaceDirection`, at both rates for the same start.
+Closest-approach trace (temporary log, 32 starts, about 310 Pikmin per rate, not kept): distance is not the difference.
+Closest `dist3D - (size)` is 2.77 at 30 Hz and 2.47 at 60 Hz, and 99% of Pikmin enter the `size + 10` band at both rates.
+Alignment is: the angle error at closest approach is 0.55 rad at 30 Hz and 0.65 rad at 60 Hz, and the share of Pikmin with at
+least one tick both inside the band and aligned (`angle < PI/10`) is 70% at 30 Hz and 51% at 60 Hz. Pikmin therefore meet
+the ground-attack condition less often at 60 Hz because they are less well turned towards the target when they are in range,
+and take the jump instead, which is the earlier sticking seen above. The two turning terms I read are close to equivalent
+across rates (`Creature::moveRotation` is linear in the frame time with `faceDirAdjust` 0.25 by default, and the
+`PC_ATTACK_RATE` turn is compounded), so the 0.1 rad lag comes from somewhere not yet identified.
+
+Next: log the angle error per tick for one approaching Pikmin at both rates together with which term last changed
+`mFaceDirection` (`moveRotation`, the `ActJumpAttack` turn, or another writer), and compare the two angle-versus-time curves.
 
 ## Public stand-in fixture
 
