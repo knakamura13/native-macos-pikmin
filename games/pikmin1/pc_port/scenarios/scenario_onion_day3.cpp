@@ -72,6 +72,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <set>
 #include <string>
@@ -127,10 +128,11 @@ const CourseOnions kCourses[] = {
 	{ StandIn, "stages/sandbox_onions.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
 	// The stand-in story Forest stage (same Onion layout, selected on the world map after Day 2).
 	{ StandIn, "stages/stage1.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
-	// The disc's default.gen (VERSION_GPIE01_01 install, read-only with nectar::loadGen, 2026-10-28):
-	// Forest of Hope has a `next` yellow Onion where it is found; The Impact Site has none.
-	{ Disc, "stages/stage1.ini", { -377.7f, 2155.7f }, { -64.3f, 1976.6f }, { -306.4f, 1823.6f }, true, { -1635.9f, 2117.9f } },
-	{ Disc, "stages/practice.ini", { -498.2f, 1454.5f }, { -146.0f, 1353.3f }, { -231.7f, 1725.6f }, false, { 0.0f, 0.0f } },
+#if __has_include("onion_day3_disc_courses.inc")
+	// Local exact lane only: the placements of a user's own install, kept out of the public tree
+	// (PROVENANCE.md). Without the file the `_disc` entries of this scenario skip (exit 77).
+#include "onion_day3_disc_courses.inc"
+#endif
 };
 
 void verifyKCoursesTable()
@@ -517,6 +519,10 @@ private:
 		if (mVariant == HideTextV) pc_settings_scenario_set_hide_olimar_text(1);
 		mTree = assetTreeFromRequestedStage();
 		const CourseOnions* course = courseFor(flowCont.mCurrentStage->mFileName, mTree);
+		if (!course && mTree == Disc) {
+			std::printf("[scenario] %s: skipped: no local course table for the disc stage '%s' (onion_day3_disc_courses.inc)\n", mName, flowCont.mCurrentStage->mFileName);
+			std::exit(77);
+		}
 		if (!course || !course->hasNextYellow) {
 			fail(0, "Day 2 on a course with a `next` yellow Onion (sandbox_onions or the disc's stage1)", "stage '%s' tree %d",
 			     flowCont.mCurrentStage->mFileName, (int)mTree);
