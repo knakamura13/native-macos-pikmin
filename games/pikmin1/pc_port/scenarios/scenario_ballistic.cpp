@@ -26,10 +26,10 @@
 namespace {
 // Flower-glide fixtures. The source default of Pikmin parameter p48 (mFlowerGravityScale, 0.01)
 // cancels almost all gravity, so a glide neither reaches an apex nor lands inside the two-second
-// trace window every case shares. The fixtures use a test control of 0.5 (the glide cancels half
-// of gravity) and start 100 above the ground; both are authored here, not read from any file.
+// trace window every case shares. The fixtures use a test control of 0.4 (the glide cancels 40% of
+// gravity) and start 100 above the ground; both are authored here, not read from any file.
 constexpr float kFlowerStartHeight  = 100.0f;
-constexpr float kFlowerGravityScale = 0.5f;
+constexpr float kFlowerGravityScale = 0.4f;
 enum Kind { Fall, Flick, Launch, Impulse, ZeroGravity, Drag, Volatile, GravityToggle, SubtickImpulse, FlowerNegative, FlowerApexImpulse };
 class Ballistic : public PcScenario {
 public:
