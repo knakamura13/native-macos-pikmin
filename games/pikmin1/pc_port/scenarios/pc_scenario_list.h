@@ -64,6 +64,9 @@ PcScenario* pc_scenario_make_tutorial_firsts(void);
 PcScenario* pc_scenario_make_tutorial_day1(void);
 PcScenario* pc_scenario_make_pellet_table(void);
 PcScenario* pc_scenario_make_ufo_part_discovery(void);
+PcScenario* pc_scenario_make_blue_onion_boot(void);
+PcScenario* pc_scenario_make_red_onion_boot(void);
+PcScenario* pc_scenario_make_yellow_onion_boot(void);
 PcScenario* pc_scenario_make_pellet_carry(void);
 PcScenario* pc_scenario_make_ship_part_carry(void);
 PcScenario* pc_scenario_make_nectar_growth(void);
@@ -129,5 +132,21 @@ PcScenario* pc_scenario_make_throw_flight_bud(void);
 PcScenario* pc_scenario_make_throw_flight_flower(void);
 PcScenario* pc_scenario_make_throw_flight_yellow(void);
 PcScenario* pc_scenario_make_throw_flight_hold(void);
+
+PcScenario* pc_scenario_make_ballistic_gravity_toggle(void);
+PcScenario* pc_scenario_make_ballistic_subtick_impulse(void);
+PcScenario* pc_scenario_make_ballistic_flower_negative(void);
+PcScenario* pc_scenario_make_ballistic_flower_apex_impulse(void);
+PcScenario* pc_scenario_make_ballistic_fall(void);
+PcScenario* pc_scenario_make_ballistic_flick(void);
+PcScenario* pc_scenario_make_ballistic_launch(void);
+PcScenario* pc_scenario_make_ballistic_impulse(void);
+PcScenario* pc_scenario_make_ballistic_zero_gravity(void);
+PcScenario* pc_scenario_make_ballistic_drag(void);
+PcScenario* pc_scenario_make_ballistic_volatile(void);
+
+PcScenario* pc_scenario_make_ballistic_scripted(void);
+
+PcScenario* pc_scenario_make_ballistic_enemy(void);
 
 #endif

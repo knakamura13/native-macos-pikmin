@@ -425,6 +425,7 @@ Which stage each stand-in entry boots:
 `sprout_landing`, `onion_skip`, `container_menu`, `onion_unlock`, `onion_unlock_whistle`, `first_yellow` and `objects_smoke` have no `_disc` entry: their
 stages do not exist on a real install. `coop_smoke` and `coop_look` have none either: they were not run on a real install.
 | `pellet_table`, `ufo_part_discovery`, `nectar_growth`, `bomb_firsts` | `stages/sandbox.ini` |
+| `blue_onion_boot`, `yellow_onion_boot`, `red_onion_boot` | Day 2; blue on object stage / disc Forest Navel; yellow/red on Onion stage / disc Forest of Hope | W2-4: starts the ordinary `startBoot` API on an unbooted Onion with its route closed. No movie skip, `pcSnapLanded`, animator-counter write or waypoint write. Every boot tick checks route closure through the measured effect frame and opening afterward; checks one seed at Action0, natural Wait, then real Pikmin AI carries a pellet to that Onion. Both 30/60 Hz, including `_disc`. Mutation controls disable only the generated blue/yellow value-2 cue and require this exact route assertion to fail. Measurements and scope: [standin-onion-boot.md](standin-onion-boot.md). |
 | `pellet_carry`, `carry_blocked` | `stages/sandbox_objects.ini` |
 | `pikmin_cap`, `pikmin_cap_1`, `pikmin_cap_250`, `pikmin_cap_999` | `stages/sandbox_objects.ini` (its blue Onion) |
 | `day_clock`, `throw_levels`, `whistle_radius`, `navi_invincible`, `whistle_gather_release`, `whistle_pluck_held` | `stages/sandbox.ini` |
@@ -497,6 +498,10 @@ Other jobs of the workflow:
   and Windows in 3 (`ctest -I <shard>,,<shards>`); this job joins them with `merge_scenario_shards.py`, which fails
   unless every scenario test ran in exactly one shard, then runs `ci_k_summary.sh` and
   `check_throw_flight.py` on the merged logs and uploads `scenario-hash-logs-<OS>`.
+  Raw build provenance is retained byte for byte under `scenario-evidence/<shard-name>/`:
+  hosted runner tool versions and paths can differ, so these files are not merged by name.
+  Scenario logs still reject conflicting bytes under the same filename. The merger's
+  regression and negative-control tests run in every merge job.
   Golden refresh: `golden-update-<OS>` comes from the shard that ran `scenario_screenshot_goldens`.
 - **`scenario-hash-compare`**: see below.
 
@@ -797,8 +802,8 @@ from `PcScenario` (`pc_scenario.h`):
 
 `scenarioHandOff()` marks the hand-off point: with `--scenario-handoff` the
 player takes over there, otherwise it is a pass. `scenarioApplyDiscKeyBindings()`
-sets the disc's `parms/key.bin` bindings, which the stand-in tree lacks (pluck
-on A, not B).
+sets the disc's `parms/key.bin` bindings (pluck and throw on A). The stand-in
+generator writes that file; the call restores the same six binds.
 | `crossesDays()` | Default false. True lets the run continue past the soft reset that ends a day: the runner stops ticking the scenario from that tick (the stage's objects are gone), waits for the next stage, runs the intro gate again and calls `onStageReady()` once more; `pc_scenario_stage_number()` says which stage (1, 2, ...). Ticks keep counting across stages. Used by `onion_day3`. |
 | `onMapSelect()` | For a `crossesDays()` scenario, when `OnePlayerSection` builds MapSelect: return a `stages.ini` `file` and the runner skips DrawWorldMap (direct `enterCourse`); return `nullptr` to run the real world map (stand-in BLOs or disc) and drive it with `providePadsBetweenStages` and/or `pc_scenario_request_map_course`. |
 | `providePadsBetweenStages(ticks, pad0)` | Pad 0 between the soft reset and the next stage (the real world map). |
@@ -921,8 +926,8 @@ What the run does and does not touch:
   white cross at the cursor always, a yellow ring while B is down. A call reaches only
   Pikmin within the ring, around the cursor (`Navi::callPikis`), so aim at them and hold
   B for a moment (the radius grows from its minimum over `mWhistleExpandTime`).
-- Keys: the disc's game bindings (pluck and throw on A, whistle on B); the
-  stand-in tree has no `parms/key.bin`. Keyboard, mouse and controller bindings
+- Keys: the disc's game bindings (pluck and throw on A, whistle on B). The
+  stand-in generator writes `parms/key.bin` with those binds. Keyboard, mouse and controller bindings
   are the port's defaults.
 - No audio: the run uses SDL's dummy audio driver, and a
   `PIKMIN_NATIVE_JAUDIO=OFF` build has the legacy facade anyway.
