@@ -205,11 +205,12 @@ it attaches.
 
 Attachment trace (temporary log in `Creature::startStick` and `endStick`, 48 starts, up to the kill, not kept): the earlier
 "same number of sticks" was true only for the one traced start. Over 48 starts there are 268 attachments at 30 Hz (5.6 per
-fight) and 339 at 60 Hz (7.1 per fight, +26% in a shorter fight). An attachment lasts about the same (mean 0.64 s and 0.70 s,
-the length of one Kuttuku attack: the Pikmin attacks once, `mAttackState` reaches 4, the action succeeds and `cleanup`
-lets go). Re-attachment by the same Pikmin before the kill is rare (8 and 3 cases in 48 fights), so the gap is not a faster
-re-approach cycle but more of the ten Pikmin attaching at all within a fight at 60 Hz, which matches the fewer ground
-attackers (51% against 70%).
+fight) and 339 at 60 Hz (7.1 per fight, +26% in a shorter fight). CORRECTED later the same day: the attachment lengths
+quoted at the time (0.64 s and 0.70 s) and the reading that a Pikmin attacks once and lets go were wrong. A trace that logged
+only the attachment ends showed that nearly all of them fall at the kill (the cleanup when the Bulborb dies), so the figure was
+the time from attaching to the kill, and the 8 and 3 re-attachments were mostly artefacts of that. A stuck Pikmin keeps
+attacking about every 0.63 s until the Bulborb dies or it is thrown off. What remains of this trace is the count: more of the
+ten Pikmin attach at all within a fight at 60 Hz, which matches the fewer ground attackers (51% against 70%).
 
 That sits badly with the paired turn tests (a better-aligned 60 Hz, hence more ground attackers, kills faster rather than
 slower), which means the ground attackers and the stuck attackers contribute to the kill rate in a way the simple
@@ -238,16 +239,28 @@ difference is unknown. The patch is kept outside the repository in the working n
 Interval trace on the faithful-turning build (temporary log, 64 starts, up to the kill, not kept): the gap between one
 Pikmin's consecutive hits is the same at both rates, ground to ground median 0.70 s at 30 Hz and 0.73 s at 60 Hz, stuck to stuck
 0.63 s at both. Only a change of attack mode (a Pikmin that hit from the ground and later from the Bulborb's back, or the
-reverse) is shorter at 60 Hz, mean 1.76 s against 1.45 s. State dwell times from a transition log agree with that: the major
-states are equal at both rates (the Flick state 3.09 s and 3.13 s, state 31 1.15 s and 1.16 s), while the normal state, where
-a Pikmin walks back, turns and decides, is shorter per visit at 60 Hz (0.33 s against 0.24 s, with the same number of visits).
+reverse) is shorter at 60 Hz, mean 1.76 s against 1.45 s. State dwell times from a transition log: the Flick state (22) lasts
+3.09 s and 3.13 s, so it is faithful. CORRECTED: state 31 (1.15 s and 1.16 s) is the Pikmin spawn state that all ten go through at
+the start, not a recovery state, and the reading that the extra rate comes from "the return to the fight after being thrown off"
+was wrong: after leaving the Flick state essentially no Pikmin attacks again (5 of 179 exits at 30 Hz, 0 of 197 at 60 Hz, no
+hits), because the scenario's attack action does not re-target a thrown-off Pikmin.
 
-So the per-attack cycle and the knock-down and recovery times are faithful; the extra 13% hit rate comes from the return to the
-fight after being thrown off, in the normal state.
+The per-attack cycle (0.63 s stuck, about 0.70 s ground) and the Flick duration are faithful. What differs is how quickly the
+Pikmin join the fight. Mean time from the first decision at which the k-th distinct Pikmin lands its first hit (faithful-turning
+build at 60 Hz, 64 starts):
 
-Next: on the faithful-turning build, split the return into its parts at both rates: time from leaving the recovery state to
-the first decision in `ActJumpAttack` (target choice and `ActFree`/`ActAttack` start), the walk back (distance and speed),
-and the turn, each judged on the same starts.
+| k | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 30 Hz | 0.52 | 0.56 | 0.74 | 0.91 | 1.07 | 1.33 | 1.67 | 2.05 |
+| 60 Hz | 0.47 | 0.64 | 0.79 | 0.88 | 0.98 | 1.07 | 1.21 | 1.48 |
+
+and 9.0 distinct Pikmin land a hit per fight at 60 Hz against 8.4 at 30 Hz. The first five Pikmin join at the same pace; the late
+joiners (6th to 8th) join 0.3 to 0.6 s sooner at 60 Hz. That is the extra hit rate: more attackers engaged earlier.
+
+Next: find why the late joiners reach the Bulborb sooner at 60 Hz. They are the Pikmin that start farthest away or are held up by
+the crowd, so look at Pikmin-to-Pikmin and Pikmin-to-Bulborb collision separation (per-tick push-out that is not scaled by the
+tick), the walk speed ramp from the formation, and path blocking, comparing the walk time of the farthest Pikmin on the same
+starts.
 
 ## Public stand-in fixture
 
