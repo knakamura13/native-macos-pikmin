@@ -44,9 +44,11 @@ feature does not scale (the convention elsewhere is `PC_TICKS30`, for example `a
 
 Experiment (fork branch `knakamura/combat-rate-scaling-experiment-154`, one commit on `aiAttack.cpp`): scaling (1) with `1 - 0.8^(1/PC_TICKS30)` and (2), (3) to `p / PC_TICKS30` moves the
 60 Hz kill time from 2.20 s to 2.70 s (30 Hz: 3.10 s) and the hit mix from 9/4 to 7/7. The residual
-0.4 s is **unexplained**. Remaining candidates, none tested: Pikmin walk acceleration toward
-`mTargetVelocity`, the jump and stick sequence (`doClimb`, stick-to-part), and Bulborb-side AI
-timers. The experiment is not part of the upstream package because it is incomplete and changes
+0.4 s is **not explained**. A per-Pikmin state trace of the experiment (2026-11-08) shows more Pikmin
+stuck on the Bulborb at 60 Hz (up to 5 against 3 at 30 Hz, hits from the back 7 against 2), which fits
+finer contact sampling during the jump (`wantToStick`, collision tested every tick) catching contacts a
+30 Hz tick tunnels past; this is a hypothesis, not tested. Velocity smoothing is already
+`deltaTime`-scaled (`Creature::moveVelocity`), so it is not the cause. The experiment is not part of the upstream package because it is incomplete and changes
 gameplay at 60/120 Hz; it needs Kyle's decision before any upstream action.
 
 ## Public stand-in fixture
