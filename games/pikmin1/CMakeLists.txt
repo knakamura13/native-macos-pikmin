@@ -469,6 +469,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_hud_layout.cpp
         pc_port/scenarios/scenario_standin_showcase.cpp
+        pc_port/scenarios/scenario_ship_parts_showcase.cpp
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
         pc_port/scenarios/scenario_sprout_landing.cpp
@@ -1642,6 +1643,7 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -1661,6 +1663,7 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_textures.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -1730,6 +1733,7 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -1803,6 +1807,7 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -2283,7 +2288,7 @@ endif()
 # rate, 60 ticks per second (tools/scenarios/README.md, "Tick rates"). These are disc-mode
 # tests: PIKMIN_SCENARIO_DATA_DIR names a directory holding assets/ (a real
 # install). Unset or without assets/dataDir/parms/gamePrms.bin the binary exits
-# 77 and CTest reports a skip. The stand-in fixtures (no disc) are #68.
+# 77 and CTest reports a skip. The stand-in fixtures (no disc) are registered separately.
 if(PIKMIN_BUILD_SCENARIOS)
     set(PIKMIN_SCENARIO_SCRATCH "${CMAKE_CURRENT_BINARY_DIR}/scenario-scratch")
     file(MAKE_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}")
@@ -2515,7 +2520,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     endforeach()
 
     # Save, load, the results and pause exits, Permadeath and the memory-card
-    # errors (scenario_save_load.cpp and the files beside it; T13-T15, T20, T21).
+    # errors (scenario_save_load.cpp and the files beside it).
     # Each entry is name:stage:rates (tools/scenarios/README.md,
     # "Tick rates").
     foreach(entry save_load:sandbox_objects:30,60 save_load_flags:sandbox_objects:30,60
@@ -2525,8 +2530,8 @@ if(PIKMIN_BUILD_SCENARIOS)
             # a Pikmin 2 file on the card through a Pikmin 1 save.
             save_load_repair:sandbox_onions:30 card_other_game:sandbox_objects:30
             permadeath_erase:sandbox:30,60 permadeath_unsaved:sandbox:30 permadeath_bad_slot:sandbox:30 permadeath_off:sandbox:30
-            # Endings, the last day, No Day Limit and challenge mode (T07-T10,
-            # T12, T17, T18): bounds in seconds, movies and windows advance per tick.
+            # Endings, the last day, No Day Limit and challenge mode: bounds in
+            # seconds, movies and windows advance per tick.
             ending_bad_day30:sandbox:30,60 ending_neutral_day30:sandbox:30,60 ending_happy:sandbox:30,60
             ending_happy_skip:sandbox:30,60 captain_death_day30:sandbox:30,60
             challenge_captain_death:sandbox:30,60 challenge_extinction:sandbox:30,60
@@ -2844,7 +2849,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         endforeach()
     endforeach()
 
-    # Replay determinism (EC-60): two runs, identical per-tick state hash logs.
+    # Replay determinism: two runs, identical per-tick state hash logs.
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism")
     foreach(scenario boot_smoke throw_release day30_clock)
         foreach(rate 30 60)
@@ -3108,6 +3113,18 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA}"
         RUN_SERIAL TRUE
         TIMEOUT 600)
+    add_test(NAME scenario_screenshot_ship_parts_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/ship_parts_30
+            -DPIKMIN_STANDIN_DATA=${PIKMIN_STANDIN_DATA}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_ship_parts_screenshot.cmake)
+    set_tests_properties(scenario_screenshot_ship_parts_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA}"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
     # The Y menu's map and controller pages, the world map and the title
     # screens, region-checked at 30 and 60 Hz.
     foreach(rate 30 60)
@@ -3139,7 +3156,7 @@ if(PIKMIN_BUILD_SCENARIOS)
                 TIMEOUT 600)
         endforeach()
     endforeach()
-    foreach(scenario standin_showcase)
+    foreach(scenario standin_showcase ship_parts_showcase)
         foreach(rate 30)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}
@@ -3176,8 +3193,7 @@ if(PIKMIN_BUILD_SCENARIOS)
 
     # CTest starts the costliest tests first (COST), so a long scenario does not start last and
     # hold up the end of a parallel run (disc-free-scenarios.yml runs each OS in 3 shards).
-    # Seconds: the slowest of the macOS, Linux and Windows CI runs of 2026-11-05 (run 41963880068),
-    # rounded. Only the order changes; a stale or missing entry costs time, never a result.
+    # Seconds: the slowest of the macOS, Linux and Windows CI runs, rounded. Only the order changes; a stale or missing entry costs time, never a result.
     # A build directory that has run ctest before orders by its own measured times instead.
     set(_scenario_costs
         scenario_pikmin_cap_999_60 245
