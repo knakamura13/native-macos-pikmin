@@ -30,7 +30,7 @@
 //          The captain plucks the seed the Onion makes of it.
 //   DF12   Twenty free Pikmin at the Main Engine, the captain far away:
 //          Piki::demoCheck sets DEMOFLAG_ApproachEngine.
-//   DF13   They carry it to the ship (the disc's 20 carriers): when it enters
+//   DF13   They carry it to the ship (kEngineCarriers): when it enters
 //          PelletGoalState with the ship as goal, DEMOFLAG_CollectEngine,
 //          gameflow.mShipTextType SHIPTEXT_CollectEngine and mShipTextPartID
 //          UFO_NOPART. The ship sucks it in (UfoItem::finishSuck): the engine is
@@ -79,7 +79,7 @@ namespace {
 
 using namespace tutorial;
 
-constexpr int kEngineCarriers = 20;    // the disc's p01 for ust5
+constexpr int kEngineCarriers = 20;    // the stand-in ust5 pellet's carrier count (pelMgr.bin, standin_objects.cpp)
 constexpr float kBoxSide      = 90.0f; // where the pushers are born, beyond the box's +z face
 
 class TutorialDay1 : public PcScenario {

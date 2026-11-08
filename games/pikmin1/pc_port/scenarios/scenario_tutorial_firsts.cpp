@@ -1,14 +1,16 @@
 // tutorial_firsts: the tutorial's first-of milestones the captain reaches by
 // walking (coverage/milestones.md DF00, DF03, DF12, DF30 and ON4's tutorial boot;
 // the clock lock of terminals.md T16 throughout), on the tutorial stand-in stage
-// stages/practice.ini (tools/scenarios/standin_practice_stage.h; the trigger
-// radii are the disc's parms/demo.bin: 60, 25, 40, the timer 40 s).
+// stages/practice.ini (tools/scenarios/standin_practice_stage.h). The trigger
+// radii and the timer are read from demoParms at run time; on the stand-in tree
+// parms/demo.bin is an empty list, so they are the source defaults (gameDemo.cpp:
+// Onion 150, seed 100, engine 150, the timer 6 s).
 //
 // In order, each within a bound in seconds:
 //   DF00  The captain walks to the red Onion. Navi::demoCheck (demoInvoker.cpp)
-//         sets DEMOFLAG_DiscoverRedOnyon when qdist2(Onion, captain) <= 60 on
-//         stage Practice: the flag comes within a tick of the captain being
-//         inside 60 and not before he is within 60 plus one step. The discovery
+//         sets DEMOFLAG_DiscoverRedOnyon when qdist2(Onion, captain) <= the
+//         Onion radius on stage Practice: the flag comes within a tick of the
+//         captain being inside it and not before he is within it plus one step. The discovery
 //         movie (movie 4, the stand-in demo04: Boot at 10, EmitCone at 300, the
 //         TUT_RedOnion text at 310, which A closes) plays to its end.
 //   ON4   Its Boot key (DemoEventMgr::act) boots the Onion and sets the boot bit,
@@ -18,11 +20,12 @@
 //         seed (GameStat::bornPikis), the Onion reaches GOAL_Wait, and no second
 //         seed follows.
 //   DF03  Once the seed is planted (PIKIHEAD_Wait), the captain walks to it:
-//         DEMOFLAG_ApproachSeed comes when he is within 25 (same latency rule),
-//         and arms the timer: mCurrentDemoIndex NoPikminTimeout, mWaitTimer 40 s.
+//         DEMOFLAG_ApproachSeed comes when he is within the seed radius (same
+//         latency rule), and arms the timer: mCurrentDemoIndex NoPikminTimeout,
+//         mWaitTimer mSeedDemoWaitTime.
 //   DF12  The captain walks to the Main Engine (no Pikmin exist yet):
 //         DEMOFLAG_ApproachEngine when the flat distance to the engine's centre
-//         minus its bottom radius is <= 40 (same latency rule). The engine's own
+//         minus its bottom radius is <= the engine radius (same latency rule). The engine's own
 //         discovery flag (32 + 4) is the new-game preset, so no part text.
 //   DF04  Back at the sprout, A plucks it (PikiNukareState::cleanup). One Pikmin.
 //   DF30  Pluck15thPikmin needs isTutorial() and GameStat::allPikis >= 15 at a
@@ -106,8 +109,8 @@ public:
 			if (t % 15 == 0) pad.button = navi->getCurrState()->getID() == NAVISTATE_Nuku ? PAD_BUTTON_B : PAD_BUTTON_A;
 			return;
 		}
-		// The captain goes Idle (17) after a stretch with no input, for example while a sprout grows (p50 mPluckWaitTime,
-		// 5 s on the disc). One tick of stick wakes him; he leaves Idle only when the idle motion ends
+		// The captain goes Idle (17) after a stretch with no input, for example while a sprout grows (p50 mPluckWaitTime).
+		// One tick of stick wakes him; he leaves Idle only when the idle motion ends
 		// (NaviIdleState::procAnimMsg) and runs no demo check (Navi::demoCheck) until then, so the stick waits for Walk.
 		const int state = navi->getCurrState()->getID();
 		if ((state != NAVISTATE_Walk && state != NAVISTATE_Idle) || currentMovie() != -1) return;
@@ -138,7 +141,8 @@ public:
 		const unsigned rate = unsigned(pc_scenario_ticks_per_second());
 		Navi* navi          = naviMgr->getNavi();
 		const int movie     = currentMovie();
-		const float step    = 160.0f / float(rate) + 0.5f; // the captain's walk (naviMgr p04, the disc's 160) per tick
+		// One tick of the captain's walk (naviMgr p04 mMoveSpeed, as loaded) plus half a unit.
+		const float step    = naviMgr->mNaviParms->mNaviProps.mMoveSpeed() / float(rate) + 0.5f;
 		const float clock   = gameflow.mWorldClock.mTimeOfDay;
 		if (clock != TUTORIAL_TIME_OF_DAY || gameflow.mWorldClock.mCurrentDay != 1 || !playerState->isTutorial()) {
 			fail(t, "T16: the tutorial holds the clock at 14.8 h on Day 1", "day %d, %.5f h, tutorial %d", gameflow.mWorldClock.mCurrentDay, clock,
@@ -232,7 +236,7 @@ public:
 				const float left = playerState->mDemoFlags.mWaitTimer;
 				std::printf("[scenario] tutorial_firsts: DF03 timer index %d, %.3f s of %.0f\n", (int)playerState->mDemoFlags.mCurrentDemoIndex, left, full);
 				if (playerState->mDemoFlags.mCurrentDemoIndex != DEMOFLAG_NoPikminTimeout || left > full || left < full - 2.0f / float(rate)) {
-					fail(t, "DF03 arms the NoPikminTimeout timer with mSeedDemoWaitTime (40 s)", "index %d, %.3f s", (int)playerState->mDemoFlags.mCurrentDemoIndex, left);
+					fail(t, "DF03 arms the NoPikminTimeout timer with mSeedDemoWaitTime", "index %d, %.3f s", (int)playerState->mDemoFlags.mCurrentDemoIndex, left);
 					return;
 				}
 				enter(ToEngine, t);
@@ -350,7 +354,7 @@ private:
 
 	// A sprout's Bury lasts p49 mSeedUpTime and its Tane p50 mPluckWaitTime, each plus up to 2 s at random (PikiHeadAI,
 	// itemAI.cpp), then the Hatuga motion: the two parameters plus 4 s of random plus 4 s for the motions and the landing
-	// (10 s with the code's 1 and 1 s, 13.1 s with the disc's 0.1 and 5 s).
+	// (10 s with the code's 1 and 1 s).
 	static float sproutLimitS()
 	{
 		PikiProp::Parms& pp = pikiMgr->mPikiParms->mPikiParms;

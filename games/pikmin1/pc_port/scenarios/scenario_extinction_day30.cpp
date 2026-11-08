@@ -69,8 +69,9 @@ constexpr int kPikmin         = 3;
 constexpr unsigned kKillTicks = 5;
 constexpr int kLastDay        = 30; // MAX_DAYS
 // Bounds, in seconds. Measured at 30 Hz (60 Hz alike in seconds): PikiZero 1 tick after
-// the kill, the flag 29 ticks later, the reset 58 ticks after that (demo46's key),
-// DayOverModeState the next tick, demo73 3 ticks later, the soft reset about 14 s later
+// the kill, the flag 29 ticks later, the reset 51 ticks after that (demo46's key at movie
+// frame 50), DayOverModeState the next tick, demo73 10 ticks later (once demo46's 60 frames
+// end), the soft reset about 14 s later
 // with A every 6 ticks.
 constexpr unsigned kPikiZeroSeconds = 3;
 constexpr unsigned kFlagSeconds     = 5;
