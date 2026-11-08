@@ -1222,3 +1222,19 @@ assets. Each run uses scratch state and keeps game assets on the local machine.
 The public workflow selects the synthetic profile. Its grab and release checks
 follow the authored Action0 schedule and its flight checks use the source
 parameter defaults. Both profiles fail on missing results or failed throws.
+
+## Ship-part art capture
+
+`ship_parts_showcase` spawns the real `ust5` and `uf01` pellets on the showcase
+stage, with a fixed camera away from the landing site. It runs for 150 ticks.
+The engine cartridge is on the left, the compass instrument on the right.
+
+```sh
+PIKMIN_SCENARIO_DATA_DIR="$PWD/build/pikmin1-scenarios/scenario-data" \
+  build/pikmin1-scenarios/bin/nectar --scenario ship_parts_showcase \
+  --scenario-screenshot "120:$PWD/ship_parts.png"
+```
+
+`scenario_screenshot_ship_parts_30` checks the two objects' colours in separate
+regions at 640x480, and CI uploads the capture in `scenario-screenshots-*`. The
+models are original Hollowmere designs (`libs/nectar_assets/art/ART_DIRECTION.md`).

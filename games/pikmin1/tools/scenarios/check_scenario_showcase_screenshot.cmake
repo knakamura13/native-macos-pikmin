@@ -46,26 +46,33 @@ execute_process(
         --min-saturated-yellow 350
         --min-saturated-blue 350
         --max-center-near-black-ratio 0.18
-        # Procedural Onion at left, silver ship with blue glass and orange nose at right.
-        # The camera follows the captain, whose spawn overlaps the pellet; the nose box
-        # is set from the frame of the authored fixture sizes.
+        # Back left, the red hive: warm grey stone with the red crystals of its
+        # type at the top (the crystals are effects/shapes/r_goal.mod, which the
+        # game draws only while the hive is booted). Back right, the ship: a teal
+        # hull under an amber lamp. Nothing run off the frame.
         --onion-region 15,0,205,120 --min-onion-red 2200
-        --region-colour 45,60,185,170:D7262C:24:3500
-        --region-colour 70,170,200,270:5F4646:24:1400
-        --region-colour 375,160,575,225:DEE4EE:20:3200
-        --region-colour 485,140,555,170:8CC8FF:25:400
-        --region-colour 595,167,635,217:F55F2D:25:300
+        --region-colour 15,0,205,280:807868:24:9000
+        --region-colour 355,115,610,265:208088:36:3000
+        --region-colour 355,40,610,140:F0A028:30:1200
         --max-edge-object-pixels 20
-        # The lineup shows the captain's helmet and suit, then the three body
-        # colours and their distinct leaf, bud and flower silhouettes.
-        --region-colour 172,297,217,373:C8DCFF:20:260
-        --region-colour 172,297,217,373:F0F0FA:20:220
-        --region-colour 300,287,339,365:FF2D32:25:320
-        --region-colour 373,287,415,370:FFD723:25:340
-        --region-colour 433,287,474,370:375FFF:25:330
-        --region-colour 300,287,339,315:3CC83C:25:25
-        --region-colour 373,287,415,315:C878A0:25:30
-        --region-colour 433,287,474,315:F0F078:25:60
+        # The Blender folk art (ART_DIRECTION.md): the teal captain with his amber
+        # lantern, then a red folk with the tier-1 bead, a yellow one with the tier-2
+        # shards and a blue one with the tier-3 star. Each body must show its colour
+        # and each crest its own colour, and not the colour of another tier's crest.
+        # The folk bodies are authored white and drawn with material 0, so they show
+        # the game's own type colours (Piki::pikiColors, shaded), not the art's.
+        --region-colour 165,285,230,380:1E787D:30:600
+        --region-colour 170,295,195,325:FFAA3C:40:30
+        --region-colour 300,315,342,352:DC1400:40:180
+        --region-colour 370,318,414,355:DCBE00:40:170
+        --region-colour 430,312,476,352:0028DC:40:190
+        --region-colour 300,305,342,330:D7D2C3:30:25
+        --max-region-colour 300,305,342,330:7DE1F0:35:5
+        --max-region-colour 300,305,342,330:FFEC9E:20:5
+        --region-colour 372,303,412,330:7DE1F0:35:30
+        --max-region-colour 372,303,412,330:FFEC9E:20:5
+        --region-colour 430,296,476,325:FFEC9E:20:80
+        --max-region-colour 430,296,476,325:7DE1F0:35:5
     RESULT_VARIABLE pos_rc)
 if(NOT pos_rc STREQUAL "0")
     message(FATAL_ERROR "standin_showcase PNG composition check failed")
