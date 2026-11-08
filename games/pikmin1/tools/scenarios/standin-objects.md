@@ -2,95 +2,89 @@
 
 What the stand-in tree (`nectar_standin_generator`) writes for objects, plants,
 gates, bosses and enemies, and the second stage that places some of them.
-Provenance: see `PROVENANCE.md` (#190). The sections from "What the disc was read
-for" to "World models" describe the object, world and animation fixtures as they
-were before #190; they are rewritten with those files.
+Provenance: see `PROVENANCE.md` (#190). Every value below is authored for the
+fixtures, a source default, or a name or count the game code requires.
 
-## What the disc was read for
+## What is authored
 
 Per AnimMgr table and bundle (`libs/nectar_assets/src/standin_object_profiles.cpp`):
+the info count (the game's motion enums: `PikiHeadMotion`, `UfoMotion`, `TekiMotion`,
+`PelletMotion` and each item's own indices), and per info the frame count, the
+anim-key frames, the info-key records and the `p00` flags and `spd`. The recipe is
+one rule set designed from the key each state machine waits on: an info nobody
+waits on is the shared 40 frames; one that must finish needs a finite length; one
+that must loop has `KEY_LoopStart` at its first anim key and `KEY_LoopEnd` at its
+last; one with a `KEY_Action0` consumer carries it at an authored frame; enemy
+Move1/Move2 use flags 6. The Onion boot motions (goal infos 3 to 5) are one
+authored motion for every colour (`nectar_assets/standin_onion_boot.h`): 300
+frames, the route-opening effect (value 2) at frame 100, `KEY_Action0` (the first
+seed) at frame 150.
 
-- the info count, and per info the frame count N, the anim-key frames, the
-  info-key records (which anim key each `KEY_*` event sits on) and the `p00`
-  flags and `spd` parameters;
-- the joint count of the model (the first int of the bundle payloads).
+Per model (`naka1`, `naka4`, `naka7`, `chappy` here; the 45 boot models in
+`standin_models.h`): a flat authored rig and the collision spheres the game code
+looks up by id (`cent`, `slot` and so on); radii and centres are round numbers.
 
-Per model written here (`naka1`, `naka4`, `naka7`, `chappy`): the joint count and
-parents, and the collision parts (id, code, joint, radius, centre), as for the
-first 45 models (`standin_models.h`).
+For the world models below (`standin_world.h`): flat authored rigs and the
+collision parts the code reads; the platform parts of the Beetle and Swallow are
+boxes. The 31 `tekipara/*.bin` files and the two boss `parms.bin` files are not
+written: `TekiMgr` builds every parameter type with its constructor defaults
+before the optional load, and a missing file is a no-op, so every enemy runs on
+source defaults. The two boss files are empty lists for the same reason
+(`check_synthetic_parameters.py` fails if a `tekipara` file appears).
 
-For the world models below (`standin_world.h`): the joint parents and the
-collision parts (id, code, joint, radius, centre, or the platform `.mod` a part
-names) of 15 models, and the numbers of the 31 `tekipara/*.bin` files and the two
-boss `parms.bin` files, carried as words (a `tekipara` file is a version int,
-eight ids and the type's int and float parameters in order; the counts differ per
-enemy, so the words are not split).
-
-Not read and not written: curves, geometry, textures, animation names, event keys
-(sound and effect cues; their counts per info are 0 to 19), the `pelMgr` carry
-weights, the plants' light-flare groups and anything else.
+Nothing else is written: no curves, geometry, textures, animation names, event keys
+beyond the Onion cue, or enemy numbers.
 
 ## What is written (`libs/nectar_assets/src/standin_objects.cpp`)
 
 | Files | Notes |
 |-------|-------|
-| 48 `.anm` bundles and their AnimMgr tables (`anims.bin`, `.key`, `gate.bin`, `whiteN.bin`, `plants/*.bin`, `ufoparts/*.bin`, `ufo0705.bin`) | The 47 of the boot manifest and `gt_hard.anm` (counted on the generated tree, 2026-10-28; this file's own writer covers the 46 object sets, the manifest's Pikmin set is not checked here). Each info is a static identity DCK with the disc's frame count and keys, under invented names (`<id>_<nn>.dck`). |
-| `ufoparts/naka1.mod`, `naka4.mod`, `naka7.mod` | One joint, one `cent` sphere. The disc's pellet table loads them by id. |
-| `tekis/chappy/chappy.mod` | 17 joints and the disc's collision parts (`cent`, `head`, `body`, `slot`, `lleg`, `rleg`). |
-| `parms/pelMgr.bin` | Twelve pellet configs: blue, red and yellow at 1, 5, 10 and 20. The carry numbers are this file's own, not the disc's. Then the Main Engine's, all the disc's (Tutorial stage, below), and the Whimsical Radar's (`uf01`, shape `fuzoku1`, ship part; 10 to 20 carriers, this file's own numbers, for `ship_part_carry`). Then six enemy corpses, for the stand-in enemies that leave one (`tkch` chappy, `tksw` swallow, `tkbe` beatle, `tkka` kabekuiA, `tkkb` kabekuiB, `tkot` otama): type 0, colour -1, model and shape id the enemy's own; carriers and seeds are this file's own numbers. `BTeki::dieSoon` halts the game when a dying enemy has no config, so `enemy_kills` (W7 #98) needs them. 20 configs in all (`pellet_table`). |
-| `objects/pelAnim.bin` | 23 shape infos: the four pellets, the 16 ship parts the game always loads, and `un01`, `un04`, `un07`. With it the game loads those 20 resident shapes at stage start, as on the disc. |
+| 45 object `.anm` bundles and their AnimMgr tables (`anims.bin`, `.key`, `whiteN.bin`, `plants/*.bin`, `ufoparts/*.bin`, `ufo0705.bin`), plus the sandbox gate's | Each info is a static identity DCK with the authored frame count and keys of `standin_object_profiles.cpp`. |
+| `ufoparts/naka1.mod`, `naka4.mod`, `naka7.mod` | One joint, one `cent` sphere. The pellet table loads them by id. |
+| `tekis/chappy/chappy.mod` | A flat rig with the parts the code reads (`cent`, `slot` with one child, `lleg`, `rleg`) and authored stick parts. |
+| `parms/pelMgr.bin` | Pellet configs: blue, red and yellow at 1, 5, 10 and 20, the Main Engine (carriers 12 to 24, every other value a source default) and the Whimsical Radar (`uf01`, shape `fuzoku1`; 10 to 20 carriers, for `ship_part_carry`), then enemy corpses for the stand-in enemies that leave one. All numbers are this file's own. |
+| `objects/pelAnim.bin` | Shape infos for the four pellets, the 16 ship parts the game always loads, and `un01`, `un04`, `un07`; every override joint is -1. The game loads those 20 resident shapes at stage start. |
 
 Choices worth knowing:
 
 - Event keys are dropped. They mostly produce sound and effect cues
-  (`PaniAnimator` maps them to `KEY_PlaySound` and `KEY_PlayEffect`). Not all:
-  the Onion's boot effect value 2 reopens its route way point, so the red boot
-  keeps its five (Tutorial stage, below).
-- One disc list is not ascending by frame (the Onion's `flowrot`: loop start,
-  loop end, then an `Action0` on an earlier frame). `checkConstantKeys` fires such
-  a key on the same animate call as the one before it, so the stand-in points it
-  at that frame, which the writer accepts and which fires on the same tick.
-- The disc's `naka1` table names three animations its bundle lacks (the game opens
-  loose `.dck` files that do not exist and falls back to a dummy). The stand-in
-  bundle has all of them. The three loose paths stay in the manifest allowlist.
-- Sets whose model is not written (plants, gates, bosses, the other enemies) get a
-  flat joint list (root, then every joint under joint 0) of the disc's joint
-  count. The game stores the parents and never reads them back.
+  (`PaniAnimator` maps them to `KEY_PlaySound` and `KEY_PlayEffect`). The one
+  exception is the Onion boot cue, because effect value 2 reopens its route way point.
+- The writer wants info keys ascending by frame; the authored lists are.
+- Sets whose model is not written get a flat joint list (root, then every joint
+  under joint 0). The game stores the parents and never reads them back.
 
 Tests: `nectar_standin_objects_test` (`libs/nectar_assets/tests/standin_objects_test.cpp`)
 reads every table back through the game's `Parameters`, `AnimMgr::Parms` and key
 types, walks every bundle through a transcription of `StdSystem::loadBundle` and
 `AnimDck::read`, parses the models with `nectar::parseMod` and the collision text
-through the game's `CmdStream`, reads the pellet tables with Parm fields declared
-as in `PelletConfig` and `PelletAnimInfo`, and compares the file lists with the
-boot manifest.
+through the game's `CmdStream`, and reads the pellet tables with Parm fields declared
+as in `PelletConfig` and `PelletAnimInfo`. A boot-manifest comparison is an
+optional local run (PROVENANCE.md, local lanes).
 
-## World models and parameter files (`standin_world.cpp`, `standin_world_data.cpp`)
+## World models (`standin_world.cpp`, `standin_world_data.cpp`)
 
 Models for what had animations and no model, so a generator can place any of them
-without aborting. Colour-only boxes (`buildStandInModel`) on the disc's joints,
-with a collinfo text built from the disc's parts (`worldCollInfo`):
+without aborting. Colour-only boxes (`buildStandInModel`) on authored flat joints,
+with a collinfo text from authored parts (`worldCollInfo`):
 
 | Group | Files |
 |-------|-------|
 | Plants | `objects/plants/{chidome,clover,hae,hutaba,ine,tanpopo}.mod` |
-| Bridges and the push box | `objects/bridge/brd_test.mod` (37 joints), `brd_long.mod` (91), `objects/hinderrock/cube10.mod` |
-| Soft gate | `objects/gate/gt_soft.mod` (4 joints; parts `gate`, `side`, `flag`, `flg1`-`flg3`) and `gt_soft.anm` |
-| Bosses | `bosses/{mizu,snake}/*.mod`, `parms.bin` |
+| Bridges and the push box | `objects/bridge/brd_test.mod`, `brd_long.mod`, `objects/hinderrock/cube10.mod` |
+| Soft gate | `objects/gate/gt_soft.mod` and `gt_soft.anm` |
+| Bosses | `bosses/{mizu,snake}/*.mod`, `parms.bin` (empty lists) |
 | Enemies | `tekis/{beatle,iwagon,kabekuiA,kabekuiB,otama,palm,swallow}/*.mod` |
 | Collision platforms | `tekis/beatle/p_{body,l_wing,nozzle,r_wing}.mod`, `tekis/swallow/swalcol{b,h}.mod`: a box whose triangles are also the collision (`writePlatformMod`) |
-| Enemy parameters | `tekipara/*.bin`, 31 files |
 
 Notes:
 
 - The gate's `gate.bin`, `gt_hard.mod`, `centcoll.mod`, `sidecoll.mod` and
-  `gt_hard.anm` are the sandbox gate's (`standin_sandbox.cpp`); the object
-  profiles no longer have the two gate sets. `gt_soft.anm` reuses the sandbox
-  table's info names and frame count with the soft gate's four joints.
-- `standInObjectModelSpecs()` now includes these, so the animation sets take their
+  `gt_hard.anm` are the sandbox gate's (`standin_sandbox.cpp`); `gt_soft.anm` reuses
+  the sandbox table's info names and frame count with the soft gate's joints.
+- `standInObjectModelSpecs()` includes these, so the animation sets take their
   parents from the models.
-- With `tekipara/chappy.bin` the Bulborb of `sandbox_objects` runs on the disc's
-  parameters, not the code defaults.
+- The Bulborb of `sandbox_objects` runs on the source default enemy parameters.
 
 The every-object stage `stages/sandbox_all_objects.ini`
 (`tools/scenarios/standin_all_objects_stage.cpp`, a flat floor, a third hidden

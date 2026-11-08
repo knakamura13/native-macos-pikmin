@@ -12,6 +12,7 @@
 // SceneData::parse, getAnimInfo or DataChunk::getData change, update the copies.
 // The scenario runs (scenario_*) load the stand-in demo60 through the real code.
 #include "nectar_assets/cinema.h"
+#include "nectar_assets/standin_onion_boot.h"
 
 #include "CmdStream.h"
 #include "Stream.h"
@@ -524,7 +525,7 @@ int main()
 		}
 		check(boot6 >= 5 && boot6 + 60 + 10 <= cone6, "demo06: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
 		// demo05 (yellow, scenario onion_day3): the same order with the stand-in yellow boot
-		// motion (standin_object_profiles.cpp, KEY_Action0 at motion frame 240).
+		// motion (standin_object_profiles.cpp, KEY_Action0 at motion frame kOnionBootSeedFrame).
 		const auto k05 = keysOf("dataDir/cinemas/demo05.cin");
 		int boot5 = -1, cone5 = -1;
 		for (const ReadKey& k : k05) {
@@ -532,7 +533,7 @@ int main()
 			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionBoot) boot5 = k.frame;
 			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionEmitCone) cone5 = k.frame;
 		}
-		check(boot5 >= 5 && boot5 + 240 + 10 <= cone5, "demo05: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
+		check(boot5 >= 5 && boot5 + nectar::kOnionBootSeedFrame + 10 <= cone5, "demo05: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
 		// demo73 (scenario extinction_day30): StartTotalResults in the cut played once, before the loop.
 		int starts = 0;
 		for (const auto& f : files) {

@@ -2,9 +2,9 @@
 // Runs on the opt-in object stage, stages/sandbox_objects.ini, whose default.gen
 // places a blue Onion the player does not own yet (standin-objects.md). The
 // discovery movie is the stand-in demo06.cin (standin-cinema.md): Boot at movie
-// frame 10, the first seed from the measured Onion boot at motion frame 240
-// (movie frame about 250), EmitCone at 270, 300 frames long. Movie timing is
-// synthetic; the shared blue boot profile has the disc's 360-frame duration.
+// frame 10, the first seed from the authored Onion boot at motion frame 150
+// (nectar/standin_onion_boot.h; movie frame about 160), EmitCone at 270, 300 frames
+// long. Movie and boot timing are authored fixtures.
 //
 // DemoInvoker starts the discovery only on story stages, so the scenario sets
 // DEMOFLAG_DiscoverBlueOnyon itself, as DemoInvoker would (movie 6,
