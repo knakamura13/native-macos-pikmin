@@ -62,8 +62,7 @@ runner, so local advisory output is not permission to replace hosted goldens.
 Failed comparisons upload the actual
 pictures and expected/actual/difference composites as `scenario-screenshots-*`.
 
-Flake measurement: [run 41815060332](https://github.com/knakamura13/native-macos-pikmin-1/actions/runs/41815060332),
-2026-11-04, branch `golden-flake/r1`, head `5d2e25f27` lineage. Each OS had
+Flake measurement: one hosted workflow run, 2026-11-04. Each OS had
 20 fresh-runner captures, six pictures per capture (360 pictures total):
 
 | OS | Captures with metrics | Captures with a mismatch | Largest channel difference | Pixels differing by more than 2 |
@@ -209,7 +208,7 @@ renderer) pays per pixel on every tick. No scenario reads the picture. The
 default window is 64x36 and the scene renders at that size: the player's
 render scale (2/3) and its 160x120 floor do not apply (`pc_gfx_set_min_render_size`).
 
-Measured on an M3 Max with Apple's software renderer (the renderer macOS CI
+Measured on an Apple Silicon Mac with Apple's software renderer (the renderer macOS CI
 gets), forced by a local, uncommitted `SDL_GL_ACCELERATED_VISUAL` 0 in
 `pc_window.cpp`, `boot_smoke` at 30 Hz on the stand-in tree, 900 ticks plus boot:
 
@@ -339,7 +338,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `whistle_gather_release`, `whistle_pluck_held` | 30, 60 | W4 (#96): the whistle's growth, hold and Release are frame-time sums, so tick counts differ by rate (`KEY_LoopStart` 1 tick after Gather at 30 Hz, 2 at 60 Hz; the 0.08 s pluck interval is 3 and 5 ticks); the scenarios assert seconds and the call site's own arithmetic. |
 | `enemy_kills`, `onion_menu_transfer`, `navi_states`, `gate_break` | 30, 60 | The W7 (#98) bounds are in seconds. Kills, the menu's walk and timers, the geyser flight and the gate's hits land on different ticks per rate. `navi_states` asserts the Bury escape at 5 to 7 s: 6.30 s at both rates, since `mEscapeTimer` is scaled by `PC_TICKS30` (before that fix 60 Hz gave 3.80 s; W7 findings on #100). |
 
-Wall time of every stand-in entry, one run at a time on an M3 Max, `/usr/bin/time -p`
+Wall time of every stand-in entry, one run at a time on an Apple Silicon Mac, `/usr/bin/time -p`
 (2026-10-28, base `ee769374`; the last three rows on base `a1065fef`, CTest's own per-test time, `-j 1`). "GPU" is the Mac's own GL, "software" is Apple's
 software renderer, forced by a local, uncommitted `SDL_GL_ACCELERATED_VISUAL` 0 in
 `pc_window.cpp` (the renderer macOS CI gets). The state-hash logs of the GPU and the
@@ -379,7 +378,8 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
-| `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest tools/scenarios/boot-manifest.txt`. |
+| `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. No manifest argument. |
+| `scenario_standin_manifest` | a local boot manifest | `game-assets` | The generator with `--manifest-from-env`: checks the tree against `PIKMIN_BOOT_MANIFEST`; skipped (77) without it. |
 | `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `extinction_day30`, `day_end`, `day_end_day29`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu`, `tutorial_skip`, `tutorial_firsts` and `tutorial_day1` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 | `scenario_determinism_<name>_<rate>` | stand-in tree | none | EC-60. `boot_smoke`, `throw_release` and `day30_clock` at 30 and 60 (6 entries). `check_scenario_determinism.cmake` runs the scenario twice with `--state-hash-log` and fails if the two per-tick hash logs differ (the first differing line is printed). No scenario change. 1200 s timeout, `stages/sandbox.ini`. |
@@ -418,7 +418,7 @@ Which stage each stand-in entry boots:
 | `objects_smoke` | `stages/sandbox_all_objects.ini`, one of each plant, bridge, gate, boss and eight enemies. |
 | `ending_bad_day30`, `ending_neutral_day30`, `ending_happy`, `ending_happy_skip`, `captain_death_day30`, `challenge_captain_death`, `challenge_extinction` | `stages/sandbox.ini` |
 | `day_end_no_day_limit`, `challenge_day_end` | `stages/sandbox_objects.ini` (in challenge mode the stage has no Onion: see `challenge_day_end` below) |
-| `onion_day3` and its variants | `stages/sandbox_onions.ini`, the Onion stage: the object stage's map with Onion generators placed as on the disc's courses (red, yellow and blue not named `next`, a `next` yellow elsewhere). See `standin-objects.md`. |
+| `onion_day3` and its variants | `stages/sandbox_onions.ini`, the Onion stage: the object stage's map with Onion generators that use both of the game's ownership gates (red, yellow and blue not named `next`, a `next` yellow elsewhere). See `standin-objects.md`. |
 | `piki_hazard_deaths` | `stages/sandbox_objects.ini` (Dwarf Bulborb for swallow). |
 | `piki_drown`, `piki_throw_water` | `stages/sandbox_water.ini`, flat map with one pond (`standin_water_stage.h`). |
 
@@ -666,9 +666,7 @@ expected without FMA. With the option ON the generator writes byte-identical
 trees on both (by default `sandbox_objects.mod` and `sandbox_all_objects.mod`
 differed), and the hash logs of all 18 stand-in scenario entries, the object
 stages included, are byte-identical on the two; all 19 stand-in entries pass on
-both. K is 13 at 30 Hz and 22 at 60 Hz after #92 (GameCube RNG draw order and stand-in
-gate re-fit), on the stand-in tree
-and on a real install.
+both, and K matched between the two.
 
 On a real install (RelWithDebInfo, option ON), the six disc runs give the same
 per-tick hashes on macOS arm64, Linux x86-64 and a MinGW-w64 Windows build
@@ -736,7 +734,7 @@ run above is wine 9.0).
 | `pikmin_cap_1`, `pikmin_cap_250`, `pikmin_cap_999` | Day 1, object stage | EC-57: `pikmin_cap` at the port's limit 1, 250 and 999 (`PcScenario::pikiLimit`). At 1 the stage builds one sprout and DF17 sets (red Onion, no red Pikmin); clear in the others. |
 | `day_clock` | Day 1 | DY3, DY4, DF19, DF31, T29, EC-17, EC-18: the 10, 13 and 16 h bells once each (flag 31 and `TUT_InfoDisplay` at noon), the sundown warning once at `mNightWarning` and the banner's end (flag 19, `TUT_DayEnd`), the countdown from 18:30, the day end at 19:00, the clock never going back. Characterised: the countdown is cut by the 19:00 day end; T29's guard is always true. |
 | `demo_timers` | Day 1, tutorial stage | DF07, DF09, DF16, PL3, EC-36: NoPikminTimeout 40 s after DF03 (not at 39, by 41), Unk9 30 s after the first pluck, OnyonMenuInfo only off the tutorial and on a stage <= Forest, the pluck counter one up after the pluck, and no input acting during the red Onion's discovery movie until A skips it. |
-| `throw_levels` | Day 1 | EC-28, EC-31, EC-40 in part, EC-42: A with no Pikmin punches and returns to Walk; throws at charge levels 0-3 go Hanged, Flying, Normal, land on the ground at the cursor and, with the disc's parms (min == max), peak the same; with the max height raised (control) level 3 peaks higher. |
+| `throw_levels` | Day 1 | EC-28, EC-31, EC-40 in part, EC-42: A with no Pikmin punches and returns to Walk; throws at charge levels 0-3 go Hanged, Flying, Normal, land on the ground at the cursor and, with equal min and max throw heights, peak the same; with the max height raised (control) level 3 peaks higher. |
 | `whistle_radius` | Day 1 | EC-39: a full whistle calls every Free Pikmin inside its radius and leaves those outside Free; at Whistle Radius 50% the radius halves. The stand-in Fue motion's own `KEY_LoopStart` starts the circle (no poke since W4 #96). |
 | `navi_invincible` | Day 1 | EC-37: `invincible()` in all 36 captain states against the list of 14; a Press hit in Walk is taken and puts the captain in Pressed, where Press, Flick, Suck and Bury are refused; back in Walk after 3 s a Suck hit is taken. |
 | `whistle_gather_release` | Day 1 | EC-32, EC-39: the real whistle, no state poked. A full hold calls Free Pikmin inside R and leaves those outside; a half-grown partial calls at its scale; X disbands the squad to Free and back to Walk. Characterised (#100): a full hold never sets `mWhistleCallRadius`, so the circle's per-tick calls use 0 or a previous partial's scale. |
@@ -753,10 +751,10 @@ run above is wine 9.0).
 | `pause_continue` | Day 2 | The pause menu's "Continue from last save" (T15): START, the cursor down twice, A, then Yes on the confirmation. The soft reset goes to CardSelect within 10 s of START, no day end, nothing saved (the scratch save directory unchanged). On Day 1 the menu skips "Go to sunset", which is why the scenario starts on Day 2. PASS at tick 180 (30 Hz) and 330 (60 Hz). |
 | `permadeath_erase`, `permadeath_unsaved`, `permadeath_bad_slot`, `permadeath_off` | Day 1 | The Permadeath erase (T20). Through the game's card code the scenario writes the card file, slots A, B, C as normal saves on days 5, 4, 7 (each with its `card0/days` copy), slot B again as the run's Permadeath save on day 1, the run plays slot B. The captain takes a 1000-damage Flick at tick 10. `permadeath_erase`: CardSelect, no `DayOverModeState`, the notice queued; in the scratch save directory only the card file changes and `card0/days/slot1/` and its `day04.bin` go (the stat record stays); slot B reads back Fresh with no marks, slots A and C keep block, checksum, day and Pikmin; the banner and option sections are unchanged and exactly one game block changed, the spare. `permadeath_unsaved` (no card file), `permadeath_bad_slot` (play-state slot 3): CardSelect, the notice queued, the directory unchanged. `permadeath_off`: the same saves, a normal run: the death reaches `DayOverModeState` with the directory unchanged. PASS at tick 337 (30 Hz) and 659 (60 Hz). |
 
-| `whistle_delay` | Day 1, any stage | Issue #133: six Free Pikmin 20 to 60 units from the captain, a full whistle. Per Pikmin: the tick it enters LookAt (the call) and the tick it is in Formation and out of LookAt. Asserts every Pikmin plays Kizuku in LookAt and joins 0.45 to 1 s after its call (#145), and prints the delays. Measured 2026-11-02, call to joined: disc 0.50 to 0.57 s at 30 Hz, 0.55 to 0.75 s at 60 Hz. Stand-ins before the fix: 0.07 to 1.40 s at 30 Hz, 1.45 to 1.58 s at 60 Hz (the Kizuku motion, info 66, was a generic 40 frames). After it carries the disc's timing (16 frames, KEY_Action0 and KEY_Action1): 0.07 to 0.60 s at 30 Hz, 0.65 to 0.78 s at 60 Hz. At 30 Hz three of six stand-in Pikmin still joined within 0.2 s: the stand-in Wait (info 12) was a 40-frame one-shot, and its KEY_Finished, landing in LookAt's random delay, ended LookAt without Kizuku (PikiLookAtState::procAnimMsg takes any KEY_Finished as Kizuku's end). The disc's Wait loops (20 frames, loop start and end at anim keys 0 and 1) and never sends one. With the disc's Wait (#145): stand-ins 0.53 to 0.70 s at 30 Hz, 0.65 to 0.78 s at 60 Hz; disc unchanged, 0.50 to 0.57 s and 0.55 to 0.75 s (2026-11-04). |
-| `bulborb_fight` | Day 1, object stage or a disc stage | Issue #136: ten blue Pikmin born 60 units from a Dwarf Bulborb, the captain 90 units away, the real enemy AI, 30 s. Prints the Bulborb's health and the Pikmin by state each second, and Pikmin lost, Flick entries and Flick duration. Asserts the Bulborb dies within 10 s and a Flick lasts 4 s or less on average. Measured 2026-11-02, disc: dead at 4.0 s (30 Hz) and 2.5 s (60 Hz), 0 lost, Flick 2.9 s and 2.8 s. Stand-ins before the Flick motion (info 58) carried the disc's timing: dead at 14 s, 2 lost, 9 flicks, Flick 4.6 s. After it (10 frames, flags 6): dead at 4.3 s (30 Hz) and 4.5 s (60 Hz), 0 lost, Flick 3.6 s. Issue #154, 2026-11-04: Attack (info 18), StillJump (13), JKoke (57) and GetUp (59) carry the disc's timing too. Disc on that day: dead at 3.4 s (30 Hz) and 2.5 s (60 Hz), Flick 2.9 s and 2.8 s. Stand-ins: dead at 2.2 s and 1.5 s, 0 lost, Flick 1.8 s at 30 Hz (no flick at 60 Hz). Before, the stand-in Attack had no KEY_Action0, so ground attacks never hit and only Pikmin on the Bulborb's back did damage, at the same cadence at both rates; on the disc ground attacks hit too. The stand-ins are now faster than the disc. Their Pikmin parameters are the code defaults: knock-down 0.7 s, where the disc's give 1 to 3 s (with the disc's values the Flick is 3.3 s), so the Flick is shorter. The kill time is not explained by those values; the stand-in Bulborb's collision spheres sit lower than the disc's, and are the next candidate. |
-| `flick_out_of_range` | Day 1, object stage or a disc stage | Issue #146: does a Pikmin flicked out of its work-search range go passive? The range is p41 `mIdleAttackSearchRange`, read only by `Piki::graspSituation` (`piki.cpp`); getting up from a flick does not call it: `PikiFlickState::cleanup` (`pikiState.cpp`) restarts a resumable action, `ActAttack::resumable` is true and `ActAttack::restart` re-inits on the same enemy (`mOther`) with no distance test (`aiAttack.cpp`). One blue Pikmin born 40 units from the Dwarf Bulborb is handed to `actOnSituaton`; when it reaches the Bulborb in attack mode the scenario flicks it as `BTeki::flickUpper` does, with 10 times the Bulborb's upper flick power (60 on both; at 3x it still lands inside the range). Prints state, mode, action, attack target and distance every 0.25 s for 6 s. Asserts it passes the range during the flick (distance over p41 plus the Bulborb's centre size, and `graspSituation` finds no enemy there), keeps the attack action on the Bulborb on every tick from getting up until it reaches it again, and reaches it within 5 s. Measured 2026-11-04, not passive on either: stand-ins out of range 0.20 s / 0.25 s after the flick (30 / 60 Hz), up after 2.23 s / 2.18 s, back at the Bulborb 2.03 s / 0.63 s later; disc (Forest of Hope) 0.17 s / 0.20 s, up after 3.83 s / 3.27 s, back 2.07 s / 0.80 s later. Stand-in differences, left as they are because writing them changes other scenarios' hash logs: p41 is 100 (code default, disc 70) and the knock-down p74/p43 is 0.7-0.7 s (disc 1-3 s), both unwritten in the stand-in `pikiMgr.bin` (`verification-log.md`, item 4); the stand-in Bulborb has a `cent` sphere of 10 (disc 0). The distance at getting up follows the awake Bulborb, which walks after the Pikmin on some runs. |
-| `free_play` | Day 2, any stage | No assertions. Applies the disc's key bindings and Infinite Day (which holds Days 2 to 29), then hands off on the first tick after the intro. Headless it passes at tick 0; it exists to be played (`--scenario-handoff`) and for the hand-off check. |
+| `whistle_delay` | Day 1, any stage | Issue #133: six Free Pikmin 20 to 60 units from the captain, a full whistle. Per Pikmin: the tick it enters LookAt (the call) and the tick it is in Formation and out of LookAt. Asserts every Pikmin plays Kizuku in LookAt and joins 0.45 to 1 s after its call (#145), and prints the delays. The join delay depends on the stand-in Kizuku and Wait motions (`standin_anims.h`): a Wait that ends with KEY_Finished inside LookAt's random delay ends LookAt without Kizuku (PikiLookAtState::procAnimMsg takes any KEY_Finished as Kizuku's end), so the stand-in Wait loops. |
+| `bulborb_fight` | Day 1, object stage or a disc stage | Issue #136: ten blue Pikmin born 60 units from a Dwarf Bulborb, the captain 90 units away, the real enemy AI, 30 s. Prints the Bulborb's health and the Pikmin by state each second, and Pikmin lost, Flick entries and Flick duration. Asserts the Bulborb dies within 10 s and a Flick lasts 4 s or less on average. On the stand-in tree the Pikmin parameters are the source defaults (knock-down 0.7 s) and the motion timings are the stand-in animations' (`standin_anims.h`); ground attacks hit only because the stand-in Attack motion has a KEY_Action0. |
+| `flick_out_of_range` | Day 1, object stage or a disc stage | Issue #146: does a Pikmin flicked out of its work-search range go passive? The range is p41 `mIdleAttackSearchRange`, read only by `Piki::graspSituation` (`piki.cpp`); getting up from a flick does not call it: `PikiFlickState::cleanup` (`pikiState.cpp`) restarts a resumable action, `ActAttack::resumable` is true and `ActAttack::restart` re-inits on the same enemy (`mOther`) with no distance test (`aiAttack.cpp`). One blue Pikmin born 40 units from the Dwarf Bulborb is handed to `actOnSituaton`; when it reaches the Bulborb in attack mode the scenario flicks it as `BTeki::flickUpper` does, with 10 times the Bulborb's upper flick power (60 on both; at 3x it still lands inside the range). Prints state, mode, action, attack target and distance every 0.25 s for 6 s. Asserts it passes the range during the flick (distance over p41 plus the Bulborb's centre size, and `graspSituation` finds no enemy there), keeps the attack action on the Bulborb on every tick from getting up until it reaches it again, and reaches it within 5 s. Measured 2026-11-04, not passive on either: stand-ins out of range 0.20 s / 0.25 s after the flick (30 / 60 Hz), up after 2.23 s / 2.18 s, back at the Bulborb 2.03 s / 0.63 s later; disc (Forest of Hope) 0.17 s / 0.20 s, up after 3.83 s / 3.27 s, back 2.07 s / 0.80 s later. On the stand-in tree p41 is 100 and the knock-down p74/p43 is 0.7-0.7 s (both source defaults), and the stand-in Bulborb has a `cent` sphere of 10. The distance at getting up follows the awake Bulborb, which walks after the Pikmin on some runs. |
+| `free_play` | Day 2, any stage | No assertions. Applies the Classic key bindings and Infinite Day (which holds Days 2 to 29), then hands off on the first tick after the intro. Headless it passes at tick 0; it exists to be played (`--scenario-handoff`) and for the hand-off check. |
 | `first_yellow` | Day 1, object stage | The moment before the first yellow Pikmin (issue #76). The captain walks with the stick to the stage's yellow sprout at (-20, 180) and stops: in Walk, within 1 unit of one spot for 0.5 s, within 15 units of the sprout (the pluck reach, NaviMgr p62) and facing it within 30 degrees, within 15 s of tick 0 and 3 s of coming within 12 units. Yellow must still be undiscovered: the sprout can be plucked, `DEMOFLAG_PluckYellowPikmin` and the Yellow container and display bits are clear, no yellow Pikmin is on the field. Then the hand-off point (a pass without `--scenario-handoff`). The next A press is the first yellow pluck, which `onion_unlock` checks. The stand-in tree has no yellow Onion or discovery movie (demo05). Parked at 2.00 s at both rates. |
 | `coop_smoke` | Day 1, co-op | Two captains in split screen (see [Co-op scenarios](#co-op-scenarios)), each driven by its own pad. 2 s with pad 0 east and pad 1 north: captain 1 travels at least 40 units east and captain 2 at least 40 units north, each less than half that across its direction (measured: 248 and 227). Then 2 s with pad 0 released and pad 1 south: over the last 1.5 s captain 1 moves less than 5 units (measured 0) and captain 2 at least 30 units south (measured 196). Both end in Walk. |
 | `coop_look` | Day 1, co-op | The split-screen head-look fix (c53ce41e, upstream PR #228; `coverage/render-sim-coupling.md`, Co-op fix). Subjects: both captains (`Navi::updateHeadMatrix`) and one blue Pikmin in Free mode (`ViewPiki::refresh`). Once both captains are in Walk and not looking, each subject gets a look at a fixed point with `mLookTimer` 12; after every tick each timer must be exactly one lower with the target kept, and on the twelfth tick each look must end (no target, timer 0). Two rounds. Negative control (2026-10-28, local, not committed): with `pc_coop_first_view_pass()` returning true all three timers read 10 one tick after the start and the run fails at that tick, which also shows the two views per tick run. |
@@ -774,11 +772,10 @@ run above is wine 9.0).
 | `onion_day3_skip` | as `onion_day3` | START over every movie: the discovery no earlier than 1.5 s in (after its Boot key, before the seed), the pluck movie, the day end and, on the disc, the Day 3 landing. The regression test of the owner's report on the whole chain (fork issue #57, upstream #205): with the #205 diff reversed it fails at both rates on both trees with `Onion state 0, seeds born 0` (the Onion booted and in `GOAL_Wait`, no seed, so no yellow can be plucked). |
 | `onion_day3_unplucked` | as `onion_day3` | The negative control of every Day 3 check: the Onion found, its seed left in the ground. As on the GameCube: boot bit set, no container or display bit, no take-off, map select lists red only, and on Day 3 the `next` yellow Onion is born again (booted, `GOAL_Wait`, empty) and none from the other generator. |
 
-`throw_release` measures K at run time and never hard-codes it. On this tree both
-the stand-in sandbox and a real install give K = 13 at 30 Hz and 22 at 60 Hz
-(after #92's GameCube RNG draw order and the stand-in gate re-fit in
-`standin-k-investigation.md`), so a change to the squad AI, collision or the sim
-RNG can move the two apart.
+`throw_release` measures K at run time and never hard-codes it. On the stand-in
+tree (authored fixtures and source defaults) K is 10 at 30 Hz and 20 at 60 Hz; a
+real install gives its own value, which only the local disc lanes check. A change
+to the squad AI, collision, the sim RNG or the stand-in ThrowWait motion moves it.
 
 ## Writing a scenario
 
@@ -800,8 +797,8 @@ from `PcScenario` (`pc_scenario.h`):
 
 `scenarioHandOff()` marks the hand-off point: with `--scenario-handoff` the
 player takes over there, otherwise it is a pass. `scenarioApplyClassicKeyBindings()`
-sets the disc's `parms/key.bin` bindings (pluck and throw on A). The stand-in
-generator writes that file; the call restores the same six binds.
+sets the Classic bindings (pluck and throw on A). The stand-in generator writes
+the same six to `parms/key.bin` (an authored fixture); the call restores them.
 | `crossesDays()` | Default false. True lets the run continue past the soft reset that ends a day: the runner stops ticking the scenario from that tick (the stage's objects are gone), waits for the next stage, runs the intro gate again and calls `onStageReady()` once more; `pc_scenario_stage_number()` says which stage (1, 2, ...). Ticks keep counting across stages. Used by `onion_day3`. |
 | `onMapSelect()` | For a `crossesDays()` scenario, when `OnePlayerSection` builds MapSelect: return a `stages.ini` `file` and the runner skips DrawWorldMap (direct `enterCourse`); return `nullptr` to run the real world map (stand-in BLOs or disc) and drive it with `providePadsBetweenStages` and/or `pc_scenario_request_map_course`. |
 | `providePadsBetweenStages(ticks, pad0)` | Pad 0 between the soft reset and the next stage (the real world map). |
@@ -924,7 +921,7 @@ What the run does and does not touch:
   white cross at the cursor always, a yellow ring while B is down. A call reaches only
   Pikmin within the ring, around the cursor (`Navi::callPikis`), so aim at them and hold
   B for a moment (the radius grows from its minimum over `mWhistleExpandTime`).
-- Keys: the disc's game bindings (pluck and throw on A, whistle on B). The
+- Keys: the Classic bindings (pluck and throw on A, whistle on B). The
   stand-in generator writes `parms/key.bin` with those binds. Keyboard, mouse and controller bindings
   are the port's defaults.
 - No audio: the run uses SDL's dummy audio driver, and a
@@ -1005,12 +1002,12 @@ hand with `check_scenario_determinism.cmake`, not registered). The flags
 
 ## Stand-in assets
 
-`nectar_standin_generator <out> [--manifest <boot-manifest.txt>]` writes
+`nectar_standin_generator <out> [--manifest <local boot manifest>]` writes
 `<out>/assets/dataDir/...`, the layout the game opens (every file open resolves
 to `assets/` plus the path the game passes). It builds the tree in memory twice
 and fails if the two hashes differ (run-to-run identity on one machine only), and
-treats every writer error as fatal. With `--manifest`, every path of the disc
-boot manifest must be in the tree or on the generator's built-in allowlist
+treats every writer error as fatal. With `--manifest` (a local boot manifest, see
+below), every listed path must be in the tree or on the generator's built-in allowlist
 (`kManifestAllowlist` in `standin_generator.cpp`, each entry with a reason), or it
 exits 1. It omits `assets/.pikmin-assets`, which only the launcher reads.
 
@@ -1028,52 +1025,67 @@ The writers live in `libs/nectar_assets`: `mod_writer.h` and `standin_models.h`
 `texture.h`, `bundle.h` and `standin_textures.h` (`.bti`, `.txe`, bundles),
 `blo.h`, `pcr.h` and `standin_ui.h` (screens, particles), `cinema.h` (`.cin`
 and `.dsk` cutscenes, see `standin-cinema.md`), and `parms.h`, `archive.h`,
-`stages_ini.h` and `gen.h`. The stand-in `parms/aiconst.bin` carries the
-disc's value for every ID that differs from the code default
-(`standin-aiconst.md`), and the stand-in `parms/pikiMgr.bin` is byte-identical
-to the disc's: all 77 Pikmin IDs with the disc's values (`standin-piki-parms.md`).
+`stages_ini.h` and `gen.h`. The stand-in parameter files (`parms/gamePrms.bin`,
+`aiconst.bin`, `demo.bin`, `cunit.bin`, `naviMgr.bin`, `pikiMgr.bin`) are empty
+tagged lists, so every parameter keeps its source constructor default;
+`check_synthetic_parameters.py` (CTest) enforces that. `parms/key.bin` carries
+six authored button masks, the Classic bindings the scenarios drive.
 
 Each writer is a pure function (a plain input struct, bytes out, an error
 string, no file I/O) with a write-then-read unit test registered in CTest, for
 example `nectar_mod_writer_test`.
 
-Some models are made in Blender (the pellets so far; more follow under #115).
-Their `.blend` sources, the export script and the committed exports the
-generator compiles in are in `libs/nectar_assets/art/` (see its README for the
-one re-export command and `check_export.py`); the designs are in
-`libs/nectar_assets/art/ART_DIRECTION.md`. Building never needs Blender. Art
-models sit on the spec's own skeleton, so joint counts, joint bounds and
-collision spheres do not change.
+The models, textures and art are generated in code by the writers; building
+needs no external art tool and no exported file.
 
-### Fidelity rule
+### Fidelity rule (#190)
 
-A stand-in matches the real data **only where a scenario depends on it**: joint
-indices, animation lengths, key-event frames, collision sizes and parameter
-values. Take values from the decompiled source or code defaults first. A number
-only the disc has is recorded in a comment saying where it came from (the
-`throw_release` movement and grab parameters are the main case, see `parmFiles`
-in `standin_generator.cpp`). No disc geometry, textures, audio or text is used.
-Models are original art (flat colours, or Blender models with baked vertex
-colours) on the disc's joint structure, animations are identity poses.
+The public CI fixtures (the generated stand-in tree: `libs/nectar_assets/src/standin_*.cpp`,
+the headers in `libs/nectar_assets/include/nectar_assets`, `standin_generator.cpp` and the
+`standin_*_stage.cpp` files here) hold only two kinds of value:
+
+- **source defaults**: a value the game source itself sets, such as a parameter's
+  constructor default, a file path or pane tag the code names, an event ID;
+- **authored values**: deterministic numbers chosen for the fixture (round numbers on an
+  own grid), each with a comment stating the code contract it keeps.
+
+Nothing measured or copied from a retail disc is a fixture payload: no cutscene frame
+schedules, loop windows or scene names; no screen geometry, pane placements or
+attributes; no stage placements; no parameter tables; no file-name tables. Comments do not
+claim that a value follows the retail game. Where the game code requires a contract (an
+event ID, a pane tag or type, a `.cin` path, an ordering the code relies on), the fixture
+keeps the minimal contract, traced to the code, and authors the rest. Gameplay code is
+never tuned to make a test pass, and assertions are relations on the authored values,
+not copies of disc structure.
+
+Exact fidelity checks against retail data run only in opt-in local lanes that read a
+user-supplied, read-only install (`PIKMIN_SCENARIO_DATA_DIR`, `NECTAR_DISC_DATA`,
+`PIKMIN_BOOT_MANIFEST`): CTest label `game-assets`, skipped with exit 77 when the data
+is absent. `PROVENANCE.md` lists the source and disposition of every fixture input class.
 
 ### The allowlist and the boot manifest
 
-`boot-manifest.txt` lists every file the game opens on the scenario boot path on
-a real install: path, `OK|FAILED`, and the scenarios that opened it. It is a
-cross-check, not an input to the game. The generator checks the tree against it,
-and some writer tests take it as an argument.
-
-Regenerate it after a change that alters the boot path. On disc data, run each
-scenario at least once with `PIKMIN_LOG_FILE_OPENS` set to a fresh file, then:
+A boot manifest lists every file the game opens on the scenario boot path on a
+real install: path, `OK|FAILED`, and the scenarios that opened it. It is a local
+cross-check, not an input to the game, and it is not part of the public fixtures:
+make it on your own machine from your own install and keep it out of the
+repository. On disc data, run each scenario at least once with
+`PIKMIN_LOG_FILE_OPENS` set to a fresh file, then:
 
 ```sh
 python3 tools/scenarios/make_boot_manifest.py \
     --version VERSION_GPIE01_01 --flags "RelWithDebInfo, PIKMIN_BUILD_SCENARIOS=ON, PIKMIN_NATIVE_JAUDIO=OFF" \
-    boot_smoke=a.log throw_release=b.log day30_clock=c.log > tools/scenarios/boot-manifest.txt
+    boot_smoke=a.log throw_release=b.log day30_clock=c.log > /path/outside/the/repo/boot-manifest.txt
 ```
 
 (Run from `games/pikmin1`. Several logs per scenario go comma-separated.) The
-script stores paths only, no sizes or contents.
+script stores paths only, no sizes or contents. Then
+`PIKMIN_BOOT_MANIFEST=/path/outside/the/repo/boot-manifest.txt ctest -R '^scenario_standin_manifest$'`
+checks that every listed path is in the stand-in tree or on the generator's
+`kManifestAllowlist`; without the variable the test is skipped (77). The writer
+tests `nectar_mod_writer_test`, `nectar_anim_writer_test` and
+`nectar_standin_objects_test` take the same file as an optional argument when run
+by hand.
 
 ### Adding a stand-in file
 
@@ -1083,9 +1095,10 @@ script stores paths only, no sizes or contents.
    (add a writer and a test in `libs/nectar_assets` if the format has none).
 3. If the game tolerates its absence and no scenario depends on it, add its path
    to `standin-open-allowlist.txt` with the reason, and to `kManifestAllowlist`
-   if it is in the boot manifest.
-4. If a new scenario depends on a value, apply the fidelity rule and cite where
-   the number came from.
+   if a local boot manifest lists it.
+4. If a new scenario depends on a value, apply the fidelity rule: use the source
+   default, or author a value and state the code contract it keeps, and add its
+   class to `PROVENANCE.md`.
 
 ## GL probe
 
@@ -1113,10 +1126,9 @@ Build it with `cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe`.
   extinction and day-end movies (demo46, demo47) to the end, `extinction_day30` demo46 and the bad ending's demo73 (its other movies, demo69 and demo74, stay missing). `onion_skip` plays and skips the
   stand-in blue Onion discovery (demo06) on the object stage. The sandbox has no
   enemies, bosses, plants, gates or bridges.
-- Stand-in and disc runs can differ in timing. `throw_release` measures K, the
-  press-to-grab delay, per run because the stand-in value need not equal the
-  disc's. Today the two agree (13 at 30 Hz, 22 at 60 Hz), by a fitted sandbox
-  gate after #92, not by construction.
+- Stand-in and disc runs differ in timing. `throw_release` measures K, the
+  press-to-grab delay, per run because the stand-in value (authored fixtures) is
+  not meant to equal a real install's.
 - A scenario needs a GL context, even hidden. Without one the run exits 4. On
   Windows, Mesa's `opengl32.dll` and `libgallium_wgl.dll` must sit beside the
   executable.
@@ -1127,7 +1139,7 @@ A hidden window (`--scenario`, the default) must not move the real mouse
 pointer. `pc_window.cpp` skips `SDL_WarpMouseInWindow` when the window carries
 `SDL_WINDOW_HIDDEN`, in `warpMouseToCentre()` and in the startup centre warp
 (commit `3d1e66c0`). The cause had been inferred from the code. It was observed
-on macOS (Apple M3 Max, 2560x1080 main display) on 2026-10-28 with a read-only
+on macOS (an Apple Silicon Mac with a 2560x1080 main display) on 2026-10-28 with a read-only
 helper (`python3 -I` with pyobjc: `CGEventGetLocation` and
 `NSEvent.mouseLocation`, in CoreGraphics coordinates, origin top left). The
 helper never posts events. Each run is `boot_smoke` at 30 Hz on the stand-in tree.
@@ -1171,7 +1183,7 @@ Unix Makefiles, `PIKMIN_NATIVE_JAUDIO=OFF`):
   on a disc tree (a scratch folder whose `assets` is a symlink to an install):
   both exit 0. The three disc scenarios pass at 30 Hz and `throw_release` at 60.
 - `make_boot_manifest.py` with fresh `PIKMIN_LOG_FILE_OPENS` logs from the three
-  disc runs reproduces `boot-manifest.txt` byte for byte.
+  disc runs reproduced the manifest of that day byte for byte.
 - Exit codes 0, 1, 2 and 77, each rejected flag, the data-directory cases, the
   watchdog and `PIKMIN_SCENARIO_TRACE` were run. Exit 4 was not (no GL failure
   could be produced).
@@ -1184,7 +1196,7 @@ Unix Makefiles, `PIKMIN_NATIVE_JAUDIO=OFF`):
 - Not run: the native JAudio configuration, the Linux and Windows builds, CI, and
   `-G Ninja`.
 - `gl_probe.c`, built with the command above, printed `GL_PROBE_OK` (4.1 Metal,
-  Apple M3 Max).
+  Apple Silicon).
 
 ### Local exact throw fidelity
 
