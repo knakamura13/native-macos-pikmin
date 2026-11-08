@@ -18,7 +18,9 @@ It fails (exit 1) unless
   - every test of that set ran in exactly one shard (a FIXTURES_SETUP test, such as
     scenario_standin_generate, runs in every shard that needs it and is allowed more than once),
   - no test ran that is not in the set, and
-  - two shards never wrote different bytes to the same log name.
+  - two shards never wrote different bytes to the same scenario log name.
+Raw build provenance is retained separately in scenario-evidence/<shard-name>/; runner
+tool versions and paths can differ between shards. Nothing is normalised or discarded.
 DIR then holds scenario-logs/, scenario-evidence/ and Testing/Temporary/LastTest_shard<k>.log,
 the layout ci_k_summary.sh, check_throw_flight.py and compare_hash_logs.py read from a build
 directory. With GITHUB_STEP_SUMMARY set, a coverage line is appended to it.
@@ -123,9 +125,12 @@ def main():
     owners = {}
     for i, d in enumerate(dirs, 1):
         shard = os.path.basename(os.path.normpath(d))
-        for sub in ("scenario-logs", "scenario-evidence"):
-            if os.path.isdir(os.path.join(d, sub)):
-                copy_tree(os.path.join(d, sub), os.path.join(out, sub), shard, problems, owners)
+        logs_src = os.path.join(d, "scenario-logs")
+        if os.path.isdir(logs_src):
+            copy_tree(logs_src, os.path.join(out, "scenario-logs"), shard, problems, owners)
+        evidence = os.path.join(d, "scenario-evidence")
+        if os.path.isdir(evidence):
+            shutil.copytree(evidence, os.path.join(out, "scenario-evidence", shard))
         last = os.path.join(d, "Testing", "Temporary", "LastTest.log")
         if os.path.isfile(last):
             dst = os.path.join(out, "Testing", "Temporary", f"LastTest_shard{i}.log")

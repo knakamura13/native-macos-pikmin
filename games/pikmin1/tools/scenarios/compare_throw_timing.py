@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Require successful throw-release logs and equal calibration K per tick rate."""
+"""Require successful throw-release logs and equal calibration K per tick rate.
+
+Provenance is metadata.json beside the logs, or one metadata.json per shard under
+scenario-evidence/<shard-name>/. The compared fields must agree. Per-shard build
+files such as CMakeCache.txt are not read and are not required to match.
+"""
 import argparse
 import json
 import pathlib
@@ -22,16 +27,27 @@ def collect(directory):
     return values
 
 
+def provenance(directory):
+    """metadata.json for one source, including every shard when provenance is nested."""
+    evidence = pathlib.Path(directory).parent/'scenario-evidence'
+    direct = evidence/'metadata.json'
+    if direct.is_file():
+        return [json.loads(direct.read_text())]
+    shards = sorted(path for path in evidence.iterdir() if path.is_dir()) if evidence.is_dir() else []
+    if not shards:
+        raise FileNotFoundError(direct)
+    return [json.loads((shard/'metadata.json').read_text()) for shard in shards]
+
+
 def compare(sources):
     if len(sources) < 2:
         raise ValueError('at least two distinct sources are required')
-    metadata = {name: json.loads((pathlib.Path(directory).parent/'scenario-evidence'/'metadata.json').read_text())
-                for name, directory in sources.items()}
+    documents = [item for directory in sources.values() for item in provenance(directory)]
     for key in ('revision', 'upstream_revision', 'harness_base_revision', 'session_seed', 'rates', 'input_source_sha256'):
-        encoded = [json.dumps(item[key], sort_keys=True) for item in metadata.values()]
+        encoded = [json.dumps(item[key], sort_keys=True) for item in documents]
         if len(set(encoded)) != 1:
             raise ValueError(f'provenance differs: {key}')
-    if next(iter(metadata.values()))['session_seed'] != 0:
+    if documents[0]['session_seed'] != 0:
         raise ValueError('unexpected session seed')
     values = {name: collect(directory) for name, directory in sources.items()}
     for rate in ('30', '60'):
