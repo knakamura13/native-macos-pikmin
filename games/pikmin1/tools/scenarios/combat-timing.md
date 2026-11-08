@@ -257,10 +257,25 @@ build at 60 Hz, 64 starts):
 and 9.0 distinct Pikmin land a hit per fight at 60 Hz against 8.4 at 30 Hz. The first five Pikmin join at the same pace; the late
 joiners (6th to 8th) join 0.3 to 0.6 s sooner at 60 Hz. That is the extra hit rate: more attackers engaged earlier.
 
-Next: find why the late joiners reach the Bulborb sooner at 60 Hz. They are the Pikmin that start farthest away or are held up by
-the crowd, so look at Pikmin-to-Pikmin and Pikmin-to-Bulborb collision separation (per-tick push-out that is not scaled by the
-tick), the walk speed ramp from the formation, and path blocking, comparing the walk time of the farthest Pikmin on the same
-starts.
+Where the join-time difference sits (faithful-turning build, temporary log, 64 starts, Pikmin binned by the distance to the
+Bulborb at their first decision, mean time to their first hit, 30 Hz then 60 Hz): within 25 units 1.22 s and 0.88 s; 25 to 35
+1.23 and 0.99; 35 to 45 1.26 and 0.90; 45 to 55 0.96 and 1.11; beyond 55 1.16 and 1.19. So it is the Pikmin that start NEAR the
+Bulborb that join 0.3 to 0.4 s sooner at 60 Hz, while the far ones, whose join time is dominated by walking, are equal. A Pikmin
+that begins almost in range still needs about 1.2 s to land its first hit at 30 Hz, so that time is alignment and decision
+latency (the turn toward a moving target, the `angle < PI/10` test, the jump-adjust roll, the attack animation start), not
+walking or crowding. My earlier idea of unscaled collision push-out is not supported.
+
+Interpretation: the remaining difference looks like a discretization effect, not a missed scale factor. The original reads the
+target direction, turns, tests and decides once per 1/30 s on a target that moves during that step. A 60 Hz port that samples
+the same quantities twice as often tracks the target with less lag and aligns sooner, even when every rate constant is
+compounded correctly (which is why exact compounding of each term, one at a time, did not close the gap). Reproducing the
+30 Hz behaviour exactly would mean evaluating the Pikmin facing and attack decisions against the target state sampled on
+30 Hz boundaries (and combining the turn terms in the original order within that step), a change to how the AI reads the world
+rather than another constant.
+
+Decision for the project (see #154): accept this as a documented, bounded divergence of finer sampling (about 5% of kill time at
+60 Hz on the paired starts, up to 12% on the heavy-tailed 96-start mean), or invest in a 30 Hz sampled-target pipeline for
+the Pikmin attack AI. The exact-disc test `scenario_combat_rate_disc` pins the default start only.
 
 ## Public stand-in fixture
 
