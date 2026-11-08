@@ -1,6 +1,6 @@
 # Combat timing against the original game (issues #154 and #180)
 
-Status: **measured and partly explained; not resolved.** The public scenarios assert only smoke
+Status: **measured, cause found in three per-tick behaviours, divergence cut from 0.9 s to 0.2 s at 60 Hz on a fork branch; not fully resolved.** The public scenarios assert only smoke
 limits (`bulborb_fight`: the Dwarf Bulborb dies within 10 s, a Flick lasts 4 s or less). Those limits
 do not establish parity with the original game and nothing here claims it.
 
@@ -33,23 +33,31 @@ At 120 Hz the scenario aborts after the kill with `ActTransport::crInit` raising
 Pikmin starts carrying the corpse). `bulborb_fight` is registered at 30 and 60 Hz only; the abort
 is recorded here and not investigated further.
 
-## Cause found so far
+## Cause and fix (branch `knakamura/combat-rate-parity-154`)
 
-`ActJumpAttack::exec` (`aiAttack.cpp`) has three per-tick behaviours that the port's tick-rate
-feature does not scale (the convention elsewhere is `PC_TICKS30`, for example `aiCrowd.cpp`):
+`ActJumpAttack` (`aiAttack.cpp`) has per-tick behaviour that the port's tick-rate feature did not scale:
 
 1. facing smoothing `mFaceDirection += 0.2f * angle` in the approach and jump-setup states;
-2. the per-tick 10% roll to jump from a ground approach;
-3. the per-tick 30% roll to adjust the jump when close.
+2. the per-tick 10% roll to jump from a ground approach and the per-tick 30% roll to adjust the jump;
+3. the jump's contact test (`procCollideMsg`) runs every tick, so at 60 and 120 Hz a jumping Pikmin sticks to contacts
+   that a 30 Hz tick moves past (the trace shows up to 5 Pikmin on the Bulborb's back against 3 at 30 Hz).
 
-Experiment (fork branch `knakamura/combat-rate-scaling-experiment-154`, one commit on `aiAttack.cpp`): scaling (1) with `1 - 0.8^(1/PC_TICKS30)` and (2), (3) to `p / PC_TICKS30` moves the
-60 Hz kill time from 2.20 s to 2.70 s (30 Hz: 3.10 s) and the hit mix from 9/4 to 7/7. The residual
-0.4 s is **not explained**. A per-Pikmin state trace of the experiment (2026-11-08) shows more Pikmin
-stuck on the Bulborb at 60 Hz (up to 5 against 3 at 30 Hz, hits from the back 7 against 2), which fits
-finer contact sampling during the jump (`wantToStick`, collision tested every tick) catching contacts a
-30 Hz tick tunnels past; this is a hypothesis, not tested. Velocity smoothing is already
-`deltaTime`-scaled (`Creature::moveVelocity`), so it is not the cause. The experiment is not part of the upstream package because it is incomplete and changes
-gameplay at 60/120 Hz; it needs Kyle's decision before any upstream action.
+The branch scales (1) with `1 - 0.8^(1/PC_TICKS30)` and (2) to `p / PC_TICKS30`, and takes the stick decision only on
+the original 30 Hz boundaries (`PcBallisticClock::boundary`), where the position equals the 30 Hz one.
+
+| Tick rate | Bulborb dead before | after | Damage in first 1.5 s before | after |
+| --- | --- | --- | --- | --- |
+| 30 Hz | 3.10 s | 3.13 s | 50 | 50 |
+| 60 Hz | 2.20 s | 2.93 s | 70 | 40 |
+| 120 Hz | aborts after the kill | 2.72 s (then aborts) | 110 | 60 |
+
+Contact sampling alone moved 60 Hz from 2.20 s to 2.80 s; the smoothing and roll scaling alone, to 2.70 s; both,
+to 2.93 s. A divergence of about 0.2 s per doubling of the rate remains (mean Flick 3.19 s at 30 Hz, 3.68 s at 60 Hz;
+the knock-down time is a random draw), unexplained: the other per-tick behaviours of the Pikmin and enemy AI were not
+audited. The exact-lane test `scenario_combat_rate_disc` records the measured bounds (kill within 0.35 s, damage in
+the first 1.5 s within 20, equal flick count) so the gap cannot grow back; it does not claim parity. The change alters
+gameplay at 60 and 120 Hz and its stand-in hash logs, so it is not in the upstream package and needs Kyle's decision.
+The 120 Hz abort in `ActTransport::crInit` after the kill is a separate finding.
 
 ## Public stand-in fixture
 
