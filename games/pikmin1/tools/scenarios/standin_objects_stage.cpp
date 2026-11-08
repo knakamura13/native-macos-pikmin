@@ -49,7 +49,7 @@ bool sourceMod(Bytes& out, std::string& error)
 	return true;
 }
 
-/// The same base .ini as stages/sandbox.ini: map_file and the disc's day_multiply.
+/// The same base .ini as stages/sandbox.ini: map_file and the neutral day_multiply 1.0.
 std::string baseIni()
 {
 	return "# Object sandbox stage for the disc-free scenario tests, written by nectar_standin_generator.\n"

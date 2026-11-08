@@ -15,13 +15,10 @@ namespace {
 // ── The gate's shape (ours) ──────────────────────────────────────────────────
 // Local space: the wall spans x, faces +-z, stands on y = 0. The panel is the
 // part the Pikmin attack ('gate'); the posts at its ends ('side') are solid but
-// not attackable. Sizes are round numbers of the same order as a Forest of
-// Hope gate as seen in play (a wall a few captains high, wider than the squad),
-// not measured from the disc model. The panel's half-width (105, a 210-unit
-// wall) was chosen with the placement below: a wider panel moves where the
-// Pikmin work it away from the captain, which sets how far the first one walks
-// back to his hand (standin-k-investigation.md).
-constexpr float kPanelHalfWidth = 111.0f;
+// not attackable. Round authored sizes: a 200-unit wall a few captains high,
+// wider than the squad, with posts a little taller. No size is tuned to
+// reproduce a timing measured elsewhere.
+constexpr float kPanelHalfWidth = 100.0f;
 constexpr float kPanelHeight    = 90.0f;
 constexpr float kPanelHalfDepth = 8.0f;
 constexpr float kPostWidth      = 20.0f;
