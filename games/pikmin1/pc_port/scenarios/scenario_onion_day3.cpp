@@ -512,7 +512,7 @@ private:
 			verifyKCoursesTable();
 			sCoursesVerified = true;
 		}
-		applyDiscKeys();
+		applyClassicKeys();
 		if (mVariant == WhistleV) pc_settings_scenario_set_whistle_pluck(1);
 		if (mVariant == HideTextV) pc_settings_scenario_set_hide_olimar_text(1);
 		mTree = assetTreeFromRequestedStage();

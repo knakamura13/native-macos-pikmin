@@ -67,8 +67,8 @@ inline int currentMovie()
 	return info ? int(info->mMovieIndex) : -1;
 }
 
-/// The disc's parms/key.bin bindings (onion_unlock): A throws and plucks, B whistles. The stand-in generator writes that file.
-inline void applyDiscKeys()
+/// The Classic bindings (onion_unlock): A throws and plucks, B whistles. The stand-in generator writes the same six to parms/key.bin.
+inline void applyClassicKeys()
 {
 	KeyConfig* k           = KeyConfig::_instance;
 	k->mThrowKey.mBind     = KBBTN_A;

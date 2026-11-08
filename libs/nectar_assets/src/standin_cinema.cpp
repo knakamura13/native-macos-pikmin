@@ -1,14 +1,13 @@
 // Stand-in cinemas for the disc-free scenario tests (cinema.h,
 // games/pikmin1/tools/scenarios/standin-cinema.md).
 //
-// Fidelity (#62): nothing here comes from a disc cinema. The cameras, lights,
-// lengths and frames are invented; there are no actors (no model, bundle or
-// animation table is opened). What matches the game is only what its code
-// defines: the movie that each path is (moviePlayer.cpp movieTitles and the
-// translation tables), the CinePlayerFlags, and the key events the movie's
-// game logic needs, by their code enums (demoEvent.cpp, Interface.h,
-// ogTutorial.h). The file paths of the .dsk scenes the disc boot opens are the
-// ones in boot-manifest.txt, so the manifest check needs no cinema allowlist.
+// Provenance (#190): authored fixtures. The game code fixes only which movie a
+// .cin path is (moviePlayer.cpp movieTitles and the translation tables), the
+// CinePlayerFlags it reads, and the key events a movie's game logic acts on, by
+// their code enums (demoEvent.cpp, Interface.h, ogTutorial.h). Everything else
+// is chosen here: the .dsk scene names (all under cinemas/standin/), the
+// cameras and lights, every scene length, key frame and loop window. Frames sit
+// on a 10-frame grid. Each movie's comment states the contract its frames keep.
 #include "nectar_assets/cinema.h"
 
 namespace nectar {
@@ -58,6 +57,9 @@ struct Movie {
 	std::vector<int> sceneFrames; ///< one per scene path, the .dsk length
 };
 
+/// The authored scene name for scene `n` (0-based) of movie `id`.
+std::string standInDsk(const char* id, int n) { return std::string("cinemas/standin/demo") + id + "_" + char('a' + n) + ".dsk"; }
+
 std::vector<Movie> movies()
 {
 	std::vector<Movie> list;
@@ -67,12 +69,13 @@ std::vector<Movie> movies()
 	// sandbox (STAGE_TESTMAP, translated as Impact Site) plays from finalSetup
 	// on Day 1; demo61 is the Forest of Hope's. BonusPiki from each Onion (the
 	// game emits only for an Onion the player has and with no Pikmin of its
-	// colour), then the extinction text.
+	// colour), then the extinction text. Contract: a non-zero-length movie with
+	// a camera, so the intro's START skip has something to skip.
 	for (const char* id : { "60", "61" }) {
 		Movie m;
 		m.cin            = id[1] == '0' ? "dataDir/cinemas/demo60.cin" : "dataDir/cinemas/demo61.cin";
 		m.cinema.flags   = hideNavi;
-		m.cinema.scenes  = { std::string("cinemas/demo") + id + "/dm_" + id + "_1.dsk", std::string("cinemas/demo") + id + "/dm_" + id + "_2.dsk" };
+		m.cinema.scenes  = { standInDsk(id, 0), standInDsk(id, 1) };
 		m.sceneFrames    = { 60, 30 };
 		CinCut first;
 		first.scene    = 0;
@@ -86,14 +89,15 @@ std::vector<Movie> movies()
 		list.push_back(m);
 	}
 
-	// Forest of Hope landing (DEMOID_LandingForest), played on disc only: the
-	// sandbox is not a story stage and plays no landing. The Onion keys are the
-	// two that the landing's game logic acts on (both guarded by hasContainer).
+	// Forest of Hope landing (DEMOID_LandingForest): played when a scenario
+	// enters stages/stage1.ini (onion_day3, throw_flight). The Onion keys are
+	// the two that the landing's game logic acts on (both guarded by
+	// hasContainer): Land, then EmitCone.
 	{
 		Movie m;
 		m.cin           = "dataDir/cinemas/demo41.cin";
 		m.cinema.flags  = hideNavi;
-		m.cinema.scenes = { "cinemas/demo40/ca_d_m01.dsk" };
+		m.cinema.scenes = { standInDsk("41", 0) };
 		m.sceneFrames   = { 90 };
 		CinCut cut;
 		cut.endFrame  = 90;
@@ -102,12 +106,13 @@ std::vector<Movie> movies()
 		list.push_back(m);
 	}
 
-	// Pikmin into the Onion, Forest of Hope (DEMOID_PikminInOnyonForest): no keys.
+	// Pikmin into the Onion, Forest of Hope (DEMOID_PikminInOnyonForest): no
+	// keys; played on the way into stage1 (demo_timers). Two short scenes.
 	{
 		Movie m;
 		m.cin           = "dataDir/cinemas/demo45.cin";
 		m.cinema.flags  = hideNavi;
-		m.cinema.scenes = { "cinemas/demo45/dm_45_1.dsk", "cinemas/demo45/dm_45_2.dsk" };
+		m.cinema.scenes = { standInDsk("45", 0), standInDsk("45", 1) };
 		m.sceneFrames   = { 40, 40 };
 		CinCut a, b;
 		a.endFrame    = 40;
@@ -118,37 +123,34 @@ std::vector<Movie> movies()
 	}
 
 	// Onion discovery: red (DEMOID_FindRedOnyon, demo04; the sandbox translates
-	// DEMOID_FindOnyon to it) and blue (DEMOID_FindBlueOnyon, demo06, which
+	// DEMOID_FindOnyon to it), blue (DEMOID_FindBlueOnyon, demo06, which
 	// DEMOFLAG_DiscoverBlueOnyon starts untranslated; the object stage's Onion is
-	// blue). Localized at the Onion. Boot at frame kDiscoveryBoot starts the
-	// Onion's boot motion (info colour + 3), whose KEY_Action0 emits the first
-	// seed: frame 270 (red), 240 (blue/yellow), measured on the disc.
-	// These synthetic movies use Boot at 10 and EmitCone after the seed,
-	// preserving the before-Boot, before-seed and after-seed skip windows.
-	// Their movie durations are fixture choices, not disc measurements.
-	// demo04 opens the red Onion text; demo06 has no text key.
-	// Yellow (DEMOID_FindYellowOnyon, demo05, which DEMOFLAG_DiscoverYellowOnyon
-	// starts; scenario onion_day3): the yellow boot motion keeps the disc's numbers
-	// (360 frames, KEY_Action0 at 240), so the seed comes out at movie frame 250 and
-	// EmitCone follows at 270. No text key (the yellow Onion's screen is not a
-	// stand-in).
+	// blue) and yellow (DEMOID_FindYellowOnyon, demo05, which
+	// DEMOFLAG_DiscoverYellowOnyon starts; scenario onion_day3). Localized at the
+	// Onion. Boot at frame kDiscoveryBoot starts the Onion's boot motion (info
+	// colour + 3), whose KEY_Action0 emits the first seed; EmitCone follows.
+	// Contract (#205 skip cases): Boot < Boot + the boot motion's KEY_Action0
+	// frame (the stand-in Onion profile, standin_object_profiles.cpp) < EmitCone,
+	// with frames free between each, so a START skip can land before Boot,
+	// before the seed and after it. The cone frames are tied to that profile and
+	// move with it. demo04 opens the red Onion text; the others have no text key.
 	{
 		constexpr int kDiscoveryBoot = 10;
 		struct Discovery {
 			const char* cin;
-			const char* scene;
+			const char* id;
 			int sender, cone, frames;
 		};
 		const Discovery discoveries[] = {
-			{ "dataDir/cinemas/demo04.cin", "cinemas/demo04/demo04_1.dsk", kDemoSenderRedOnion, 300, 330 },
-			{ "dataDir/cinemas/demo06.cin", "cinemas/demo06/demo06_1.dsk", kDemoSenderBluOnion, 270, 300 },
-			{ "dataDir/cinemas/demo05.cin", "cinemas/demo05/demo05_1.dsk", kDemoSenderYelOnion, 270, 300 },
+			{ "dataDir/cinemas/demo04.cin", "04", kDemoSenderRedOnion, 300, 330 },
+			{ "dataDir/cinemas/demo06.cin", "06", kDemoSenderBluOnion, 270, 300 },
+			{ "dataDir/cinemas/demo05.cin", "05", kDemoSenderYelOnion, 270, 300 },
 		};
 		for (const Discovery& d : discoveries) {
 			Movie m;
 			m.cin           = d.cin;
 			m.cinema.flags  = kCinLocalized | hideNavi;
-			m.cinema.scenes = { d.scene };
+			m.cinema.scenes = { standInDsk(d.id, 0) };
 			m.sceneFrames   = { d.frames };
 			CinCut cut;
 			cut.endFrame = d.frames; // EmitCone: after the seed, before the movie's end
@@ -161,37 +163,34 @@ std::vector<Movie> movies()
 
 	// Pikmin extinction (DEMOID_Extinction, demo46), then the day end after it
 	// (DEMOID_ExtDayEnd, translated per stage: the sandbox plays demo47, Impact
-	// Site's). The keys are the disc movies' (read-only, 2026-10-28) on invented
-	// frames; the disc movies have one actor (nv3Model) and an animation, the
-	// stand-ins none. demo46 (Localized at the captain): FadeOut, then
-	// GameEndCondition (PikminZero) and CleanupDayEnd on one frame. The first
-	// GameEndCondition message starts demo46; this second one, with the end flag
-	// set, starts the day-end movie and sets the clock to the end hour
-	// (newPikiGame.cpp, GameMovieInterface::parse). demo47: FadeIn at 0, FadeOut
-	// and ForceResults near the end; ForceResults clears the end flag, which
-	// releases MessageModeState into the day end. The disc's demo47 also has two
-	// ship Actions (sender 1, events 5 and 6, the take-off); the stand-in leaves
-	// them out because it has no ship actor to move.
+	// Site's). Contract (newPikiGame.cpp, GameMovieInterface::parse): the first
+	// GameEndCondition message starts demo46; demo46 must send the second one
+	// (PikminZero), which with the end flag set starts the day-end movie and
+	// sets the clock to the end hour; demo47 must send ForceResults, which clears
+	// the end flag and releases MessageModeState into the day end. Without them
+	// the chain never ends. Authored: demo46 fades out at 30 and sends
+	// GameEndCondition at 50; demo47 fades in at 0 and sends ForceResults at 50.
+	// Neither has actors.
 	{
 		Movie ext;
 		ext.cin           = "dataDir/cinemas/demo46.cin";
 		ext.cinema.flags  = kCinLocalized | hideNavi;
-		ext.cinema.scenes = { "cinemas/demo46/dm_46_1.dsk" };
+		ext.cinema.scenes = { standInDsk("46", 0) };
 		ext.sceneFrames   = { 60 };
 		CinCut cut;
 		cut.endFrame    = 60;
-		cut.keys        = { notify(kMovieCmdGameEndCondition, kEndCausePikminZero, 57), notify(kMovieCmdFadeOut, 0, 40), notify(kMovieCmdCleanupDayEnd, 0, 57) };
+		cut.keys        = { notify(kMovieCmdFadeOut, 0, 30), notify(kMovieCmdGameEndCondition, kEndCausePikminZero, 50) };
 		ext.cinema.cuts = { cut };
 		list.push_back(ext);
 
 		Movie end;
 		end.cin           = "dataDir/cinemas/demo47.cin";
 		end.cinema.flags  = hideNavi;
-		end.cinema.scenes = { "cinemas/demo47/de_ptd_00.dsk" };
+		end.cinema.scenes = { standInDsk("47", 0) };
 		end.sceneFrames   = { 60 };
 		CinCut endCut;
 		endCut.endFrame = 60;
-		endCut.keys     = { notify(kMovieCmdFadeIn, 0, 0), notify(kMovieCmdFadeOut, 0, 50), notify(kMovieCmdForceResults, 0, 57) };
+		endCut.keys     = { notify(kMovieCmdFadeIn, 0, 0), notify(kMovieCmdForceResults, 0, 50) };
 		end.cinema.cuts = { endCut };
 		list.push_back(end);
 	}
@@ -199,21 +198,22 @@ std::vector<Movie> movies()
 	// End-of-day results backdrop (DEMOID_EndOfDayResults, demo36): started by
 	// DayOverModeState::initialisePhaseTwo together with the results screen, which stays
 	// up as long as the movie is active (DayOverModeState::update waits on
-	// mMoviePlayer->mIsActive before phases three and four). The disc's movie plays a
-	// 420-frame cut once and then a 10-frame cut in a loop (CINMODE_LoopScene) that runs
-	// until exitDayEnd drops it. Same shape here, shorter. A missing demo36 is a
-	// zero-length movie: phases three and four then run on the next ticks and the day
-	// ends through the title exit (ONEPLAYER_GameExit) with the results screen unread.
+	// mMoviePlayer->mIsActive before phases three and four). Contract: the movie stays
+	// active until exitDayEnd drops it, so it ends in a looping cut (CINMODE_LoopScene),
+	// and it is NonGameMovie so the clock stops. Authored: a 30-frame cut once, then a
+	// 15-frame cut in a loop. A missing demo36 is a zero-length movie: phases three and
+	// four then run on the next ticks and the day ends through the title exit
+	// (ONEPLAYER_GameExit) with the results screen unread.
 	{
 		Movie m;
 		m.cin           = "dataDir/cinemas/demo36.cin";
 		m.cinema.flags  = kCinNonGameMovie;
-		m.cinema.scenes = { "cinemas/demo36/ship_t00.dsk", "cinemas/demo36/ship_l00.dsk" };
-		m.sceneFrames   = { 30, 10 };
+		m.cinema.scenes = { standInDsk("36", 0), standInDsk("36", 1) };
+		m.sceneFrames   = { 30, 15 };
 		CinCut once, loop;
 		once.endFrame = 30;
 		loop.scene    = 1;
-		loop.endFrame = 10;
+		loop.endFrame = 15;
 		loop.flags    = kCutLoop;
 		m.cinema.cuts = { once, loop };
 		list.push_back(m);
@@ -221,74 +221,70 @@ std::vector<Movie> movies()
 
 	// Bad ending, Olimar fails to escape (DEMOID_BadEndingFailEscape, demo73, untranslated):
 	// started by DayOverModeState::initialisePhaseTwo on Day 30 with fewer than 25 parts,
-	// right after makeTotalScoreWindow builds the final results window. The window does not
-	// start itself: the movie's Notify StartTotalResults key does (GameMovieInterface::parse).
-	// The disc's demo73 (read-only, 2026-10-28) is NonGameMovie, a 449-frame cut played once
-	// with that key at frame 446, then a 4-frame cut in a loop; DayOverModeState::update skips
-	// the scene when the window reports it is done, which ends the loop. Same shape here,
-	// shorter, with no actors (the disc's has the results backdrop and the ship). A missing
-	// demo73 is a zero-length movie: the window is built but never started, and phases three
-	// and four run on the next ticks.
+	// right after makeTotalScoreWindow builds the final results window. Contract: the window
+	// does not start itself, the movie's Notify StartTotalResults key does
+	// (GameMovieInterface::parse); then the movie must stay active until
+	// DayOverModeState::update skips the scene when the window reports it is done, so it
+	// ends in a loop; NonGameMovie. Authored: a 40-frame cut once with the key at 20, then
+	// a 15-frame cut in a loop, no actors. A missing demo73 is a zero-length movie: the
+	// window is built but never started, and phases three and four run on the next ticks.
 	{
 		Movie m;
 		m.cin           = "dataDir/cinemas/demo73.cin";
 		m.cinema.flags  = kCinNonGameMovie;
-		m.cinema.scenes = { "cinemas/demo73/demo73_t.dsk", "cinemas/demo73/demo73_l.dsk" };
-		m.sceneFrames   = { 30, 10 };
+		m.cinema.scenes = { standInDsk("73", 0), standInDsk("73", 1) };
+		m.sceneFrames   = { 40, 15 };
 		CinCut once, loop;
-		once.endFrame = 30;
-		once.keys     = { notify(kMovieCmdStartTotalResults, 0, 27) };
+		once.endFrame = 40;
+		once.keys     = { notify(kMovieCmdStartTotalResults, 0, 20) };
 		loop.scene    = 1;
-		loop.endFrame = 10;
+		loop.endFrame = 15;
 		loop.flags    = kCutLoop;
 		m.cinema.cuts = { once, loop };
 		list.push_back(m);
 	}
 
 	// The last ship upgrade (DEMOID_ShipUpgradeLast, demo26, untranslated): queued by
-	// PlayerState::preloadHenkaMovie when a delivery brings the 30th part. Its Notify key
-	// MOVIECMD_SpecialDayEnd is the happy ending's trigger (GameMovieInterface::parse:
-	// forceDayEnd, mIsDayEndTriggered, ENDING_Happy). The disc's demo26 (read-only,
-	// 2026-10-28): one 530-frame cut played once with a ship Action (sender 1, event 2) at
-	// 180, then SpecialDayEnd at 521 and FadeOut at 519, listed in that order; the movie also
-	// shows the field Pikmin (Show/Update flags) near the ship. The stand-in keeps the two
-	// Notify keys, their file order and their two-frame gap, on an invented 60-frame scene; the
-	// ship Action is left out (no ship on the stand-in stages; DemoEventMgr::act ignores it
-	// without one). Used by ending_happy and ending_happy_skip: a START skip replays the keys in
-	// frame order (FadeOut, then SpecialDayEnd; pc_cine_skip_order_test has the disc frames).
+	// PlayerState::preloadHenkaMovie when a delivery brings the 30th part. Contract: its
+	// Notify key MOVIECMD_SpecialDayEnd is the happy ending's trigger
+	// (GameMovieInterface::parse: forceDayEnd, mIsDayEndTriggered, ENDING_Happy). Authored:
+	// a 60-frame scene with FadeOut at 40 and SpecialDayEnd at 45. SpecialDayEnd is listed
+	// first on purpose: a START skip replays the remaining keys in frame order
+	// (pc_cine_sort_skip_keys), and ending_happy_skip checks that the replay still sends
+	// SpecialDayEnd, which only exercises the sort when file order and frame order differ.
+	// No ship Action (no ship on the stand-in stages; DemoEventMgr::act ignores it without one).
 	{
 		Movie m;
 		m.cin           = "dataDir/cinemas/demo26.cin";
 		m.cinema.flags  = hideNavi;
-		m.cinema.scenes = { "cinemas/demo26/demo26_1.dsk" };
+		m.cinema.scenes = { standInDsk("26", 0) };
 		m.sceneFrames   = { 60 };
 		CinCut cut;
 		cut.endFrame  = 60;
-		cut.keys      = { notify(kMovieCmdSpecialDayEnd, 0, 52), notify(kMovieCmdFadeOut, 0, 50) };
+		cut.keys      = { notify(kMovieCmdSpecialDayEnd, 0, 45), notify(kMovieCmdFadeOut, 0, 40) };
 		m.cinema.cuts = { cut };
 		list.push_back(m);
 	}
 
 	// Flying through space (DEMOID_EndingSpace, demo77, untranslated): the neutral ending's
 	// phase three and the happy ending's phase four (DayOverModeState), each right after
-	// makeTotalScoreWindow. Like demo73, the movie starts the final results window with its
-	// StartTotalResults key and then loops until the window is done: in the neutral ending
-	// DayOverModeState::update leaves for GameExit when the window reports done in phase three,
-	// and runs phase four (GameExit, window unread) as soon as no movie is active. The disc's
-	// (read-only, 2026-10-28): NonGameMovie, one scene, a 1199-frame cut played once with FadeIn
-	// at 0 and StartTotalResults at 1197, then the same scene's frames 1197-1199 in a loop, with
-	// the space backdrop, Olimar and the ship as actors. Same shape here, shorter, no actors.
+	// makeTotalScoreWindow. Contract, as for demo73: the StartTotalResults key starts the
+	// final results window and the movie then loops until the window is done; in the
+	// neutral ending DayOverModeState::update leaves for GameExit when the window reports
+	// done in phase three, and runs phase four (GameExit, window unread) as soon as no movie
+	// is active. NonGameMovie. Authored: one 40-frame scene, played once with FadeIn at 0 and
+	// StartTotalResults at 20, then its frames 30-40 in a loop; no actors.
 	{
 		Movie m;
 		m.cin           = "dataDir/cinemas/demo77.cin";
 		m.cinema.flags  = kCinNonGameMovie;
-		m.cinema.scenes = { "cinemas/demo77/demo77.dsk" };
-		m.sceneFrames   = { 30 };
+		m.cinema.scenes = { standInDsk("77", 0) };
+		m.sceneFrames   = { 40 };
 		CinCut once, loop;
-		once.endFrame   = 30;
-		once.keys       = { notify(kMovieCmdStartTotalResults, 0, 27), notify(kMovieCmdFadeIn, 0, 0) };
-		loop.startFrame = 27;
-		loop.endFrame   = 30;
+		once.endFrame   = 40;
+		once.keys       = { notify(kMovieCmdFadeIn, 0, 0), notify(kMovieCmdStartTotalResults, 0, 20) };
+		loop.startFrame = 30;
+		loop.endFrame   = 40;
 		loop.flags      = kCutLoop;
 		m.cinema.cuts   = { once, loop };
 		list.push_back(m);
@@ -296,47 +292,29 @@ std::vector<Movie> movies()
 
 	// The Main Engine reaching the ship on the Impact Site (DEMOFLAG_CollectEngine's
 	// movie 20, DEMOID_CollectPartPractice, demo20). The engine is sucked into the
-	// ship while it plays (PelletGoalState::exec, UfoItem::finishSuck). The disc's
-	// (read-only, 2026-10-28): one 218-frame cut played once with a TextDemo
-	// TUT_GetParts (17) key at 216, then a 2-frame loop. With gameflow.mShipTextType
-	// CollectEngine that key opens no window: GameMovieInterface::parse skips the
-	// scene, which ends the loop, and the queued ship-upgrade movie (demo17) follows.
-	// The stand-in keeps the key and the loop on a 120-frame cut (4 s at 30 Hz, the
-	// suck takes about 2); without it the movie is zero-length and the day ends
-	// (demo17) before the ship has the engine.
-	{
+	// ship while it plays (PelletGoalState::exec, UfoItem::finishSuck), which takes
+	// about 2 s. Contract: a TextDemo TUT_GetParts (17) key inside a cut that
+	// outlasts the suck, then a loop. With gameflow.mShipTextType CollectEngine that
+	// key opens no window: GameMovieInterface::parse skips the scene, which ends the
+	// loop, and the queued ship-upgrade movie (demo17) follows. Without the movie the
+	// day ends (demo17) before the ship has the engine. Authored: a 120-frame cut
+	// (4 s at 30 Hz) with the key at 100, then frames 120-130 in a loop.
+	// The Whimsical Radar reaching the ship (DEMOID_CollectRadar, demo78) has the same
+	// contract and shape: MoviePlayer::startMovie swaps DEMOID_CollectPart for it
+	// whenever the part is uf01, on every stage (ship_part_carry). With a part id and
+	// the ship text type PartCollect the key opens the part's "get" text
+	// (TUT_PartsGetOffset + the part index), whose close skips the scene.
+	for (const char* id : { "20", "78" }) {
 		Movie m;
-		m.cin           = "dataDir/cinemas/demo20.cin";
+		m.cin           = id[0] == '2' ? "dataDir/cinemas/demo20.cin" : "dataDir/cinemas/demo78.cin";
 		m.cinema.flags  = hideNavi;
-		m.cinema.scenes = { "cinemas/demo20/dm_20.dsk" };
-		m.sceneFrames   = { 122 };
+		m.cinema.scenes = { standInDsk(id, 0) };
+		m.sceneFrames   = { 130 };
 		CinCut once, loop;
 		once.endFrame   = 120;
-		once.keys       = { notify(kMovieCmdTextDemo, kTutGetParts, 118) };
+		once.keys       = { notify(kMovieCmdTextDemo, kTutGetParts, 100) };
 		loop.startFrame = 120;
-		loop.endFrame   = 122;
-		loop.flags      = kCutLoop;
-		m.cinema.cuts   = { once, loop };
-		list.push_back(m);
-	}
-
-	// The Whimsical Radar reaching the ship (DEMOID_CollectRadar, demo78): MoviePlayer::startMovie
-	// swaps DEMOID_CollectPart for it whenever the part is uf01, on every stage. Used by
-	// ship_part_carry. Same shape as demo20: a cut played once with the TextDemo TUT_GetParts key,
-	// then a 2-frame loop that the window's close ends (GameMovieInterface::parse skips the scene).
-	// With a part id and the ship text type PartCollect the key opens the part's "get" text
-	// (TUT_PartsGetOffset + the part index). The disc's demo78 was not read; lengths are invented.
-	{
-		Movie m;
-		m.cin           = "dataDir/cinemas/demo78.cin";
-		m.cinema.flags  = hideNavi;
-		m.cinema.scenes = { "cinemas/demo78/dm_78.dsk" };
-		m.sceneFrames   = { 122 };
-		CinCut once, loop;
-		once.endFrame   = 120;
-		once.keys       = { notify(kMovieCmdTextDemo, kTutGetParts, 118) };
-		loop.startFrame = 120;
-		loop.endFrame   = 122;
+		loop.endFrame   = 130;
 		loop.flags      = kCutLoop;
 		m.cinema.cuts   = { once, loop };
 		list.push_back(m);
@@ -345,21 +323,21 @@ std::vector<Movie> movies()
 	// The ship's first upgrade on the Impact Site (DEMOID_ShipUpgradePractice, demo17,
 	// movie17table's Impact Site entry), which PlayerState::preloadHenkaMovie queues
 	// when the Main Engine reaches the ship (PelletGoalState::init). It is what ends
-	// the tutorial's Day 1: the clock is held at 14.8 h there, and the movie's
-	// ForceDayEnd key starts the day end. The disc's (read-only, 2026-10-28): one
-	// 380-frame cut played once, the ship's Henka Action at 40, ForceDayEnd at 356,
-	// the TUT_GetEngine text at 378, then a 2-frame loop, with ship actors. The
-	// stand-in keeps the three keys in that order on invented frames, no actors and
-	// no loop (the loop waits for the text, which here comes on the cut's last frames).
+	// the tutorial's Day 1: the clock is held at 14.8 h there. Contract: the movie's
+	// ForceDayEnd key (GameMovieInterface::parse) starts the day end, and its TextDemo
+	// TUT_GetEngine key opens the upgrade text (tu_tx15.blo). The ship's Henka Action
+	// (DemoEventUFO::Henka) is optional. Authored: one 60-frame cut played once with
+	// Henka at 10, ForceDayEnd at 40 and the text at 50, no actors and no loop
+	// (tutorial_day1 reads them in that order).
 	{
 		Movie m;
 		m.cin           = "dataDir/cinemas/demo17.cin";
 		m.cinema.flags  = hideNavi;
-		m.cinema.scenes = { "cinemas/demo17/demo17_1.dsk" };
+		m.cinema.scenes = { standInDsk("17", 0) };
 		m.sceneFrames   = { 60 };
 		CinCut cut;
 		cut.endFrame  = 60;
-		cut.keys      = { action(kDemoSenderUfo, kDemoUfoHenka, 10), notify(kMovieCmdForceDayEnd, 0, 50), notify(kMovieCmdTextDemo, kTutGetEngine, 57) };
+		cut.keys      = { action(kDemoSenderUfo, kDemoUfoHenka, 10), notify(kMovieCmdForceDayEnd, 0, 40), notify(kMovieCmdTextDemo, kTutGetEngine, 50) };
 		m.cinema.cuts = { cut };
 		list.push_back(m);
 	}
@@ -369,7 +347,7 @@ std::vector<Movie> movies()
 		Movie m;
 		m.cin            = "dataDir/cinemas/opening.cin";
 		m.cinema.flags   = 0;
-		m.cinema.scenes  = { "cinemas/opening/op_stand.dsk" };
+		m.cinema.scenes  = { "cinemas/standin/opening_a.dsk" };
 		m.sceneFrames    = { 30 };
 		CinCut cut;
 		cut.endFrame  = 30;

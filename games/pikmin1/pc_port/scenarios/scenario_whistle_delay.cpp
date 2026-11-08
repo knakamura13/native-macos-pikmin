@@ -49,7 +49,7 @@ public:
 
 	void onStageReady() override
 	{
-		tutorial::applyDiscKeys();
+		tutorial::applyClassicKeys();
 		Navi* navi = naviMgr->getNavi();
 		if (!navi || pikiMgr->getSize() != 0) {
 			fail(0, "a captain and no Pikmin", "captain %d, Pikmin %d", (int)(navi != nullptr), pikiMgr->getSize());

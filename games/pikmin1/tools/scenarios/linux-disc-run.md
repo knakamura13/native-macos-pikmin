@@ -1,6 +1,6 @@
 # Disc scenarios on Linux x86-64 (Docker)
 
-Recorded 2026-10-28 on an M3 Max Mac, Docker Desktop 29.9.2, `linux/amd64`
+Recorded 2026-10-28 on an Apple Silicon Mac, Docker Desktop 29.9.2, `linux/amd64`
 (emulated), tree `91132b88` (with `PIKMIN_SCENARIO_FLOAT_DET`, default ON in a
 scenario build). Scenarios `boot_smoke`, `throw_release` and `day30_clock` at 30
 and 60 Hz against a real disc install, then compared with macOS arm64 runs of the

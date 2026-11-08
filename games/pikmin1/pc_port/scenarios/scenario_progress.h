@@ -1,6 +1,6 @@
 #pragma once
 // Helpers shared by the progression scenarios: onion_unlock and onion_unlock_whistle
-// (the first-pluck snapshot and its check, the disc's key bindings), day_end (a
+// (the first-pluck snapshot and its check, the Classic key bindings), day_end (a
 // Pikmin spawned as the game's spawners do, the sunset clock jump) and onion_day3,
 // which uses both. Moved here unchanged from scenario_onion_unlock.cpp and
 // scenario_day_end.cpp.
@@ -170,10 +170,10 @@ inline bool checkPluck(unsigned t, Path path, int colour, const Snap& b, const S
 	return true;
 }
 
-/// The disc's parms/key.bin bindings. The stand-in generator writes that file (six big-endian ints, read 2026-10-28):
+/// The Classic bindings the stand-in generator writes to parms/key.bin (six big-endian ints, an authored fixture):
 /// throw A, set cursor B, extract A, attack A, disband X, menu Y. This call sets the same six, so a scenario that
-/// changed a bind can put them back, and a stand-in run matches a disc run. Without the file, extract stays B.
-inline void applyDiscKeys()
+/// changed a bind can put them back, whatever key.bin the data tree has. Without the file, extract stays B.
+inline void applyClassicKeys()
 {
 	KeyConfig* k = KeyConfig::_instance;
 	std::printf("[scenario] key bindings before: throw 0x%x cursor 0x%x extract 0x%x attack 0x%x\n", k->mThrowKey.mBind, k->mSetCursorKey.mBind,

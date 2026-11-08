@@ -11,8 +11,8 @@
 // demo26 carries the special handling as a Notify key: MOVIECMD_SpecialDayEnd
 // (GameMovieInterface::parse) calls forceDayEnd, sets mIsDayEndTriggered and
 // flowCont.mEndingType = ENDING_Happy, and unlocks PC_ACH_BEST_ENDING (and
-// PC_ACH_SPEED_DEMON on Day 12 or earlier). The stand-in demo26 keeps the disc's two
-// Notify keys and their order (SpecialDayEnd listed before FadeOut, two frames after it).
+// PC_ACH_SPEED_DEMON on Day 12 or earlier). The stand-in demo26 lists SpecialDayEnd before
+// FadeOut but at a later frame, so a skip's frame-order replay has to reorder them.
 // Then the game's own chain: DayOverModeState from phase zero once the movie ends; phase
 // one GoodEndingWave (demo75), phase two GoodEndingTakeOff (demo113, no day advance),
 // phase three GoodEndingOnyons (demo76), all missing stand-ins (zero length); phase four
@@ -50,7 +50,7 @@ namespace {
 
 using namespace scenario_endings;
 
-constexpr int kSkipFrame = 20; // the stand-in demo26: FadeOut at 50, SpecialDayEnd at 52, 60 frames
+constexpr int kSkipFrame = 20; // the stand-in demo26: FadeOut at 40, SpecialDayEnd at 45, 60 frames
 // Bounds, in seconds. Measured on the stand-in tree: demo26 starts 1 to 2 ticks after the
 // part, plays 2 s at 30 Hz (4 s at 60 Hz, half a frame per tick); DayOverModeState starts
 // as it ends; demo77 a few ticks later; the soft reset about 14 s after it.

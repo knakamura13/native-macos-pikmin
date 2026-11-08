@@ -1556,7 +1556,7 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(nectar_mod_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
         ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
     target_compile_options(nectar_mod_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
-    add_test(NAME nectar_mod_writer_test COMMAND nectar_mod_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+    add_test(NAME nectar_mod_writer_test COMMAND nectar_mod_writer_test)
 
     # Texture (.bti/.txe) and bundle (.bun/.anm) writers and the stand-in textures.
     # Header fields are read with the game's BtiHeader and RamStream; pixels with
@@ -1618,7 +1618,7 @@ if(PIKMIN_BUILD_TESTS)
         src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
     target_include_directories(nectar_cinema_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
     target_compile_options(nectar_cinema_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
-    add_test(NAME nectar_cinema_writer_test COMMAND nectar_cinema_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+    add_test(NAME nectar_cinema_writer_test COMMAND nectar_cinema_writer_test)
 
     # DCA/DCK payload and AnimMgr table writers, and the stand-in animations (#66).
     # Parameters::read and the game's Stream/DataChunk/AnimKey types read the bytes
@@ -1644,7 +1644,7 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(nectar_anim_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
         ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
     target_compile_options(nectar_anim_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
-    add_test(NAME nectar_anim_writer_test COMMAND nectar_anim_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+    add_test(NAME nectar_anim_writer_test COMMAND nectar_anim_writer_test)
 
     # JAudio sequence archive writer and the stand-in SndData (standin-audio.md).
     # The layout input is the game's own BARC table (src/jaudio/pikiseq.c); the
@@ -1717,7 +1717,7 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(nectar_standin_objects_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
         ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
     target_compile_options(nectar_standin_objects_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
-    add_test(NAME nectar_standin_objects_test COMMAND nectar_standin_objects_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+    add_test(NAME nectar_standin_objects_test COMMAND nectar_standin_objects_test)
 
     # No Day Limit: the voyage log's Misc pages never run out (no disc or save)
     add_executable(pc_diary_misc_pool_test
@@ -2250,11 +2250,17 @@ if(PIKMIN_BUILD_SCENARIOS)
     set(PIKMIN_STANDIN_DATA "${CMAKE_BINARY_DIR}/scenario-data")
     file(MAKE_DIRECTORY "${PIKMIN_STANDIN_DATA}")
     add_test(NAME scenario_standin_generate
-        COMMAND nectar_standin_generator "${PIKMIN_STANDIN_DATA}"
-            --manifest "${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt")
+        COMMAND nectar_standin_generator "${PIKMIN_STANDIN_DATA}")
     set_tests_properties(scenario_standin_generate PROPERTIES
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
+    # Local lane (#190): cross-check the stand-in tree against a boot manifest made
+    # on this machine from the user's own install (make_boot_manifest.py over
+    # PIKMIN_LOG_FILE_OPENS logs). PIKMIN_BOOT_MANIFEST names the file; unset, the
+    # test is skipped (77). No manifest is committed.
+    add_test(NAME scenario_standin_manifest COMMAND nectar_standin_generator --manifest-from-env)
+    set_tests_properties(scenario_standin_manifest PROPERTIES
+        TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "game-assets")
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
     foreach(scenario boot_smoke hud_layout throw_release day30_clock extinction captain_death ship_parts captain_damage extinction_day30)
         foreach(rate 30 60)

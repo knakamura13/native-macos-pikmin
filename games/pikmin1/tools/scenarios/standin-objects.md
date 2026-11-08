@@ -2,9 +2,9 @@
 
 What the stand-in tree (`nectar_standin_generator`) writes for objects, plants,
 gates, bosses and enemies, and the second stage that places some of them.
-Issue #59 and #62 rules apply: nothing is copied from the disc. The numbers that
-only the disc has were read once, read-only, and each is named in the file that
-uses it.
+Provenance: see `PROVENANCE.md` (#190). The sections from "What the disc was read
+for" to "World models" describe the object, world and animation fixtures as they
+were before #190; they are rewritten with those files.
 
 ## What the disc was read for
 
@@ -148,10 +148,10 @@ entries `scenario_sprout_landing_30` and `_60` do.
 Written by `addObjectsStage` too (`standin_objects_stage.cpp`): the same compiled
 map and `.ini` text as `sandbox_objects`, its own generator folder
 `stages/sandbox_onions/`, and a fourth hidden `stages.ini` entry, appended last so
-no other entry's index moves. `default.gen` places only Onions, as the disc's story
-courses do (Forest of Hope's `default.gen`, read with `nectar::loadGen`, 2026-10-28:
-red, yellow and blue `goal` generators with the default name and a yellow one named
-`next` at the discovery spot):
+no other entry's index moves. `default.gen` places only Onions and uses both
+ownership gates of `GenObjectItem::birth`: red, yellow and blue `goal` generators
+with the default name (born only for an owned colour) and a yellow one named
+`next` (born only while yellow is not owned) at another spot. Positions authored:
 
 | Generator | Colour | At (x, z) | Born when |
 |-----------|--------|-----------|-----------|
@@ -207,24 +207,27 @@ floor, so this stage cannot show the mid-air case.
 
 ## Tutorial stage (`stages/practice.ini`)
 
-`tools/scenarios/standin_practice_stage.{h,cpp}`. The Impact Site's own file name,
-which the stand-in `stages.ini` already listed first with `id 0`, so the game takes
-it as `STAGE_Practice` at index 0 and a new game's Day 1 there is the tutorial
-(`isTutorial()`). Used by `tutorial_skip`, `tutorial_firsts` and `tutorial_day1`.
-The other stages are unchanged.
+`tools/scenarios/standin_practice_stage.{h,cpp}`. The Impact Site's own file name
+(a code literal, `game.cpp` `setStage`), listed first in the stand-in `stages.ini`
+with `id 0`, so the game takes it as `STAGE_Practice` at index 0 and a new game's
+Day 1 there is the tutorial (`isTutorial()`). Used by `tutorial_skip`,
+`tutorial_firsts`, `tutorial_day1` and `demo_timers`.
 
-What is placed, and in which file, follows the disc's `stages/practice/` (read
-once, read-only, 2026-10-28; kinds, names and parameters, no positions):
+Provenance (#190): independently authored. What the tutorial code needs is a red
+Onion, a deliverable Main Engine (`ust5`, `Pellet.h` `UFOID_MainEngine`), a ship and
+a pushable obstruction (`move stone` with shape `stone 10`, `HinderRock`); the
+names are the ones the loader and the game code use. Everything else (positions,
+facings, the push distance, the route grid, which file holds what) is chosen here.
 
 | File | Generators |
 |------|------------|
-| `default.gen` | The red Onion (item `goal`, colour 1, facing 100), the blue and yellow Onions (colours 0 and 2, facing 180 and 320; generators not named `next`, so `GenObjectItem::birth` makes them only for an owned colour: never on a new game), the ship (item `ufo`, facing 256). |
-| `init.gen` | The Main Engine (pellet `ust5`) and the push box (`move stone`, shape `stone 10`, `p02` 10 Pikmin, `p03` speed 50, pushed 270 units towards -z, unrotated). |
-| `0.gen` (Day 1) | One red 1-pellet (`pr01`). The disc's has four, two red 5-pellets and four pellet posies. |
+| `default.gen` | The red Onion (item `goal`, colour 1, facing 90), the blue and yellow Onions (colours 0 and 2, facings 0 and 180; generators not named `next`, so `GenObjectItem::birth` makes them only for an owned colour: never on a new game), the ship (item `ufo`, facing 270). |
+| `init.gen` | The Main Engine (pellet `ust5`) and the push box (`move stone`, shape `stone 10`, 10 pushers and speed 30, the source defaults, pushed 240 units towards -z). |
+| `0.gen` (Day 1) | One red 1-pellet (`pr01`). |
 
-The positions are invented: a flat 1,600-unit floor, the captain at the origin, the
-red Onion, the pellet and the box on one side, the engine and the ship on the
-other, each far from the others' trigger radii and outside the route grid.
+The floor is flat (1,600 units), the captain at the origin, the red Onion, the
+pellet and the box on one side, the engine and the ship on the other, each far
+from the others' trigger radii and outside the route grid.
 
 The route grid is 3 by 3 (`routeStep` 400). A carry plans its route with
 `PathFinder::findSyncOnyon`, the original depth-first search with no visited set:
@@ -233,32 +236,24 @@ route search did not end in two minutes (a `sample` of the process showed
 `selectWayOnyon` recursion). An Onion, the ship or the box on a route line blocked
 the carriers (`TUT_Rute` opened), so all of them sit outside the grid.
 
-What this stage needed that the tree did not have, each with the disc's numbers:
+Other inputs this stage relies on (their provenance is in `PROVENANCE.md`):
 
-- `parms/demo.bin` (`standin_generator.cpp`): the demo-flag radii and timer, 60,
-  25, 40 s, 30, 40 (code defaults 150, 100, 6, 30, 150). Before it was allowlisted
-  as missing. Read only by tutorial and stage-gated checks; every other hash log is
-  unchanged.
-- The Main Engine's config in `parms/pelMgr.bin` (`standin_objects.cpp`): the disc's
-  config 23 (type 3, colour -1, 20 to 40 carriers, dynamics 10 / 4 / 4, seeds 1 / 1,
-  scale 1.65, height 30, sounds 1 / 1, ship joint 3). Every stage now registers it
-  as a ship part at load; `ship_parts` skips registered ids, so it reports one part
-  registered by the tree.
+- `parms/demo.bin` is an empty list, so the demo-flag radii and timer are the
+  source defaults (`gameDemo.cpp`: 150, 100, 6 s, 30, 150).
+- The Main Engine's config in `parms/pelMgr.bin` (`standin_objects.cpp`). Every
+  stage registers it as a ship part at load; `ship_parts` skips registered ids, so
+  it reports one part registered by the tree.
 - The push box is solid: `objects/hinderrock/cube10.mod` is a platform whose
-  collision is the 120-unit block its four `vtx` parts (the disc's, at +-60) bound
-  (`StandInModelSpec::platform`, `standin_world.cpp`). Without it the pushers walked
-  into the box, left `HinderRock::getPlaneFlag`'s face and dropped out of ActPush,
-  and the box moved 7 units. The every-object stage's box is solid too; its hash log
-  is unchanged.
-- The Pikmin PickLoop motion (info 68) has the disc's timing (`standin_anims.h`): 30
-  frames, KEY_Action0 at 10 (`ActTransport::animationKeyUpdated`, which
-  `ActTransport::doLift` waits for), loop 13 to 18, KEY_Action1 at 20. Before it no
-  pellet could be lifted on the stand-in tree.
-- The red Onion's boot motion (goal info 4) carries the disc's five effect events
-  (`ObjectAnimInfoProfile::effectKeys`): value 2 at frame 221 reopens the Onion's
-  route way point, which the boot closed (`GoalItem::startAI`); 4 starts the colour
-  fade; 0, 1 and 3 are particles. Without it a booted red Onion accepts no pellet.
-  The blue and yellow boots keep none (no scenario boots them and then carries).
+  collision is a block its four `vtx` parts bound (`StandInModelSpec::platform`,
+  `standin_world.cpp`). Without it the pushers walked into the box, left
+  `HinderRock::getPlaneFlag`'s face and dropped out of ActPush.
+- The Pikmin PickLoop motion (info 68, `standin_anims.h`) has a KEY_Action0, which
+  `ActTransport::doLift` waits for (`ActTransport::animationKeyUpdated`); without it
+  no pellet could be lifted.
+- The red Onion's boot motion (goal info 4) carries effect events
+  (`ObjectAnimInfoProfile::effectKeys`): value 2 reopens the Onion's route way
+  point, which the boot closed (`GoalItem::startAI`); without it a booted red Onion
+  accepts no pellet.
 - `intro/map0.bti` (the Impact Site's area banner, null-checked).
 
 `stages/practice/plants.gen` is allowlisted (guarded, as for the sandboxes).
@@ -270,8 +265,8 @@ What this stage needed that the tree did not have, each with the disc's numbers:
   its own seeds needs its enter animation and a container state (`aiEnter`).
 - Enemy, boss, plant and bridge behaviour is not asserted: they are placed and
   loaded and survive 300 ticks, nothing more.
-- Models exist only for the objects in the boot manifest; the 23 other enemies, the
-  other bosses, the other plants and the slopes have none.
+- Models exist only for the objects the stand-in stages place; the 23 other
+  enemies, the other bosses, the other plants and the slopes have none.
 - The plants' light-flare groups (`hae`) are not stand-ins.
 - Event keys (sounds, effects) are not stand-ins, except the red Onion boot's (above).
 - Disc-only checks: a `_disc` variant of `sprout_landing` does not exist, because

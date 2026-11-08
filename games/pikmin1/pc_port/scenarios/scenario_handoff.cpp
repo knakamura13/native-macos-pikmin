@@ -24,7 +24,7 @@
 // tree has no yellow Onion and no yellow discovery movie (demo05), so the
 // GameCube's Onion discovery is not part of it.
 //
-// Both apply the disc's key bindings first (scenarioApplyDiscKeyBindings). The
+// Both apply the Classic key bindings first (scenarioApplyClassicKeyBindings). The
 // stand-in generator writes parms/key.bin with the same binds (pluck on A).
 #include "scenarios/pc_scenario_list.h"
 
@@ -60,7 +60,7 @@ public:
 	bool ownsAllOnions() const override { return true; }
 	void onStageReady() override
 	{
-		scenarioApplyDiscKeyBindings();
+		scenarioApplyClassicKeyBindings();
 		pc_settings_scenario_set_infinite_day(1);
 		// Every Onion of the stage must wait with its route open: a carrier of the pellet
 		// that finds one in BootInit circles it (ActTransport, TUT_Rute). Print them.
@@ -80,7 +80,7 @@ public:
 
 	void onStageReady() override
 	{
-		scenarioApplyDiscKeyBindings();
+		scenarioApplyClassicKeyBindings();
 		Iterator it(itemMgr->getPikiHeadMgr());
 		CI_LOOP(it)
 		{

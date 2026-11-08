@@ -128,7 +128,7 @@ bool addPracticeStage(std::map<std::string, std::vector<std::uint8_t>>& tree, st
 	// with PathFinder::findSyncOnyon, the original depth-first search with no
 	// visited set, which walks every simple path of the graph; on the default
 	// 150-unit grid (81 points, each linked to 8) one pellet's route did not
-	// finish in two minutes. The disc's hand-made route networks are sparse too.
+	// finish in two minutes.
 	nectar::MapDoc doc;
 	doc.routeStep = 400;
 	doc.name      = "practice";

@@ -58,7 +58,7 @@
 // except NoPikminTimeout, which only the hand path sets, and the pluck counter,
 // which the whistle path does not raise (printed, not asserted).
 //
-// Both scenarios apply the disc's key bindings first (applyDiscKeys). The
+// Both scenarios apply the Classic key bindings first (applyClassicKeys). The
 // stand-in generator writes parms/key.bin with the same binds. Achievements: pc_achievements writes into
 // the run's own NECTAR_SAVE_DIR in a scenario run (pc_achievements.cpp), so each
 // run starts with none unlocked and nothing is written into the data folder.
@@ -116,7 +116,7 @@ protected:
 
 	bool checkBaseline()
 	{
-		applyDiscKeys();
+		applyClassicKeys();
 		const Snap s = take();
 		std::printf("[scenario] %s baseline: container 0x%02x display 0x%02x demo flags %s challenge 0x%x story 0x%x tutorialMode %d parts %d plucked %d "
 		            "achievements %d\n",

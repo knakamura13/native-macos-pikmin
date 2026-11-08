@@ -30,11 +30,11 @@ constexpr float kOnionX       = -120.0f;
 constexpr float kOnionZ       = -250.0f;
 
 /// The Onion stage, `stages/sandbox_onions.ini` (onion_day3): the same map and
-/// .ini text as sandbox_objects, its own generator folder. default.gen exercises
-/// the source rule for Onion generators (GenObjectItem::birth, genItem.cpp:171-180):
-/// a red, a yellow and a blue Onion from generators not named `next` (born only
-/// while the player owns that colour) and a yellow Onion from a `next` generator
-/// (born only while the player does not), at another spot. Nothing else.
+/// .ini text as sandbox_objects, its own generator folder. default.gen uses both
+/// Onion ownership gates the game's generators have (GenObjectItem birth): a red,
+/// a yellow and a blue Onion from generators not named `next` (born only while the
+/// player owns that colour) and a yellow Onion from a `next` generator (born only
+/// while the player does not), at another spot. Nothing else; positions authored.
 constexpr const char* kOnionsStageIni = "stages/sandbox_onions.ini";
 
 /// The play stage, `stages/sandbox_play.ini` (free_play, issues #127 and #129): the same

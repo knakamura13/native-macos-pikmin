@@ -49,7 +49,7 @@ bool sourceMod(Bytes& out, std::string& error)
 	return true;
 }
 
-/// The same base .ini as stages/sandbox.ini: map_file and the neutral day_multiply 1.0.
+/// The same base .ini as stages/sandbox.ini: map_file and the source-default day_multiply.
 std::string baseIni()
 {
 	return "# Object sandbox stage for the disc-free scenario tests, written by nectar_standin_generator.\n"
@@ -266,7 +266,7 @@ bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std
 	const Bytes emptyGen = nectar::writeObjectGenFile({});
 	tree["dataDir/stages/stage1.ini"]            = compiled.ini;
 	tree["dataDir/stages/stage1/default.gen"]    = onionGen;
-	for (const char* ini : { "stages/stage2.ini", "stages/stage3.ini", "stages/last.ini" }) {
+	for (const char* ini : { "stages/course2.ini", "stages/course3.ini", "stages/course4.ini" }) {
 		tree[std::string("dataDir/") + ini] = compiled.ini;
 		std::string genPath = std::string("dataDir/") + ini;
 		genPath.replace(genPath.size() - 4, 4, "/default.gen");

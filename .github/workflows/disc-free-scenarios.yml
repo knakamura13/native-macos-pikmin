@@ -30,8 +30,8 @@ on:
   pull_request:
     # Pikmin 1 only: a pull request that changes nothing but Pikmin 2's own files skips this
     # workflow. Keep in step with the Pikmin 2 rule in .github/scripts/changed-games.sh.
-    # No status check of this workflow is required on main or the disc-free base branch
-    # (2026-11-04); a required one would stay pending on such a pull request, and would then
+    # No status check of this workflow is required on any protected branch (2026-11-04);
+    # a required one would stay pending on such a pull request, and would then
     # need a job-level skip instead.
     paths-ignore:
       - 'games/pikmin2/**'

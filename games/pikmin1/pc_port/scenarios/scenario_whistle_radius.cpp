@@ -75,7 +75,7 @@ public:
 
 	void onStageReady() override
 	{
-		tutorial::applyDiscKeys();
+		tutorial::applyClassicKeys();
 		Navi* navi = naviMgr->getNavi();
 		if (!navi || pikiMgr->getSize() != 0 || pc_settings_get_whistle_radius_pct() != 100) {
 			fail(0, "a captain, no Pikmin and Whistle Radius 100%", "captain %d, Pikmin %d, pct %d", (int)(navi != nullptr), pikiMgr->getSize(),

@@ -21,7 +21,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <set>
 #include <string>
 #include <vector>
@@ -349,7 +348,7 @@ void checkCin(const nectar::Cinema& in, const std::string& name)
 
 } // namespace
 
-int main(int argc, char** argv)
+int main()
 {
 	std::string err, text;
 
@@ -471,10 +470,10 @@ int main(int argc, char** argv)
 		for (const ReadCut& c : r.cuts) {
 			check(c.scene >= 0 && c.scene < int(r.scenes.size()), f.path + ": cut scene in range");
 			// demo36 (the results backdrop) ends with a looping cut on purpose: it keeps the results screen up
-			// until exitDayEnd drops it, as the disc's does. Every other stand-in ends on its own.
-			// demo73 (the bad ending's escape) and demo77 (the neutral and happy endings' space flight)
-			// do the same for the final results window, and demo20 (the Main Engine reaching the ship)
-			// until its own TextDemo key skips the scene, as the disc's does; demo78 (the Whimsical Radar) likewise.
+			// until exitDayEnd drops it (DayOverModeState::update waits on the movie). Every other stand-in
+			// ends on its own. demo73 (the bad ending's escape) and demo77 (the neutral and happy endings'
+			// space flight) do the same for the final results window, and demo20 (the Main Engine reaching
+			// the ship) and demo78 (the Whimsical Radar) loop until their own TextDemo key skips the scene.
 			if ((f.path == "dataDir/cinemas/demo36.cin" || f.path == "dataDir/cinemas/demo73.cin" || f.path == "dataDir/cinemas/demo77.cin"
 			     || f.path == "dataDir/cinemas/demo20.cin" || f.path == "dataDir/cinemas/demo78.cin")
 			    && &c == &r.cuts.back())
@@ -527,8 +526,8 @@ int main(int argc, char** argv)
 			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionEmitCone) cone6 = k.frame;
 		}
 		check(boot6 >= 5 && boot6 + 60 + 10 <= cone6, "demo06: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
-		// demo05 (yellow, scenario onion_day3): the same order with the disc's yellow boot
-		// motion (KEY_Action0 at motion frame 240).
+		// demo05 (yellow, scenario onion_day3): the same order with the stand-in yellow boot
+		// motion (standin_object_profiles.cpp, KEY_Action0 at motion frame 240).
 		const auto k05 = keysOf("dataDir/cinemas/demo05.cin");
 		int boot5 = -1, cone5 = -1;
 		for (const ReadKey& k : k05) {
@@ -560,8 +559,8 @@ int main(int argc, char** argv)
 		}
 		check(starts77 == 1, "demo77 starts the final results window once, from its first cut");
 		// demo26 (scenarios ending_happy, ending_happy_skip): SpecialDayEnd once, listed before
-		// FadeOut and two frames after it, as on the disc, so a skip's frame-order replay
-		// (pc_cine_sort_skip_keys) reorders them.
+		// FadeOut but at a later frame, so a skip's frame-order replay (pc_cine_sort_skip_keys)
+		// has to reorder them.
 		const auto k26 = keysOf("dataDir/cinemas/demo26.cin");
 		int special = -1, fadeOut = -1, specialAt = -1, fadeOutAt = -1;
 		for (std::size_t i = 0; i < k26.size(); i++) {
@@ -569,9 +568,10 @@ int main(int argc, char** argv)
 			if (k26[i].cmd == nectar::kMovieCmdSpecialDayEnd) special = int(i), specialAt = k26[i].frame;
 			if (k26[i].cmd == nectar::kMovieCmdFadeOut) fadeOut = int(i), fadeOutAt = k26[i].frame;
 		}
-		check(special >= 0 && fadeOut >= 0 && special < fadeOut && specialAt == fadeOutAt + 2, "demo26: SpecialDayEnd listed before FadeOut, two frames after it");
-		check(specialAt >= 30, "demo26: SpecialDayEnd late enough to leave a skip window before it");
-		// demo17 (scenario tutorial_day1): the ship's Henka, then ForceDayEnd, then the TUT_GetEngine text, in the disc's order.
+		check(special >= 0 && fadeOut >= 0 && special < fadeOut && specialAt > fadeOutAt, "demo26: SpecialDayEnd listed before FadeOut, at a later frame");
+		// ending_happy_skip presses START at movie frame 20 (scenario_ending_happy.cpp kSkipFrame), before both keys.
+		check(fadeOutAt > 20, "demo26: both keys late enough to leave a skip window before them");
+		// demo17 (scenario tutorial_day1): the ship's Henka, then ForceDayEnd, then the TUT_GetEngine text (the authored order).
 		int henka = -1, dayEnd = -1, text = -1;
 		for (const auto& f : files) {
 			if (f.path != "dataDir/cinemas/demo17.cin") continue;
@@ -589,21 +589,6 @@ int main(int argc, char** argv)
 	std::vector<nectar::StandInCinemaFile> again;
 	check(nectar::writeStandInCinemas(again, err) && again.size() == files.size(), "second build");
 	for (std::size_t i = 0; i < files.size() && i < again.size(); i++) check(files[i].path == again[i].path && files[i].text == again[i].text, "deterministic: " + files[i].path);
-
-	if (argc > 1) {
-		std::ifstream in(argv[1]);
-		check(bool(in), std::string("read ") + argv[1]);
-		std::string line;
-		int listed = 0;
-		while (std::getline(in, line)) {
-			if (line.empty() || line[0] == '#') continue;
-			const std::string path = line.substr(0, line.find('\t'));
-			if (path.rfind("dataDir/cinemas/", 0) != 0) continue;
-			listed++;
-			check(paths.count(path) == 1, "boot manifest cinema path is a stand-in: " + path);
-		}
-		check(listed > 0, "the boot manifest lists cinema paths");
-	}
 
 	if (failures) {
 		std::printf("%d failure(s)\n", failures);
