@@ -498,6 +498,10 @@ Other jobs of the workflow:
   and Windows in 3 (`ctest -I <shard>,,<shards>`); this job joins them with `merge_scenario_shards.py`, which fails
   unless every scenario test ran in exactly one shard, then runs `ci_k_summary.sh` and
   `check_throw_flight.py` on the merged logs and uploads `scenario-hash-logs-<OS>`.
+  Raw build provenance is retained byte for byte under `scenario-evidence/<shard-name>/`:
+  hosted runner tool versions and paths can differ, so these files are not merged by name.
+  Scenario logs still reject conflicting bytes under the same filename. The merger's
+  regression and negative-control tests run in every merge job.
   Golden refresh: `golden-update-<OS>` comes from the shard that ran `scenario_screenshot_goldens`.
 - **`scenario-hash-compare`**: see below.
 
