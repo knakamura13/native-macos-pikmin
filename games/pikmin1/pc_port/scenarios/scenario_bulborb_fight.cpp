@@ -9,9 +9,11 @@
 // (a Pikmin shaken off) and, for each Flick, whether that Pikmin attacks again before the end.
 //
 // Asserted: the Bulborb is found and dies within 10 s, and a Flick lasts 4 s at most on average. Those
-// are smoke limits for the authored fixtures (Attack, StillJump, JHit, JKoke and GetUp have the authored
-// schedules of standin_anims.h, the parameters are the source defaults); they do not establish parity
-// with the original game. Everything else is printed.
+// are smoke limits for the authored fixtures: the fight's timing comes from the stand-in Flick, Attack,
+// StillJump, JKoke and GetUp motions (standin_anims.h; the Attack motion's KEY_Action0 is what lets ground
+// attacks hit, #154) and from the Pikmin parameters, which are the source defaults (parms/pikiMgr.bin is an
+// empty list: knock-down 0.7 s, health 100). They do not establish parity with the original game.
+// Everything else is printed.
 //
 // Combat timing against the original game (issues #154 and #180) is a local exact-lane question: it
 // needs the original motions and parameters, which only a user-supplied install has, and it is

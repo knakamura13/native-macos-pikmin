@@ -2,8 +2,8 @@
 
 // Texturas y bundles de relleno para arrancar sin datos de disco (escenarios,
 // issue #67). Todo se genera por código: colores planos, nada del disco.
-// Las rutas son relativas a assets/dataDir/ (el prefijo que llevan las líneas
-// de boot-manifest.txt). Sin E/S: el generador decide dónde se escribe.
+// Las rutas son relativas a assets/dataDir/. Sin E/S: el generador decide
+// dónde se escribe.
 
 #include <cstdint>
 #include <string>

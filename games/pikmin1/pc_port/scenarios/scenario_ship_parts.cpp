@@ -13,8 +13,8 @@
 //  - SP5-SP9: mShipUpgradeLevel and the stage unlocks (Forest at the first
 //    part, Forest Navel at AICONST._154, Distant Spring at _164, Final Trial at
 //    _174, perfect at _184) are checked against the live AICONST values, never
-//    literals: the disc and the stand-in tree both set p19 = 5 (standin-aiconst.md),
-//    the code default is 6;
+//    literals (the stand-in aiconst.bin is an empty list, so the stand-in tree
+//    runs on the code defaults, p19 = 6; a real install may set its own);
 //  - SP10: the result flags (UnlockCave, UnlockYakushima, Collect15Parts,
 //    Collect25Parts, Collect29Parts, Collect10Parts) in their on (1) and seen (2)
 //    states, with Collect10Parts needing the clock on day 10 or later;
