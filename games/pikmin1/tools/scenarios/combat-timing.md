@@ -217,8 +217,27 @@ slower), which means the ground attackers and the stuck attackers contribute to 
 `ActAttack` re-init on the same target, about one hit per attack animation) against one stuck attacker (one hit per
 attachment, then a re-approach), and how the Bulborb's Flick, which throws sticking and nearby Pikmin off, changes each.
 
-Next: per-Pikmin damage accounting at both rates (hits per Pikmin per second split by ground and stuck attack), and the
-Flick's effect on each group, using the paired starts so each variant is judged against about 0.1 s of noise.
+Damage accounting (temporary log in `ActJumpAttack::attackHit`, 64 starts, up to the kill, not kept; a fight needs about 13
+hits at either rate). Hits per fight from ground attackers (state 4) and stuck attackers (state 5):
+
+| Build | Ground hits | Stuck hits | Hits per second | Mean kill |
+| --- | --- | --- | --- | --- |
+| 30 Hz (reference) | 8.9 | 4.5 | 4.48 | 3.11 s |
+| 60 Hz, current parity build | 5.6 | 7.6 | 4.66 | 2.97 s |
+| 60 Hz, faithful turning (exact growth of the away turn and compounded `moveRotation`) | 8.2 | 5.2 | 4.9 | 2.74 s |
+| 60 Hz, faithful turning plus state-machine decisions only on 30 Hz boundaries | 11.2 | 2.1 | 5.0 | 2.67 s |
+
+Reading: the current parity build gets a similar total hit rate as 30 Hz by accident, with the mix inverted (stuck attackers
+do most of the damage at 60 Hz, ground attackers at 30 Hz). Faithful turning restores the mix almost exactly (8.2 and 5.2 against
+8.9 and 4.5), so it is the more faithful port of the behaviour, but it exposes the real remaining difference: the total hit rate
+is then about 13% higher at 60 Hz (4.9 against 4.3 to 4.5 per second). Gating the decisions to 30 Hz boundaries is refuted (it
+inverts the mix the other way and does not slow the kill). The faithful-turning variant is not adopted on the parity branch: it
+makes the headline kill-time gap larger (paired 60 Hz minus 30 Hz -0.654 s against -0.421 s) while the cause of the hit-rate
+difference is unknown. The patch is kept outside the repository in the working notes.
+
+Next: explain the 13% higher hit rate at equal mix. Per attacker type, time from the decision to the hit (ground: attack
+animation start to the first key, stuck: attachment to the first hit) and the interval between consecutive hits of one
+Pikmin, at both rates, on the faithful-turning build.
 
 ## Public stand-in fixture
 
