@@ -11,6 +11,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void);
 PcScenario* pc_scenario_make_boot_smoke(void);
 PcScenario* pc_scenario_make_hud_layout(void);
 PcScenario* pc_scenario_make_standin_showcase(void);
+PcScenario* pc_scenario_make_ship_parts_showcase(void);
 PcScenario* pc_scenario_make_throw_release(void);
 PcScenario* pc_scenario_make_day30_clock(void);
 PcScenario* pc_scenario_make_sprout_landing(void);

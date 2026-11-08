@@ -449,6 +449,15 @@ void testModels()
 	std::string err;
 	check(nectar::writeStandInObjectModels(files, err), "write models: " + err);
 	check(files.size() == specs.size(), "one file per spec");
+	// Blender art: every binding to this list names exported art made for the spec's rig,
+	// and the model is then drawn from it (vertex colours), as mod_writer_test checks for the 45.
+	check(nectar::checkStandInArtBindings(specs, err), "Blender art bindings: " + err);
+	for (const nectar::StandInArtBinding& b : nectar::standInArtBindings()) {
+		for (const nectar::StandInModelSpec& spec : specs) {
+			if (spec.path != b.path) continue;
+			check(!parsedModel(spec).colours.empty(), spec.path + ": drawn from its Blender art (vertex colours)");
+		}
+	}
 	for (const nectar::StandInModelSpec& spec : specs) {
 		check(nectar::findStandInModel(spec.path) == nullptr, spec.path + ": not also one of the 45 models");
 		nectar::Model m = parsedModel(spec);

@@ -198,8 +198,8 @@ std::vector<StandInModelSpec> buildObjectModelSpecs()
 		s.push_back(std::move(m));
 	}
 
-	// chappy (the Dwarf Bulborb stand-in), authored. 12 joints in a flat fan: the
-	// art (standin_art.cpp buildChappy) draws on joints 0, 1, 4, 5, 6, 8 and 11.
+	// chappy (the Dwarf Bulborb stand-in), authored. 13 joints in a flat fan: the
+	// art (art/blender/enemies.blend) draws on joints 1 to 12.
 	// The game looks up 'cent' (TAIAmove.cpp:40), 'slot' with at least one child
 	// (BTeki::getFreeSlot, tekibteki.cpp:2174; one child is the fewest that lets it
 	// swallow), and 'lleg'/'rleg' (TaiJointEffectAction, taichappy.cpp:609). Pikmin
@@ -209,7 +209,7 @@ std::vector<StandInModelSpec> buildObjectModelSpecs()
 	{
 		StandInModelSpec m;
 		m.path     = "dataDir/tekis/chappy/chappy.mod";
-		m.parents  = { -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+		m.parents  = { -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 		m.colour   = { 200, 70, 60, 255 };
 		m.halfSize = 12.0f;
 		std::string t;
