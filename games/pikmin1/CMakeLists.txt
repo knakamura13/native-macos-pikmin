@@ -505,6 +505,9 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_whistle_gather_release.cpp
         pc_port/scenarios/scenario_whistle_pluck_held.cpp
         pc_port/scenarios/scenario_bulborb_fight.cpp
+        pc_port/scenarios/scenario_attack_rate.cpp
+        pc_port/scenarios/scenario_update_rotation.cpp
+        pc_port/scenarios/scenario_rng_draw_order.cpp
         pc_port/scenarios/scenario_flick_out_of_range.cpp
         pc_port/scenarios/scenario_whistle_delay.cpp
         pc_port/scenarios/scenario_enemy_kills.cpp
@@ -2559,7 +2562,10 @@ if(PIKMIN_BUILD_SCENARIOS)
         # The Y menu's map and controller pages on the stand-in screens;
         # a day end through the real world map, a title round trip from it.
         map_menu:practice:30,60 map_menu_lockout:practice:30,60
-        world_map_day_end:sandbox_objects:30,60 title_round_trip:sandbox_objects:30,60)
+        world_map_day_end:sandbox_objects:30,60 title_round_trip:sandbox_objects:30,60
+        # Per-second rates the port scales above 30 Hz (60 only: at 30 Hz the code is the
+        # original), and the draw order of one two-random-number expression (rate-free).
+        attack_rate:sandbox_objects:60 update_rotation:sandbox:60 rng_draw_order:sandbox:30)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
