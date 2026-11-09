@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # auto-install-kyle-develop.sh [REPO]
 #
-# Keep /Applications/Pikmin 1.app on origin/kyle-develop.
+# Keep /Applications/Open Nectar Develop.app on origin/kyle-develop.
 # A LaunchAgent runs this hourly. If the game is open, it exits 0 and the next
-# run tries again. Logs go to ~/Library/Logs/OpenNectar/auto-install.log.
+# run tries again. Each run writes a few summary lines to
+# ~/Library/Logs/OpenNectar/auto-install.log (capped at about 5 MB); the full
+# build output goes to last-build-develop.log next to it, overwritten each run.
 #
 # REPO is a checkout that can fetch origin. The LaunchAgent passes the checkout
 # that install-launchd.sh was run from. The build itself uses a worktree in
@@ -13,19 +15,15 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 log_file="${HOME:-/tmp}/Library/Logs/OpenNectar/auto-install.log"
-app_info="/Applications/Pikmin 1.app/Contents/Resources/build-info.json"
+last_build_file="${HOME:-/tmp}/Library/Logs/OpenNectar/last-build-develop.log"
+app_path="/Applications/Open Nectar Develop.app"
+app_info="${app_path}/Contents/Resources/build-info.json"
 builds_root="${HOME:-}/OpenNectar-builds.noindex"
 lock_dir=""
 
-log() {
-    local line
-    line="$(date '+%Y-%m-%d %H:%M:%S') $*"
-    mkdir -p "$(dirname -- "${log_file}")"
-    printf '%s\n' "${line}" >> "${log_file}"
-    if [[ -t 2 ]]; then
-        printf '%s\n' "${line}" >&2
-    fi
-}
+# log, cap_log, run_quiet, run_build_logged, log_summary_lines.
+# shellcheck source=install_log.sh
+source "${script_dir}/install_log.sh"
 
 # Print the build's own sha: the top-level "sha" in build-info.json, and only
 # when it is a hex commit id. The manifest also lists a sha for every merged
@@ -63,7 +61,7 @@ read_state_sha() {
 }
 
 game_running() {
-    pgrep -x nectar >/dev/null 2>&1 || pgrep -x nectar-launcher >/dev/null 2>&1
+    pgrep -x nectar >/dev/null 2>&1 || pgrep -x nectar-launcher >/dev/null 2>&1 || pgrep -x pikmin2 >/dev/null 2>&1
 }
 
 # Directory mkdir is the lock. A dead pid is stale and is taken over.
@@ -103,11 +101,15 @@ ensure_worktree() {
         return 1
     fi
     if [[ ! -e "${worktree}/.git" ]]; then
-        git -C "${repo}" worktree prune
-        git -C "${repo}" worktree add --detach "${worktree}" "${sha}"
+        run_quiet git -C "${repo}" worktree prune
+        run_quiet git -C "${repo}" worktree add --detach "${worktree}" "${sha}"
     else
-        git -C "${worktree}" checkout --detach --force "${sha}"
+        run_quiet git -C "${worktree}" checkout --detach --force "${sha}"
     fi
+}
+
+supports_develop_app() {
+    grep -q 'Open Nectar Develop.app' "$1" 2>/dev/null
 }
 
 write_state() {
@@ -175,6 +177,15 @@ self_test() {
     [[ "$(cat "${lock}/pid")" == "$$" ]]
     lock_dir="${lock}"
     release_lock
+
+    printf 'app_name="Pikmin 1.app"\n' > "${tmp}/old-build-app.sh"
+    if supports_develop_app "${tmp}/old-build-app.sh"; then
+        printf 'treated an old build-app.sh as Open Nectar Develop\n' >&2
+        return 1
+    fi
+    supports_develop_app "${script_dir}/../../games/pikmin1/packaging/macos/build-app.sh"
+    rm -rf "${tmp}"
+    install_log_self_test
     printf 'auto-install self-test ok\n'
 }
 
@@ -202,6 +213,7 @@ if [[ -z "${repo}" ]]; then
 fi
 builds_root="${HOME}/OpenNectar-builds.noindex"
 log_file="${HOME}/Library/Logs/OpenNectar/auto-install.log"
+last_build_file="${HOME}/Library/Logs/OpenNectar/last-build-develop.log"
 worktree="${builds_root}/kyle-develop"
 build_dir="${builds_root}/kyle-develop-build"
 state_file="${builds_root}/installed-sha"
@@ -212,20 +224,26 @@ if ! acquire_lock "${lock_dir}"; then
     exit 0
 fi
 trap release_lock EXIT INT TERM
+cap_log
+log "start"
 
 if ! git -C "${repo}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     log "not a git checkout: ${repo}"
     exit 1
 fi
 
-log "fetching origin kyle-develop"
-if ! git -C "${repo}" fetch origin kyle-develop >> "${log_file}" 2>&1; then
+# Fetch output only reaches the log when the fetch fails, so the last build's
+# output in last-build-develop.log survives the hourly up-to-date runs.
+if ! fetch_output="$(git -C "${repo}" fetch origin kyle-develop 2>&1)"; then
     log "fetch failed"
+    printf '%s\n' "${fetch_output}" | tail -n "${install_log_tail_lines}" >> "${log_file}"
     exit 1
 fi
 sha="$(git -C "${repo}" rev-parse refs/remotes/origin/kyle-develop)"
 installed="$(read_json_sha "${app_info}")"
-if [[ -z "${installed}" ]]; then
+# The state file only stands in for a manifest without a sha. With no Develop
+# app installed (for example only the legacy Pikmin 1.app), install it.
+if [[ -z "${installed}" && -d "${app_path}" ]]; then
     installed="$(read_state_sha "${state_file}")"
 fi
 installed="$(printf '%s' "${installed}" | tr 'A-F' 'a-f')"
@@ -241,7 +259,10 @@ if game_running; then
 fi
 
 log "updating ${installed:-nothing} -> ${sha}"
+start_build_output "updating ${installed:-nothing} -> ${sha}"
 if ! ensure_worktree "${repo}" "${worktree}" "${sha}"; then
+    log "could not check out ${sha} in ${worktree}"
+    copy_output_tail
     exit 1
 fi
 mkdir -p "${build_dir}"
@@ -250,12 +271,22 @@ if [[ ! -f "${build_app}" ]]; then
     log "missing ${build_app}"
     exit 1
 fi
-if "${build_app}" --build-dir "${build_dir}" --install >> "${log_file}" 2>&1; then
+if ! supports_develop_app "${build_app}"; then
+    # An older kyle-develop would install the legacy Pikmin 1.app; leave
+    # /Applications alone until kyle-develop has the Open Nectar names.
+    log "kyle-develop ${sha} predates Open Nectar Develop.app; not installing"
+    exit 0
+fi
+rc=0
+printf '%s build-app.sh --build-dir %s --install\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${build_dir}" >> "${last_build_file}"
+run_build_logged "build ${sha:0:12}" env PIKMIN_BUILD_ROLE=develop "${build_app}" --build-dir "${build_dir}" --install || rc=$?
+log_summary_lines
+if [[ "${rc}" -eq 0 ]]; then
     write_state "${state_file}" "${sha}"
     log "installed ${sha}"
     exit 0
 fi
-if game_running; then
+if [[ "${rc}" -eq 75 ]] || game_running; then
     log "install deferred because the game is running"
     exit 0
 fi

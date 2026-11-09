@@ -1,0 +1,21 @@
+diff --git a/games/pikmin1/pc_port/launcher/launcher_main.cpp b/games/pikmin1/pc_port/launcher/launcher_main.cpp
+index 00000000..00000000 100644
+--- a/games/pikmin1/pc_port/launcher/launcher_main.cpp
++++ b/games/pikmin1/pc_port/launcher/launcher_main.cpp
+@@ -1294,6 +1294,16 @@
+     // mueven) los de la carpeta del usuario, antes de escribir ninguno.
+     nectar::paths::migrateUserFolderSettings();
+ 
++#ifdef __APPLE__
++    if (isManagedBundle()) {
++        const char* overridePath = std::getenv("PIKMIN_BUILD_INFO");
++        const fs::path manifest = overridePath && *overridePath ? fs::path(overridePath)
++            : platform::executablePath().parent_path().parent_path() / "Resources" / "build-info.json";
++        std::string backupError;
++        pikmin::launcher::maybeBackupCentralSaveForBuild(manifest, backupError);
++    }
++#endif
++
+     const fs::path sourceDirectory = executableDirectory();
+     // Instalación (de Pikmin 1, de Pikmin 2 o de los dos) junto a este launcher.
+     const bool isInstallFolder = assetsReady(sourceDirectory)

@@ -1210,6 +1210,12 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(gci_save_import_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME gci_save_import_test COMMAND gci_save_import_test)
 
+    add_executable(pc_card_save_root_test pc_port/dolphin_stubs/pc_card_save_root_test.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp)
+    target_include_directories(pc_card_save_root_test PRIVATE ${PC_PORT_DIR})
+    target_compile_options(pc_card_save_root_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_card_save_root_test COMMAND pc_card_save_root_test)
+
     add_executable(install_directory_test
         pc_port/launcher/install_directory_test.cpp
         pc_port/launcher/install_directory.cpp
@@ -1230,8 +1236,6 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         pc_port/launcher/install_note_layout.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/installer_ui.cpp
-        pc_port/launcher/install_note_layout.cpp
-        pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/pc_icon.cpp
         ${LAUNCHER_PLATFORM_SOURCE})
     target_include_directories(install_dialog_snapshot PRIVATE

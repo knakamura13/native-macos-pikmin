@@ -15,6 +15,7 @@
 //    botones de cristal) se lee de los datos que el usuario extrajo de su
 //    propio disco. Sin instalación se dibuja una pradera con flores.
 #include "launcher_gui.h"
+#include "json_mini.h"
 
 #include "bti_decode.h"
 #include "button_layout.h"
@@ -2776,17 +2777,17 @@ struct Hub {
 
     // El pie va en la ventana del hub (debajo de modales y de "What's new"),
     // en su franja reservada; si la ruta no cabe se recorta por delante.
-    void drawFooter(ImVec2 size)
+    void drawFooter(ImVec2 size, float reservedWidth)
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const std::string where = !state.dataFolder.empty()
             ? "Data folder: " + fitTail(fonts.caption, 16.0f, state.dataFolder,
-                                        std::max(40.0f, size.x - 44.0f
+                                        std::max(40.0f, size.x - 44.0f - reservedWidth
                                             - fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, "Data folder: ").x))
             : state.games[0].directory.empty()
             ? std::string("Not installed yet")
             : "Installed in: " + fitTail(fonts.caption, 16.0f, state.games[0].directory,
-                                         std::max(40.0f, size.x - 44.0f
+                                         std::max(40.0f, size.x - 44.0f - reservedWidth
                                              - fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, "Installed in: ").x));
         // Placa semitransparente para que el texto se lea sobre la hierba.
         const ImVec2 extent = fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, where.c_str());
@@ -2867,17 +2868,71 @@ struct Hub {
         }
 
         drawReleaseNotice(size, t);
+#ifdef __APPLE__
+        const float footerButtonH = 40.0f;
+        const float infoWidth = buttons::fitWidth("Build information", footerButtonH, buttons::kLabelSize, measureLabel());
+        const float folderWidth = state.dataFolder.empty() ? 0.0f
+            : buttons::fitWidth("Change folder", footerButtonH, buttons::kLabelSize, measureLabel()) + 10.0f;
+#endif
         if (!state.dataFolder.empty()) {
             // Abajo a la derecha, a la altura del rótulo de la carpeta.
             const char* label = "Change folder";
             const float h     = 40.0f;
             const float w     = buttons::fitWidth(label, h, buttons::kLabelSize, measureLabel());
+#ifdef __APPLE__
+            ImGui::SetCursorScreenPos(ImVec2(size.x - 18.0f - infoWidth - 10.0f - w, size.y - 10.0f - h));
+#else
             ImGui::SetCursorScreenPos(ImVec2(size.x - 18.0f - w, size.y - 10.0f - h));
+#endif
             if (glassButton(label, ImVec2(w, h))) choose(HubAction::DataFolder, HubGame::Pikmin1);
         }
         ImGui::EndDisabled();
         // Fuera de las páginas con scroll: el cursor vuelve a la ventana del hub.
-        drawFooter(size);
+#ifdef __APPLE__
+        drawFooter(size, infoWidth + folderWidth + 18.0f);
+        ImGui::SetCursorScreenPos(ImVec2(size.x - 18.0f - infoWidth, size.y - 10.0f - footerButtonH));
+        if (glassButton("Build information", ImVec2(infoWidth, footerButtonH))) ImGui::OpenPopup("Build information");
+        ImGui::SetNextWindowSize(ImVec2(std::min(720.0f, size.x - 40.0f), std::min(520.0f, size.y - 40.0f)), ImGuiCond_Always);
+        if (ImGui::BeginPopupModal("Build information", nullptr, ImGuiWindowFlags_NoResize)) {
+            const ImVec2 popupPos = ImGui::GetWindowPos();
+            const ImVec2 popupSize = ImGui::GetWindowSize();
+            const bool clickedOutside = !ImGui::IsWindowAppearing() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                && !ImGui::IsMouseHoveringRect(popupPos, ImVec2(popupPos.x + popupSize.x, popupPos.y + popupSize.y), false);
+            const char* overridePath = std::getenv("PIKMIN_BUILD_INFO");
+            const auto manifest = overridePath && *overridePath ? std::filesystem::path(overridePath)
+                : platform::executablePath().parent_path().parent_path() / "Resources" / "build-info.json";
+            std::ifstream input(manifest);
+            std::string info((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+            Json build;
+            const bool valid = parseJson(info, build) && build.type == Json::Type::Object;
+            const float actionHeight = 44.0f;
+            ImGui::BeginChild("##build-info", ImVec2(0, -actionHeight - ImGui::GetStyle().ItemSpacing.y), true);
+            if (!valid) {
+                ImGui::TextWrapped("Build information is unavailable or invalid.");
+            } else {
+                ImGui::TextWrapped("%s", info.c_str());
+            }
+            ImGui::EndChild();
+            const float copyWidth = buttons::fitWidth("Copy build information", actionHeight, buttons::kLabelSize, measureLabel());
+            const float closeWidth = buttons::fitWidth("Close", actionHeight, buttons::kLabelSize, measureLabel());
+            const float actionWidth = copyWidth + closeWidth + ImGui::GetStyle().ItemSpacing.x;
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - actionWidth));
+            ImGui::BeginDisabled(!valid);
+            const bool copyBuildInfo = glassButton("Copy build information", ImVec2(copyWidth, actionHeight), false, !valid);
+            if (copyBuildInfo) {
+                ImGui::SetClipboardText(info.c_str());
+                toast = "Build information copied";
+                toastTime = 3.0f;
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            const bool closeBuildInfo = glassButton("Close", ImVec2(closeWidth, actionHeight));
+            if (closeBuildInfo || clickedOutside || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+#else
+        drawFooter(size, 0.0f);
+#endif
         ImGui::End();
         toastTime = std::max(0.0f, toastTime - dt);
         drawToast(size);
@@ -3366,7 +3421,9 @@ bool HubWindow::open(const HubState& state, std::string& error)
     SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_ALLOW_HIGHDPI);
 #else
-    SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1180, 780,
+    const char* requestedTitle = std::getenv("PIKMIN_LAUNCHER_TITLE");
+    const char* windowTitle = requestedTitle && *requestedTitle ? requestedTitle : "Open Nectar";
+    SDL_Window* window = SDL_CreateWindow(windowTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1180, 780,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
 #endif
     if (!window) {

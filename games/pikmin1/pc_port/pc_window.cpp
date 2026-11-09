@@ -3,6 +3,7 @@
 #endif
 #include "pc_window.h"
 #include "pc_menu_pad.h"
+#include "pc_build_window_title.h"
 
 static_assert(PAD_BUTTON_LEFT == PC_MENU_PAD_LEFT && PAD_BUTTON_RIGHT == PC_MENU_PAD_RIGHT
                   && PAD_BUTTON_DOWN == PC_MENU_PAD_DOWN && PAD_BUTTON_UP == PC_MENU_PAD_UP
@@ -1036,7 +1037,11 @@ bool pc_window_init(const char* title, int width, int height) {
     bool retriedGpu = false;
     for (;;) {
         sWindow = SDL_CreateWindow(
+#ifdef __APPLE__
+            pc_build_window_title(title, std::getenv("PIKMIN_LAUNCHER_TITLE")),
+#else
             title,
+#endif
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
             sWindowWidth,
