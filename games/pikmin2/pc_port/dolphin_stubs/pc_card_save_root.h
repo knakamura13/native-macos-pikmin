@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <filesystem>
 
 // Resolves where the emulated memory card lives on disk (the folder that
@@ -17,7 +18,12 @@ struct PcCardSaveRootOptions {
 
 std::filesystem::path pc_card_resolve_save_root(PcCardSaveRootOptions options = {});
 
-bool pc_card_save_writes_blocked();
+inline bool pc_card_save_writes_blocked()
+{
+    const char* value = std::getenv("NECTAR_SAVE_READ_ONLY");
+    if (value == nullptr || *value == '\0') return false;
+    return !(value[0] == '0' && value[1] == '\0');
+}
 
 inline std::filesystem::path pc_card_card0_directory(PcCardSaveRootOptions options = {})
 {

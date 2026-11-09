@@ -153,90 +153,82 @@ json_escape() {
     printf '%s' "${text}"
 }
 
-# The wrapper is what actually launches. NECTAR_SAVE_DIR has to be set:
-# without it the game copies card0 out of ~/.local/share/pikmin-native/save.
-# NECTAR_EXECUTABLE_PATH is the launcher's own path, so it must stay unset.
-write_wrapper() {
-    local file="$1"
-    local data_home="$2"
-    local config_home="$3"
-    local cache_home="$4"
-    local data_root="$5"
-    local save_dir="$6"
-    local game_bin="$7"
-    local launcher_bin="$8"
-    local title="$9"
-    local save_read_only="${10:-0}"
-    local q_data_home q_config_home q_cache_home q_data_root q_save q_game_bin q_launcher_bin q_title q_read_only q_mode
-    q_data_home="$(printf '%q' "${data_home}")"
-    q_config_home="$(printf '%q' "${config_home}")"
-    q_cache_home="$(printf '%q' "${cache_home}")"
-    q_data_root="$(printf '%q' "${data_root}")"
-    q_game_bin="$(printf '%q' "${game_bin}")"
-    q_launcher_bin="$(printf '%q' "${launcher_bin}")"
-    q_save="$(printf '%q' "${save_dir}")"
-    q_title="$(printf '%q' "${title}")"
-    q_read_only="$(printf '%q' "${save_read_only}")"
-    q_mode="$(printf '%q' "${PIKMIN_SAVE_MODE:-central}")"
-    if [[ "${PIKMIN_SAVE_MODE:-central}" == "fresh" ]]; then
-        cat > "${file}" <<EOF
-#!/bin/bash
-set -euo pipefail
-export XDG_DATA_HOME=${q_data_home}
-export XDG_CONFIG_HOME=${q_config_home}
-export XDG_CACHE_HOME=${q_cache_home}
-export NECTAR_PIKMIN1_DIR=${q_data_root}
-export NECTAR_PIKMIN1_EXECUTABLE=${q_game_bin}
-fresh="\$(mktemp -d "\${TMPDIR:-/tmp}/open-nectar-fresh.XXXXXX")"
-mkdir -p "\$fresh/card0"
-export NECTAR_SAVE_DIR="\$fresh"
-export PIKMIN_BUILD_INFO="\$(dirname -- "\$0")/../Resources/build-info.json"
-export PIKMIN_BUNDLE_MANAGED=1
-export PIKMIN_LAUNCHER_TITLE=${q_title}
-unset NECTAR_EXECUTABLE_PATH PIKMIN_EXECUTABLE_PATH
-exec ${q_launcher_bin} "\$@"
-EOF
-        chmod +x "${file}"
-        return 0
+# LaunchServices refuses a shell-script CFBundleExecutable (error -54, launchd
+# "Codesigning issue"). The default entry is nectar-launcher itself, with the
+# environment in Info.plist. Fresh saves need a new directory on every launch,
+# so that mode compiles a Mach-O stub that creates one and execs the launcher.
+compile_fresh_stub() {
+    local file="$1" launcher_bin="$2" title="$3"
+    local work src
+    if ! command -v cc >/dev/null 2>&1; then
+        printf 'cc is required to build the fresh-save launcher stub.\n' >&2
+        return 1
     fi
-    cat > "${file}" <<EOF
-#!/bin/bash
-set -euo pipefail
-export XDG_DATA_HOME=${q_data_home}
-export XDG_CONFIG_HOME=${q_config_home}
-export XDG_CACHE_HOME=${q_cache_home}
-export NECTAR_PIKMIN1_DIR=${q_data_root}
-export NECTAR_PIKMIN1_EXECUTABLE=${q_game_bin}
-export PIKMIN_SAVE_MODE=${q_mode}
-export NECTAR_SAVE_DIR=${q_save}
-if [[ ${q_read_only} == "1" ]]; then
-  export NECTAR_SAVE_READ_ONLY=1
-fi
-export PIKMIN_BUILD_INFO="\$(dirname -- "\$0")/../Resources/build-info.json"
-export PIKMIN_BUNDLE_MANAGED=1
-export PIKMIN_LAUNCHER_TITLE=${q_title}
-unset NECTAR_EXECUTABLE_PATH PIKMIN_EXECUTABLE_PATH
-save_mode_py="\$(dirname -- "\$0")/../Resources/save_mode.py"
-if [[ ! -f "\$save_mode_py" ]]; then
-  printf 'Missing bundled save helper: %s\\n' "\$save_mode_py" >&2
-  exit 1
-fi
-if [[ ${q_read_only} != "1" && ${q_mode} == "central" ]]; then
-  python3 "\$save_mode_py" backup-if-needed --home "\${HOME}" --build-info "\$PIKMIN_BUILD_INFO" >/dev/null 2>&1 || true
-fi
-data_root=\$NECTAR_PIKMIN1_DIR
-mkdir -p "\$data_root/save" "\$XDG_CONFIG_HOME/open-nectar" "\$XDG_CACHE_HOME"
-real_assets="\${HOME}/.local/share/pikmin-native/assets"
-if [[ ! -e "\$data_root/assets" && ! -L "\$data_root/assets" && -f "\$real_assets/.pikmin-assets" ]]; then
-    ln -s "\$real_assets" "\$data_root/assets"
-fi
-install_dir_file="\$XDG_CONFIG_HOME/open-nectar/install_dir"
-if [[ ! -f "\$install_dir_file" ]]; then
-    printf '%s\\n' "\$data_root" > "\$install_dir_file"
-fi
-exec ${q_launcher_bin} "\$@"
-EOF
+    work="$(mktemp -d)"
+    src="${work}/fresh-stub.c"
+    python3 - "$src" "$launcher_bin" "$title" <<'PY'
+import sys
+path, launcher, title = sys.argv[1:]
+
+def c_string(text):
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+program = r"""#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
+static const char *launcher = __LAUNCHER__;
+static const char *configured_title = __TITLE__;
+int main(int argc, char **argv) {
+    const char *tmp = getenv("TMPDIR");
+    char tmpl[1024];
+    char card[1024];
+    if (!tmp || !*tmp) tmp = "/tmp";
+    if (snprintf(tmpl, sizeof tmpl, "%s/open-nectar-fresh.XXXXXX", tmp) >= (int)sizeof tmpl) return 1;
+    if (!mkdtemp(tmpl)) { perror("mkdtemp"); return 1; }
+    if (snprintf(card, sizeof card, "%s/card0", tmpl) >= (int)sizeof card) return 1;
+    if (mkdir(card, 0700) != 0) { perror("mkdir"); return 1; }
+    setenv("NECTAR_SAVE_DIR", tmpl, 1);
+    setenv("PIKMIN_LAUNCHER_TITLE", configured_title, 1);
+    argv[0] = (char *)launcher;
+    execv(launcher, argv);
+    perror("execv");
+    return 1;
+}
+"""
+program = program.replace("__LAUNCHER__", c_string(launcher)).replace("__TITLE__", c_string(title))
+open(path, "w", encoding="utf-8").write(program)
+PY
+    if ! cc -O2 -o "${file}" "${src}"; then
+        rm -rf "${work}"
+        printf 'cc could not build the fresh-save launcher stub.\n' >&2
+        return 1
+    fi
+    rm -rf "${work}"
     chmod +x "${file}"
+}
+
+prepare_test_runtime() {
+    local data_root="$1" config_home="$2" cache_home="$3"
+    mkdir -p "${data_root}/save" "${config_home}/open-nectar" "${cache_home}"
+    local real_assets="${HOME}/.local/share/pikmin-native/assets"
+    if [[ ! -e "${data_root}/assets" && ! -L "${data_root}/assets" && -f "${real_assets}/.pikmin-assets" ]]; then
+        ln -s "${real_assets}" "${data_root}/assets"
+    fi
+    local install_dir_file="${config_home}/open-nectar/install_dir"
+    if [[ ! -f "${install_dir_file}" ]]; then
+        printf '%s\n' "${data_root}" > "${install_dir_file}"
+    fi
+}
+
+adhoc_sign_app() {
+    local app="$1"
+    [[ "$(uname -s)" == "Darwin" ]] || return 0
+    if ! command -v codesign >/dev/null 2>&1; then
+        printf 'codesign is required to sign %s\n' "${app}" >&2
+        return 1
+    fi
+    codesign --force --deep --sign - "${app}"
 }
 
 write_test_app() {
@@ -258,16 +250,21 @@ write_test_app() {
     if [[ -n "${PIKMIN_SAVE_MODE_LABEL:-}" ]]; then
         title+=", ${PIKMIN_SAVE_MODE_LABEL}"
     fi
-    local title_xml bundle_suffix
+    local title_xml bundle_suffix executable="nectar-launcher"
     title_xml="$(xml_escape "${title}")"
     bundle_suffix="$(printf '%s\n%s' "${branch}" "${snapshot}" | shasum -a 256 | cut -c1-16)"
     mkdir -p "${macos}" "${resources}"
     cp "${save_mode_py}" "${resources}/save_mode.py"
-    write_wrapper "${macos}/open-nectar" \
-        "${data_home}" "${config_home}" "${cache_home}" \
-        "${data_root}" "${save_dir}" "${game_bin}" "${launcher_bin}" "${title}" "${NECTAR_SAVE_READ_ONLY:-0}"
-    local data_home_xml config_home_xml cache_home_xml data_root_xml game_bin_xml save_xml save_ro_xml=""
-    local sha_json branch_json
+    if [[ "${launcher_bin}" != "${macos}/nectar-launcher" ]]; then
+        cp "${launcher_bin}" "${macos}/nectar-launcher"
+    fi
+    chmod +x "${macos}/nectar-launcher"
+    if [[ "${PIKMIN_SAVE_MODE:-central}" == "fresh" ]]; then
+        executable="open-nectar"
+        compile_fresh_stub "${macos}/open-nectar" "${macos}/nectar-launcher" "${title}"
+    fi
+    local data_home_xml config_home_xml cache_home_xml data_root_xml game_bin_xml save_xml save_ro_xml="" mode_xml
+    local sha_json branch_json build_info_xml
     sha_json="$(json_escape "${sha}")"
     branch_json="$(json_escape "${branch}")"
     data_home_xml="$(xml_escape "${data_home}")"
@@ -276,6 +273,8 @@ write_test_app() {
     data_root_xml="$(xml_escape "${data_root}")"
     game_bin_xml="$(xml_escape "${game_bin}")"
     save_xml="$(xml_escape "${save_dir}")"
+    build_info_xml="$(xml_escape "${resources}/build-info.json")"
+    mode_xml="$(xml_escape "${PIKMIN_SAVE_MODE:-central}")"
     if [[ "${save_read_only}" == "1" ]]; then
         save_ro_xml="
         <key>NECTAR_SAVE_READ_ONLY</key>
@@ -299,7 +298,7 @@ write_test_app() {
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>open-nectar</string>
+    <string>${executable}</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
@@ -318,13 +317,23 @@ write_test_app() {
         <string>${game_bin_xml}</string>
         <key>NECTAR_SAVE_DIR</key>
         <string>${save_xml}</string>${save_ro_xml}
+        <key>PIKMIN_SAVE_MODE</key>
+        <string>${mode_xml}</string>
+        <key>PIKMIN_BUNDLE_MANAGED</key>
+        <string>1</string>
+        <key>PIKMIN_LAUNCHER_TITLE</key>
+        <string>${title_xml}</string>
+        <key>PIKMIN_BUILD_INFO</key>
+        <string>${build_info_xml}</string>
     </dict>
 </dict>
 </plist>
 EOF
     printf '{\n  "sha": "%s",\n  "branch": "%s"\n}\n' "${sha_json}" "${branch_json}" \
         > "${resources}/build-info.json"
+    prepare_test_runtime "${data_root}" "${config_home}" "${cache_home}"
 }
+
 
 self_test() {
     local tmp home root desktop branch_name short name
@@ -402,17 +411,27 @@ else
 fi
 FAKE
     chmod +x "${fake}"
+    HOME="${home}"
     write_test_app "${app}" "${data_home}" "${config_home}" "${cache_home}" \
         "${data_root}" "${central_save}" "${tmp}/bin/nectar" "${fake}" \
         "0123456789abcdef" "fixture" "0123456789ab" "0"
-    wrapper="${app}/Contents/MacOS/open-nectar"
-    HOME="${home}" output="$("${wrapper}")"
-    [[ "${output}" == *"XDG_DATA_HOME=${data_home}"* ]]
-    [[ "${output}" == *"NECTAR_PIKMIN1_DIR=${data_root}"* ]]
-    [[ "${output}" == *"NECTAR_SAVE_DIR=${central_save}"* ]]
-    [[ "${output}" == *"NECTAR_PIKMIN1_EXECUTABLE=${tmp}/bin/nectar"* ]]
-    [[ "${output}" == *"NECTAR_EXECUTABLE_PATH=unset"* ]]
-    [[ "${output}" == *"PIKMIN_LAUNCHER_TITLE=Open Nectar Test — fixture [0123456789ab]"* ]]
+    plist="${app}/Contents/Info.plist"
+    entry="${app}/Contents/MacOS/nectar-launcher"
+    [[ -x "${entry}" ]]
+    [[ ! -e "${app}/Contents/MacOS/open-nectar" ]]
+    grep -q '<key>CFBundleExecutable</key>' "${plist}"
+    grep -A1 '<key>CFBundleExecutable</key>' "${plist}" | grep -q '<string>nectar-launcher</string>'
+    grep -q "XDG_DATA_HOME" "${plist}"
+    grep -F -q "${data_home}" "${plist}"
+    grep -F -q "${data_root}" "${plist}"
+    grep -F -q "${central_save}" "${plist}"
+    grep -F -q "${tmp}/bin/nectar" "${plist}"
+    grep -F -q 'Open Nectar Test — fixture [0123456789ab]' "${plist}"
+    grep -q '<key>PIKMIN_BUNDLE_MANAGED</key>' "${plist}"
+    if grep -q 'NECTAR_EXECUTABLE_PATH' "${plist}"; then
+        printf 'test app plist sets NECTAR_EXECUTABLE_PATH\n' >&2
+        return 1
+    fi
     [[ -L "${data_root}/assets" ]]
     [[ "$(readlink "${data_root}/assets")" == "${home}/.local/share/pikmin-native/assets" ]]
     [[ "$(head -n 1 "${config_home}/open-nectar/install_dir")" == "${data_root}" ]]
@@ -422,6 +441,19 @@ FAKE
     if grep -q 'Pikmin 1' "${app}/Contents/Info.plist"; then
         printf 'test app still says Pikmin 1\n' >&2
         return 1
+    fi
+    if command -v cc >/dev/null 2>&1; then
+        local fresh_app="${root}/fresh/Open Nectar Test.app" fresh_entry
+        PIKMIN_SAVE_MODE=fresh write_test_app "${fresh_app}" "${data_home}" "${config_home}" "${cache_home}" \
+            "${data_root}" "${central_save}" "${tmp}/bin/nectar" "${fake}" \
+            "0123456789abcdef" "fixture" "fresh-snapshot" "0"
+        fresh_entry="${fresh_app}/Contents/MacOS/open-nectar"
+        [[ -x "${fresh_entry}" ]]
+        if head -c 2 "${fresh_entry}" | grep -q '#!'; then
+            printf 'fresh-save entry is still a shell script\n' >&2
+            return 1
+        fi
+        grep -A1 '<key>CFBundleExecutable</key>' "${fresh_app}/Contents/Info.plist" | grep -q '<string>open-nectar</string>'
     fi
     local other_app="${root}/other/Open Nectar Test.app" fixture_id other_id
     write_test_app "${other_app}" "${data_home}" "${config_home}" "${cache_home}" \
@@ -545,6 +577,11 @@ python3 "${script_dir}/build_identity.py" --repo "${repo}" \
     --launcher "${launcher_bin}" --cache "${build_dir}/CMakeCache.txt" --data "${data_root}" --role feature \
     --save-mode "${PIKMIN_SAVE_MODE}" --save-mode-label "${save_mode_label}" \
     --save-directory "${configured_save_dir}"
+if [[ "${PIKMIN_SAVE_MODE:-central}" == "central" && "${save_read_only}" != "1" ]]; then
+    python3 "${save_mode_py}" backup-if-needed --home "${HOME}" \
+        --build-info "${app}/Contents/Resources/build-info.json" >/dev/null 2>&1 || true
+fi
+adhoc_sign_app "${app}"
 finish_test_build "${root}" "${dest}" "${app}" "${HOME}/Desktop/Open Nectar"
 
 printf 'branch: %s\n' "${branch}"

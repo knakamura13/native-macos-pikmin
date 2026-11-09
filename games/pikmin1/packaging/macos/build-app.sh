@@ -291,22 +291,70 @@ xml_escape() {
     printf '%s' "${value}"
 }
 
-write_fresh_wrapper() {
+compile_fresh_stub() {
     local file="$1" launcher_bin="$2" title="$3"
-    local q_launcher q_title
-    q_launcher="$(printf '%q' "${launcher_bin}")"
-    q_title="$(printf '%q' "${title}")"
-    cat > "${file}" <<EOF
-#!/bin/bash
-set -euo pipefail
-fresh="\$(mktemp -d "\${TMPDIR:-/tmp}/open-nectar-fresh.XXXXXX")"
-mkdir -p "\$fresh/card0"
-export NECTAR_SAVE_DIR="\$fresh"
-export PIKMIN_LAUNCHER_TITLE=${q_title}
-exec ${q_launcher} "\$@"
-EOF
+    local work src
+    # LaunchServices refuses a shell-script bundle entry (error -54, launchd
+    # "Codesigning issue"). Fresh saves still need a directory created at
+    # launch, so this Mach-O stub execs nectar-launcher.
+    if ! command -v cc >/dev/null 2>&1; then
+        printf 'cc is required to build the fresh-save launcher stub.\n' >&2
+        return 1
+    fi
+    work="$(mktemp -d)"
+    src="${work}/fresh-stub.c"
+    python3 - "$src" "$launcher_bin" "$title" <<'PY'
+import sys
+path, launcher, title = sys.argv[1:]
+
+def c_string(text):
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+program = r"""#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
+static const char *launcher = __LAUNCHER__;
+static const char *configured_title = __TITLE__;
+int main(int argc, char **argv) {
+    const char *tmp = getenv("TMPDIR");
+    char tmpl[1024];
+    char card[1024];
+    if (!tmp || !*tmp) tmp = "/tmp";
+    if (snprintf(tmpl, sizeof tmpl, "%s/open-nectar-fresh.XXXXXX", tmp) >= (int)sizeof tmpl) return 1;
+    if (!mkdtemp(tmpl)) { perror("mkdtemp"); return 1; }
+    if (snprintf(card, sizeof card, "%s/card0", tmpl) >= (int)sizeof card) return 1;
+    if (mkdir(card, 0700) != 0) { perror("mkdir"); return 1; }
+    setenv("NECTAR_SAVE_DIR", tmpl, 1);
+    setenv("PIKMIN_LAUNCHER_TITLE", configured_title, 1);
+    argv[0] = (char *)launcher;
+    execv(launcher, argv);
+    perror("execv");
+    return 1;
+}
+"""
+program = program.replace("__LAUNCHER__", c_string(launcher)).replace("__TITLE__", c_string(title))
+open(path, "w", encoding="utf-8").write(program)
+PY
+    if ! cc -O2 -o "${file}" "${src}"; then
+        rm -rf "${work}"
+        printf 'cc could not build the fresh-save launcher stub.\n' >&2
+        return 1
+    fi
+    rm -rf "${work}"
     chmod +x "${file}"
 }
+
+adhoc_sign_app() {
+    local app="$1"
+    [[ "$(uname -s)" == "Darwin" ]] || return 0
+    if ! command -v codesign >/dev/null 2>&1; then
+        printf 'codesign is required to sign %s\n' "${app}" >&2
+        return 1
+    fi
+    codesign --force --deep --sign - "${app}"
+}
+
 
 # write_info_plist FILE DISPLAY_NAME BUNDLE_ID TITLE DATA_ROOT GAME_APP ROLE SAVE_DIR SAVE_READ_ONLY EXECUTABLE
 write_info_plist() {
@@ -684,7 +732,7 @@ fi
 write_info_plist "${contents}/Info.plist" "${display_name}" "${bundle_id}" "${launcher_title}" \
     "${configured_data_root}" "${game_app}" "${build_role}" "${configured_save_dir}" "${save_read_only}" "${bundle_executable}"
 if [[ "${bundle_executable}" == "open-nectar" ]]; then
-    write_fresh_wrapper "${contents}/MacOS/open-nectar" "${contents}/MacOS/nectar-launcher" "${launcher_title}"
+    compile_fresh_stub "${contents}/MacOS/open-nectar" "${contents}/MacOS/nectar-launcher" "${launcher_title}"
 fi
 
 overlay_args=()
@@ -712,6 +760,7 @@ python3 "${game_dir}/../../tools/mac/build_identity.py" \
     --save-directory "${configured_save_dir}" \
     ${overlay_args[@]+"${overlay_args[@]}"}
 
+adhoc_sign_app "${app}"
 echo "Built: ${app}"
 
 if [[ "${install}" -eq 1 ]]; then
