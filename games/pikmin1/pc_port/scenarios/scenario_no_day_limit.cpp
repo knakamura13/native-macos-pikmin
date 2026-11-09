@@ -21,6 +21,14 @@
 // Printed for debugging (T12): the Day 29 diary lands in slot 29,
 // RESFLAG_FinalDay is not set while No Day Limit is on, and the entry is not the
 // "final day" page (re_g_00).
+//
+// day_end_no_day_limit_misc_used: the same chain after a long No Day Limit run. A day
+// end with no entry of its own shows the next of the 27 catch-all pages
+// (RESFLAG_Misc1..Misc27), each once, and a 30-day game never needs more than 27; with
+// No Day Limit the day ends keep coming. The scenario marks all 27 seen before the day
+// end (ResultFlags::setSeen), so nothing is pending. Asserted in addition: the Day 29
+// entry is RESFLAG_Misc1 with one page (the catch-all pages start over), and the results
+// still open and leave for MapSelect.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -49,7 +57,13 @@ constexpr unsigned kMinResultsSeconds = 3;
 
 class NoDayLimit : public PcScenario {
 public:
-	const char* name() const override { return "day_end_no_day_limit"; }
+	NoDayLimit(const char* name, bool miscUsed)
+	    : mName(name)
+	    , mMiscUsed(miscUsed)
+	{
+	}
+
+	const char* name() const override { return mName; }
 	int startDay() const override { return kDay; }
 
 	void providePads(unsigned t, PcInputPad& pad) override
@@ -90,15 +104,19 @@ public:
 				              (int)(pc_achievements_blocked_reason() != nullptr));
 				return;
 			}
+			if (mMiscUsed) {
+				for (int id = zen::RESFLAG_Misc1; id <= zen::RESFLAG_Misc27; id++) playerState->mResultFlags.setSeen(id);
+			}
 			const float hoursPerTick = gsys->getFrameTime() / clock.mRealSecsPerGameHour;
 			clock.setTime(endHour - kSunsetTicks * hoursPerTick);
-			std::printf("[scenario] day_end_no_day_limit: day %d, No Day Limit on, clock %.4f h\n", day, clock.mTimeOfDay);
+			std::printf("[scenario] %s: day %d, No Day Limit on, clock %.4f h, catch-all pages %s\n", mName, day, clock.mTimeOfDay,
+			            mMiscUsed ? "all seen" : "as a new game has them");
 			enter(ToSunset, t);
 			return;
 		}
 		case ToSunset:
 			if (gameflow.mIsDayEndActive) {
-				std::printf("[scenario] day_end_no_day_limit: day end at t=%u, %.4f h, last text window %d\n", t, clock.mTimeOfDay, TextWatch::lastId());
+				std::printf("[scenario] %s: day end at t=%u, %.4f h, last text window %d\n", mName, t, clock.mTimeOfDay, TextWatch::lastId());
 				if (clock.mTimeOfDay < endHour) {
 					scenarioFailf(t, "the day end starts at or after the end hour", "%.4f h", clock.mTimeOfDay);
 					return;
@@ -133,9 +151,14 @@ public:
 					scenarioFailf(t, "No Day Limit must not write the final-day diary page on Day 29", "entry %d (re_g_00)", doc29);
 					return;
 				}
-				std::printf("[scenario] day_end_no_day_limit: phase two at t=%u, day %d (not advanced); diary slot 28 entry %d, slot 29 entry %d "
+				if (mMiscUsed && (doc29 != zen::RESFLAG_Misc1 || pages29 != 1)) {
+					scenarioFailf(t, "with all 27 catch-all pages seen, the Day 29 entry is RESFLAG_Misc1 with one page (the pages start over)",
+					              "entry %d, %d pages (RESFLAG_Misc1 is %d)", doc29, pages29, (int)zen::RESFLAG_Misc1);
+					return;
+				}
+				std::printf("[scenario] %s: phase two at t=%u, day %d (not advanced); diary slot 28 entry %d, slot 29 entry %d "
 				            "(RESFLAG_FinalDay is %d)\n",
-				            t, day, doc28, doc29, (int)zen::RESFLAG_FinalDay);
+				            mName, t, day, doc28, doc29, (int)zen::RESFLAG_FinalDay);
 				mResultsTick = t;
 				enter(ToTerminal, t);
 			} else if (t - mPhaseTick > kToResultsSeconds * rate) {
@@ -145,7 +168,7 @@ public:
 		case ToTerminal:
 			if (gsys->mSoftResetPending) {
 				const int next = gameflow.mNextOnePlayerSectionID;
-				std::printf("[scenario] day_end_no_day_limit: soft reset at t=%u (%u ticks after the results opened), next section %d, day %d\n", t, t - mResultsTick, next,
+				std::printf("[scenario] %s: soft reset at t=%u (%u ticks after the results opened), next section %d, day %d\n", mName, t, t - mResultsTick, next,
 				            day);
 				if (next != ONEPLAYER_MapSelect) {
 					scenarioFailf(t, "the soft reset goes to MapSelect (6)", "section %d", next);
@@ -175,6 +198,8 @@ private:
 		mPhaseTick = t;
 	}
 
+	const char* mName;
+	bool mMiscUsed;
 	Phase mPhase        = Settle;
 	unsigned mPhaseTick = 0, mResultsTick = 0;
 	int mPrevTexts = 0, mTextsAtSunset = 0;
@@ -184,7 +209,13 @@ private:
 
 PcScenario* pc_scenario_make_day_end_no_day_limit(void)
 {
-	static NoDayLimit s;
+	static NoDayLimit s("day_end_no_day_limit", false);
+	return &s;
+}
+
+PcScenario* pc_scenario_make_day_end_no_day_limit_misc_used(void)
+{
+	static NoDayLimit s("day_end_no_day_limit_misc_used", true);
 	return &s;
 }
 
