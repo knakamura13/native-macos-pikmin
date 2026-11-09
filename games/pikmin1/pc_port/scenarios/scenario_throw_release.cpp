@@ -1,11 +1,16 @@
-// throw_release: one captain, Pikmin in grab range. Three cases (a calibration
+// throw_release: one captain, Pikmin in grab range. Four cases (a calibration
 // that holds A until the grab completes and measures K, a release one tick
-// after the press, a release 2 ticks after that Pikmin's own grab completes). Each asserts its
-// preconditions, then only behaviour that holds whatever the RNG order
-// (K is the grab-completion tick count and depends on it):
-// the Pikmin is Hanged before the captain enters Throw, the captain enters
-// Throw, the Pikmin flies and lands (Normal), and the captain returns to Walk.
-// All within tick bounds. The before-keyframe timing check is not in v1.
+// after the press, a release 2 ticks after that Pikmin's own grab completes,
+// and a release one tick after the press while the selected Pikmin is still
+// walking over to the hand). Each asserts its preconditions, then only
+// behaviour that holds whatever the RNG order (K is the grab-completion tick
+// count and depends on it): the Pikmin is Hanged before the captain enters
+// Throw (cases 0 and 2), the captain enters Throw, the Pikmin flies and lands
+// (Normal), and the captain returns to Walk. All within tick bounds.
+// Timing: the early release (case 1) enters Throw no sooner than the grab
+// keyframe, measured in the calibration from the start of the ThrowWait
+// motion; the walked-over Pikmin (case 3) is thrown on the tick it reaches
+// the hand.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -44,6 +49,15 @@ constexpr unsigned kWalkStartTicks = 45;
 constexpr float kSelectDistance = 80.0f;
 // The thrown Pikmin must end up at least this far from where it hung when Throw began.
 constexpr float kMinThrowMove = 5.0f;
+constexpr int kCases = 4;
+constexpr int kWalkOverCase = 3;
+// Case 3 narrows the hand-over range (naviMgr p37) to this, a test control: the
+// stand-in parameters keep the source default, 80, the same as the selection
+// distance, so every selected Pikmin would already be in the hand.
+constexpr float kWalkOverHandRange = 20.0f;
+// Case 3 places the plate's Pikmin this far behind the captain (and 10 units
+// further apart each): outside the narrowed hand-over range, inside the selection distance.
+constexpr float kWalkOverDistance = 45.0f;
 
 class ThrowRelease : public PcScenario {
 public:
@@ -123,6 +137,12 @@ public:
 				mCheckedWait = true;
 			}
 			if (wait->mIsHoldingThrowPiki && wait->mHeldThrowPiki && wait->mHeldThrowPiki->getState() == PIKISTATE_Hanged) mSawHanged = true;
+			// The ThrowWait motion starts on the tick a Pikmin is in the hand range.
+			if (wait->mHeldThrowPiki && !mMotionSeen) {
+				mMotionSeen = true;
+				mMotionTick = t;
+			}
+			if (wait->mPendingThrowPiki && !wait->mHeldThrowPiki) mLastPendingTick = t;
 		}
 		switch (mPhase) {
 		case Hold:
@@ -144,6 +164,7 @@ public:
 			// the squad behind on open ground; on the disc's Forest of Hope terrain
 			// stops the captain and they catch up during the walk.
 			if (cap == NAVISTATE_Walk && plateNormalCount(navi, kSelectDistance) > 0) {
+				if (mCase == kWalkOverCase) placeBehind(navi);
 				mPress = t + 1;
 				mHoldA = true;
 				mPhase = Held;
@@ -153,6 +174,8 @@ public:
 				mSawFlying = false;
 				mThrownEvent = false;
 				mGrabSeen = false;
+				mMotionSeen = false;
+				mLastPendingTick = 0;
 				mStepStart = t;
 			} else if (t - mStepStart > 2 * bound) {
 				scenarioFailf(t, "captain Walk with a Normal Pikmin in the plate within reach", "captain state %d, %d in plate, %d within %.0f", cap,
@@ -164,6 +187,25 @@ public:
 				scenarioFailf(t, "ThrowWait the tick after the press", "captain state %d", cap);
 				return;
 			}
+			if (t == mPress) {
+				NaviThrowWaitState* wait = static_cast<NaviThrowWaitState*>(navi->getCurrState());
+				// The timing checks need a known start: case 1 a Pikmin already in the
+				// hand range (its ThrowWait motion starts on the press), case 3 one
+				// still walking over. A hand-over range that covers the selection
+				// distance (the stand-in parameters) puts every selected Pikmin in the
+				// hand; a narrower one (a real install) can leave case 1's walking over,
+				// and then case 1 has no keyframe check.
+				const bool walkOver = mCase == kWalkOverCase;
+				const bool pending  = wait->mPendingThrowPiki && !wait->mHeldThrowPiki;
+				const bool mustHold = mCase == 1 && C_NAVI_PARM(navi, mPluckGrabRange) >= kSelectDistance;
+				mEarlyPending       = mCase == 1 && pending;
+				if (mEarlyPending) std::printf("[scenario] throw_release case 1: the Pikmin walks over, no grab keyframe check\n");
+				if ((mustHold && pending) || (walkOver && !pending)) {
+					scenarioFailf(t, walkOver ? "the selected Pikmin outside the hand range (walking over)" : "the selected Pikmin in the hand range on the press",
+					              "held %d, pending %d", (int)(wait->mHeldThrowPiki != nullptr), (int)(wait->mPendingThrowPiki != nullptr));
+					return;
+				}
+			}
 			bool release = false;
 			if (mCase == 0) {
 				if (cap == NAVISTATE_ThrowWait && static_cast<NaviThrowWaitState*>(navi->getCurrState())->mIsHoldingThrowPiki) {
@@ -173,12 +215,17 @@ public:
 						scenarioFailf(t, "K >= 3 (grab takes at least 3 ticks)", "K = %u", mK);
 						return;
 					}
-					std::printf("[scenario] throw_release calibration: K = %u ticks\n", mK);
+					if (!mMotionSeen) {
+						scenarioFailf(t, "the ThrowWait motion started before the grab", "no Pikmin in the hand range");
+						return;
+					}
+					mGrabTicks = t - mMotionTick;
+					std::printf("[scenario] throw_release calibration: K = %u ticks (grab keyframe %u ticks after the ThrowWait motion starts)\n", mK, mGrabTicks);
 				} else if (t - mPress > bound) {
 					scenarioFailf(t, "grab completes", "mIsHoldingThrowPiki never set within %u ticks", bound);
 					return;
 				}
-			} else if (mCase == 1) {
+			} else if (mCase == 1 || mCase == kWalkOverCase) {
 				release = (t == mPress); // A down on tick P only
 			} else {
 				// Released two ticks after this Pikmin's own grab completes. Not K + 2
@@ -213,13 +260,31 @@ public:
 				// A release before the grab keyframe completes the grab inside the
 				// same tick that enters Throw, so Hanged is visible only when the
 				// release came after the grab (cases 0 and 2).
-				if (mCase != 1 && !mSawHanged) {
+				if ((mCase == 0 || mCase == 2) && !mSawHanged) {
 					scenarioFailf(t, "Pikmin Hanged before the captain enters Throw", "never Hanged during ThrowWait (state %d)", mThrown->getState());
 					return;
 				}
 				if (mThrown->getState() == PIKISTATE_Flying) {
 					scenarioFailf(t, "Pikmin not yet Flying when Throw begins", "Flying");
 					return;
+				}
+				if (mCase == 1 && !mEarlyPending) {
+					// Released before the grab keyframe: Throw waits for it.
+					const unsigned since = mMotionSeen ? t - mMotionTick : 0;
+					std::printf("[scenario] throw_release case 1: Throw %u ticks after the ThrowWait motion starts (grab keyframe %u)\n", since, mGrabTicks);
+					if (!mMotionSeen || since < mGrabTicks) {
+						scenarioFailf(t, "an early release enters Throw no sooner than the grab keyframe", "Throw %u ticks after the ThrowWait motion starts, keyframe at %u", since,
+						              mGrabTicks);
+						return;
+					}
+				}
+				if (mCase == kWalkOverCase) {
+					// Released while the Pikmin walks over: thrown on the tick it reaches the hand.
+					std::printf("[scenario] throw_release case 3: last tick walking over %u, Throw at tick %u\n", mLastPendingTick, t);
+					if (mLastPendingTick == 0 || t != mLastPendingTick + 1) {
+						scenarioFailf(t, "a walked-over Pikmin is thrown on the tick it reaches the hand", "last tick walking over %u, Throw at tick %u", mLastPendingTick, t);
+						return;
+					}
 				}
 				mThrowFrom = mThrown->mSRT.t;
 				mPhase     = WaitFlying;
@@ -259,7 +324,8 @@ public:
 		case WaitWalk:
 			if (cap == NAVISTATE_Walk) {
 				std::printf("[scenario] throw_release case %d done at tick %u\n", mCase, t);
-				if (++mCase == 3) {
+				if (++mCase == kCases) {
+					C_NAVI_PARM(navi, mPluckGrabRange) = mHandRange;
 					scenarioPass();
 					return;
 				}
@@ -274,6 +340,28 @@ public:
 
 private:
 	enum Phase { Hold, Away, Settle, Held, WaitThrow, WaitFlying, WaitLanded, WaitWalk };
+
+	// Case 3 setup: narrow the hand-over range and stand the plate's Normal
+	// Pikmin in a line behind the captain, the nearest kWalkOverDistance away.
+	void placeBehind(Navi* navi)
+	{
+		mHandRange                         = C_NAVI_PARM(navi, mPluckGrabRange);
+		C_NAVI_PARM(navi, mPluckGrabRange) = kWalkOverHandRange;
+		const float back                   = navi->mFaceDirection + 3.14159265f;
+		CPlate* plate                      = navi->mPlateMgr;
+		int n                              = 0;
+		for (int i = plate->getFirst(); !plate->isDone(i); i = plate->getNext(i)) {
+			Creature* c = plate->getCreature(i);
+			if (c == nullptr || c->mObjType != OBJTYPE_Piki || static_cast<Piki*>(c)->getState() != PIKISTATE_Normal) continue;
+			const float d = kWalkOverDistance + 10.0f * (float)n++;
+			Vector3f at   = navi->mSRT.t;
+			at.x += d * std::sin(back);
+			at.z += d * std::cos(back);
+			at.y        = mapMgr->getMinY(at.x, at.z, true);
+			c->mSRT.t   = at;
+			c->mVelocity.set(0.0f, 0.0f, 0.0f);
+		}
+	}
 
 	// Normal Pikmin in the plate closer to the captain than `within`.
 	int plateNormalCount(Navi* navi, float within)
@@ -297,6 +385,12 @@ private:
 	unsigned mK         = 0;
 	bool mGrabSeen      = false;
 	unsigned mGrabTick  = 0;
+	bool mMotionSeen    = false; // a Pikmin reached the hand range during this hold
+	unsigned mMotionTick = 0;    // the tick it did (the ThrowWait motion starts)
+	unsigned mGrabTicks = 0;     // calibration: ticks from the motion start to the grab keyframe
+	unsigned mLastPendingTick = 0; // last tick of this hold with the Pikmin still walking over
+	float mHandRange    = 0.0f;  // the hand-over range before case 3 narrowed it
+	bool mEarlyPending  = false; // case 1's Pikmin was still walking over on the press
 	unsigned mStepStart = 0;
 	bool mHoldA         = false;
 	bool mSawHanged     = false;
