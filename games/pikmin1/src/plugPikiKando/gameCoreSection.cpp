@@ -19,6 +19,7 @@
 #include "mods/pc_mission.h"
 #include "randomizer/pc_randomizer_catalog.h"
 #include "mods/pc_vs_arena.h"
+#include "save/pc_progression_game.h"
 #include "pc_vs.h"
 #include "BuildingItem.h"
 #include "DoorItem.h"
@@ -625,7 +626,11 @@ void GameCoreSection::cleanupDayEnd()
 	}
 	}
 	if (playerState->getCurrDay() + 1 == playerState->getTotalDays() - 1) {
-		playerState->mResultFlags.setOn(zen::RESFLAG_FinalDay);
+#if defined(PIKI_PC_PORT)
+		// "No Day Limit" keeps playing past day 29; do not mark the voyage log's last day.
+		if (!pc_settings_get_no_day_advance())
+#endif
+			playerState->mResultFlags.setOn(zen::RESFLAG_FinalDay);
 	}
 	if (playerState->getCurrParts() >= 11 && playerState->getCurrDay() >= 9) {
 		playerState->mResultFlags.setOn(zen::RESFLAG_Collect10Parts);
@@ -2652,6 +2657,13 @@ void GameCoreSection::finalSetup()
 	}
 
 	GameStat::update();
+#if defined(PIKI_PC_PORT)
+	// Stuck-save repair, second phase. The stage, its Onions and the saved sprouts all exist now,
+	// and the extinction check below has not run yet, so the repair can tell whether the normal
+	// extinction seed is already coming before it adds one.
+	pc_progression_stage_phase();
+	GameStat::update();
+#endif
 	PRINT("********* BONUS PIKI CHECK\n");
 	GameStat::dump();
 

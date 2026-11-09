@@ -142,6 +142,8 @@ static bool sAnisotropySupported = false;
 static bool sFilteringReported = false;
 static PFNGLBINDVERTEXARRAYPROC glBindVertexArray_ptr = nullptr;
 static PFNGLBLENDEQUATIONPROC glBlendEquation_ptr = nullptr;
+static PFNGLBLENDEQUATIONSEPARATEPROC glBlendEquationSeparate_ptr = nullptr;
+static PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate_ptr = nullptr;
 static PFNGLGENBUFFERSPROC glGenBuffers_ptr = nullptr;
 static PFNGLDRAWBUFFERSPROC glDrawBuffers_ptr = nullptr;
 static PFNGLBINDBUFFERPROC glBindBuffer_ptr = nullptr;
@@ -230,6 +232,8 @@ static void load_gl_functions() {
     }
     glBindVertexArray_ptr = (PFNGLBINDVERTEXARRAYPROC)SDL_GL_GetProcAddress("glBindVertexArray");
     glBlendEquation_ptr = (PFNGLBLENDEQUATIONPROC)SDL_GL_GetProcAddress("glBlendEquation");
+    glBlendEquationSeparate_ptr = (PFNGLBLENDEQUATIONSEPARATEPROC)SDL_GL_GetProcAddress("glBlendEquationSeparate");
+    glBlendFuncSeparate_ptr = (PFNGLBLENDFUNCSEPARATEPROC)SDL_GL_GetProcAddress("glBlendFuncSeparate");
     glGenBuffers_ptr = (PFNGLGENBUFFERSPROC)SDL_GL_GetProcAddress("glGenBuffers");
     glDrawBuffers_ptr = (PFNGLDRAWBUFFERSPROC)SDL_GL_GetProcAddress("glDrawBuffers");
     glBindBuffer_ptr = (PFNGLBINDBUFFERPROC)SDL_GL_GetProcAddress("glBindBuffer");
@@ -2800,6 +2804,16 @@ static const char* fShaderTail =
     "            float qb = floor(clamp(bl, 0.0, 1.0) * 255.0 + 0.5);\n"
     "            bool pass = ((alphaOp & 1) != 0) ? (qa == qb) : (qa > qb);\n"
     "            aResult = dl + (pass ? ac : 0.0);\n"
+    // Compare ops 8..13 on the alpha combiner test the colour inputs, exactly
+    // as the colour combiner does, and add alpha C when they pass (the
+    // ShadowCylinder2 filter uses R8_GT). They used to fall into the subtract
+    // branch below, which made that filter's alpha 0.
+    "        } else if (alphaOp >= 8) {\n"
+    "            int acomp = (alphaOp < 10) ? 1 : (alphaOp < 12) ? 2 : 3;\n"
+    "            float acv = packTevCompare(a.rgb, acomp);\n"
+    "            float bcv = packTevCompare(b.rgb, acomp);\n"
+    "            bool apass = ((alphaOp & 1) != 0) ? (acv == bcv) : (acv > bcv);\n"
+    "            aResult = dl + (apass ? ac : 0.0);\n"
     "        } else if (alphaOp == 0) aResult = dl + aMix;\n"
     "        else aResult = dl - aMix;\n"
     "        if (alphaOp < 8) aResult = (aResult + abias) * ascl;\n"
@@ -6043,6 +6057,12 @@ void pc_gfx_set_z_mode(GXBool compareEnable, GXCompare func, GXBool updateEnable
 // RGB565 the blender reads DSTALPHA as 1, but the GL target always keeps alpha.
 static bool sEfbHasAlpha = false;
 
+// GXSetDstAlpha(GX_TRUE, 0): every pixel written stores alpha 0 whatever the
+// source alpha is. It is how ShadowCylinder2 and RandMapMgr clear the EFB
+// alpha before they accumulate into it. Only the zero value is modelled
+// (blend factors ZERO/ZERO give it exactly); other constants stay ignored.
+static bool sDstAlphaZero = false;
+
 void pc_gfx_set_pixel_fmt(int pixFmt) {
     sEfbHasAlpha = pixFmt == GX_PF_RGBA6_Z24;
 }
@@ -6055,16 +6075,21 @@ void pc_gfx_set_blend_mode(GXBlendMode type, GXBlendFactor srcFactor, GXBlendFac
     static GXBlendFactor lastSrc = GX_BL_ZERO, lastDst = GX_BL_ZERO;
     static GXLogicOp lastOp = GX_LO_CLEAR;
     static bool lastEfbHasAlpha = false;
-    if (seenSerial == sGlPipelineGuardSerial && valid && lastEfbHasAlpha == sEfbHasAlpha
+    static bool lastDstAlphaZero = false;
+    if (seenSerial == sGlPipelineGuardSerial && valid && lastEfbHasAlpha == sEfbHasAlpha && lastDstAlphaZero == sDstAlphaZero
         && lastType == type && lastSrc == srcFactor && lastDst == dstFactor && lastOp == op) return;
     seenSerial = sGlPipelineGuardSerial;
     valid = true; lastType = type; lastSrc = srcFactor; lastDst = dstFactor; lastOp = op;
     lastEfbHasAlpha = sEfbHasAlpha;
+    lastDstAlphaZero = sDstAlphaZero;
     pc_gfx_note_gl_state_change();
 #if !PIKI_USE_GLES
     glDisable(GL_COLOR_LOGIC_OP);
 #endif
     glBlendEquation_ptr(GL_FUNC_ADD);
+    // Colour factors of the mode in force, and whether alpha is forced to 0.
+    GLenum rgbSrc = GL_ONE, rgbDst = GL_ZERO;
+    bool rgbBlend = false, reverseSubtract = false;
     if (type == GX_BM_BLEND) {
         glEnable(GL_BLEND);
         GLenum s = GL_ONE, d = GL_ZERO;
@@ -6092,11 +6117,11 @@ void pc_gfx_set_blend_mode(GXBlendMode type, GXBlendFactor srcFactor, GXBlendFac
             if (s == GL_DST_ALPHA) s = GL_ONE; else if (s == GL_ONE_MINUS_DST_ALPHA) s = GL_ZERO;
             if (d == GL_DST_ALPHA) d = GL_ONE; else if (d == GL_ONE_MINUS_DST_ALPHA) d = GL_ZERO;
         }
-        glBlendFunc(s, d);
+        rgbSrc = s; rgbDst = d; rgbBlend = true;
     } else if (type == GX_BM_SUBTRACT) {
-        glEnable(GL_BLEND);
-        glBlendEquation_ptr(GL_FUNC_SUBTRACT);
-        glBlendFunc(GL_ONE, GL_ONE);
+        // GX subtractive blending is destination - source (the shadow
+        // cylinders use it to cancel the faces that fail the depth test).
+        rgbSrc = GL_ONE; rgbDst = GL_ONE; rgbBlend = true; reverseSubtract = true;
     } else if (type == GX_BM_LOGIC) {
         glDisable(GL_BLEND);
 #if PIKI_USE_GLES
@@ -6123,6 +6148,29 @@ void pc_gfx_set_blend_mode(GXBlendMode type, GXBlendFactor srcFactor, GXBlendFac
     } else {
         glDisable(GL_BLEND);
     }
+    if (type != GX_BM_LOGIC) {
+        const bool forceAlpha = sDstAlphaZero && glBlendFuncSeparate_ptr && glBlendEquationSeparate_ptr;
+        if (rgbBlend || forceAlpha) {
+            glEnable(GL_BLEND);
+            const GLenum eq = reverseSubtract ? GL_FUNC_REVERSE_SUBTRACT : GL_FUNC_ADD;
+            if (forceAlpha) {
+                glBlendEquationSeparate_ptr(eq, GL_FUNC_ADD);
+                glBlendFuncSeparate_ptr(rgbSrc, rgbDst, GL_ZERO, GL_ZERO);
+            } else {
+                glBlendEquation_ptr(eq);
+                glBlendFunc(rgbSrc, rgbDst);
+            }
+        }
+    }
+}
+
+void pc_gfx_set_dst_alpha(GXBool enable, u8 alpha) {
+    const bool zero = enable && alpha == 0;
+    if (zero == sDstAlphaZero) return;
+    close_complete_immediate(); // same as pc_gfx_set_color_update: FIFO order
+    sDstAlphaZero = zero;
+    // The blend state is derived from it: apply the mode in force again.
+    pc_gfx_set_blend_mode(sPipelineState.blendType, sPipelineState.blendSrc, sPipelineState.blendDst, sPipelineState.blendOp);
 }
 
 void pc_gfx_set_cull_mode(GXCullMode mode) {
@@ -11983,13 +12031,19 @@ void pc_gfx_copy_tex(void* dest, GXBool clear) {
     }
     // Formatos de intensidad/un canal: se replica en RGBA como hace el decodificador.
     const u32 f = sTexCopyFmt;
-    const bool intensity = f == GX_TF_I4 || f == GX_TF_I8 || f == GX_CTF_R4 || f == GX_CTF_R8
+    // GX_CTF_R8 in the decomp headers is 0x27, the hardware's alpha copy format
+    // (the real R8 is 0x28), and the game compiled that value: ShadowCylinder2
+    // accumulates its shadow in EFB alpha and copies it with it. Read alpha,
+    // not the scene's red.
+    const bool alphaCopy = f == GX_CTF_R8;
+    const bool intensity = f == GX_TF_I4 || f == GX_TF_I8 || f == GX_CTF_R4
                         || f == GX_CTF_RA4 || f == GX_CTF_RA8 || f == GX_TF_IA4 || f == GX_TF_IA8;
     const bool opaque = f == GX_TF_RGB565;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_RED);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, intensity ? GL_RED : GL_GREEN);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, intensity ? GL_RED : GL_BLUE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, intensity ? GL_RED : (opaque ? GL_ONE : GL_ALPHA));
+    const GLint srcChannel = alphaCopy ? GL_ALPHA : GL_RED;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, srcChannel);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, (intensity || alphaCopy) ? srcChannel : GL_GREEN);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, (intensity || alphaCopy) ? srcChannel : GL_BLUE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, (intensity || alphaCopy) ? srcChannel : (opaque ? GL_ONE : GL_ALPHA));
     glBindTexture(GL_TEXTURE_2D, 0);
     sBoundTextures[0] = 0;
 
@@ -12009,9 +12063,37 @@ void pc_gfx_copy_tex(void* dest, GXBool clear) {
 
     GLint sx, sy; GLsizei sw, sh;
     map_gx_rect(float(sTexCopySrc[0]), float(sTexCopySrc[1]), float(sTexCopySrc[2]), float(sTexCopySrc[3]), sx, sy, sw, sh);
+    // The EFB pixels were rasterised through the current viewport. Its GL
+    // rect was fixed when GXSetViewport ran, and the 4:3/HUD mode can change
+    // afterwards without re-setting it: the cave radar is captured at the
+    // start of the frame with the viewport the pause menu left in 4:3
+    // (pillarboxed), while map_gx_rect already used the stretched mapping, so
+    // the copy read a different area than the rooms were drawn to (#244/#248).
+    // Map the copy rect through that same viewport.
+    if (sGxVp[2] > 0.0f && sGxVp[3] > 0.0f && sLastViewportW > 0 && sLastViewportH > 0) {
+        const float kx = float(sLastViewportW) / sGxVp[2];
+        const float ky = float(sLastViewportH) / sGxVp[3];
+        const float vpTop = float(sLastViewportY + sLastViewportH);
+        sx = (GLint)lroundf(float(sLastViewportX) + (float(sTexCopySrc[0]) - sGxVp[0]) * kx);
+        sy = (GLint)lroundf(vpTop - (float(sTexCopySrc[1]) - sGxVp[1] + float(sTexCopySrc[3])) * ky);
+        sw = (GLsizei)lroundf(float(sTexCopySrc[2]) * kx);
+        sh = (GLsizei)lroundf(float(sTexCopySrc[3]) * ky);
+    }
     const GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
     glDisable(GL_SCISSOR_TEST);
     // Fila 0 de una textura GX es la de arriba; en GL el framebuffer empieza abajo.
+    // PIKMIN_RADAR_DEBUG=1: rectángulo real de la captura del radar de cueva (R4).
+    static const bool radarDbg = getenv("PIKMIN_RADAR_DEBUG") != nullptr;
+    if (radarDbg && f == GX_CTF_R4) {
+        float rsx, rsy, rox, roy;
+        gx_rect_params(rsx, rsy, rox, roy);
+        GLint vp[4];
+        glGetIntegerv(GL_VIEWPORT, vp);
+        std::fprintf(stderr, "[radar] copy gxsrc=(%d,%d %dx%d) gl=(%d,%d %dx%d) dst=%dx%d scale=(%.3f,%.3f) off=(%.1f,%.1f) "
+                     "hudWide=%d ui43=%d gx=%.0fx%.0f viewport=(%d,%d %dx%d) fbo=%d\n",
+                     int(sTexCopySrc[0]), int(sTexCopySrc[1]), int(sTexCopySrc[2]), int(sTexCopySrc[3]), sx, sy, sw, sh, w, h,
+                     rsx, rsy, rox, roy, int(sHudWide), int(sUi43), sGxW, sGxH, vp[0], vp[1], vp[2], vp[3], int(sourceDrawFbo));
+    }
     glBlitFramebuffer_ptr(sx, sy, sx + sw, sy + sh, 0, h, w, 0, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     glBindFramebuffer_ptr(GL_DRAW_FRAMEBUFFER, GLuint(sourceDrawFbo));
     glBindFramebuffer_ptr(GL_READ_FRAMEBUFFER, GLuint(previousReadFbo));

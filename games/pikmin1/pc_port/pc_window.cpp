@@ -3,7 +3,6 @@
 #endif
 #include "pc_window.h"
 #include "pc_menu_pad.h"
-#include "pc_build_window_title.h"
 
 static_assert(PAD_BUTTON_LEFT == PC_MENU_PAD_LEFT && PAD_BUTTON_RIGHT == PC_MENU_PAD_RIGHT
                   && PAD_BUTTON_DOWN == PC_MENU_PAD_DOWN && PAD_BUTTON_UP == PC_MENU_PAD_UP
@@ -16,6 +15,7 @@ static_assert(PAD_BUTTON_LEFT == PC_MENU_PAD_LEFT && PAD_BUTTON_RIGHT == PC_MENU
 #include "pc_hand_cursor.h"
 #include "pc_speedrun.h"
 #include "pc_gyro.h"
+#include "pc_xinput_usb.h"
 #include "pc_icon.h"
 #include "netplay/pc_netplay_det.h"
 #if PIKI_PC_TOUCH
@@ -90,6 +90,10 @@ static void netplayResolvePendingPad();
 #define PC_NETPLAY_IGNORE_KEYBOARD false
 #define PC_NETPLAY_IGNORE_GAMEPADS false
 #endif
+
+// Last time a text window read the pad (pc_window_note_text_window_input).
+static bool   sTextWindowNoted = false;
+static Uint32 sTextWindowMs    = 0;
 
 // Última pulsación vista en el bucle de eventos, para el menú "pulsa un botón".
 static int            sLastPressKind   = PC_INPUT_DEV_NONE;
@@ -190,8 +194,18 @@ static void pc_auto_promote_pad(SDL_JoystickID id)
 
 static bool pc_controller_open_slot(int index)
 {
-	if (!SDL_IsGameController(index) || pc_joystick_is_secondary(index))
+	if (!SDL_IsGameController(index) || pc_joystick_is_secondary(index)) {
+		// Dejar rastro: un mando que SDL ve como joystick pero sin mapa de
+		// GameController se descartaba sin decir nada.
+		char guid[40] = {};
+		SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(index), guid, sizeof guid);
+		const char* jname = SDL_JoystickNameForIndex(index);
+		printf("[PC Port] Ignored joystick #%d \"%s\" (vid %04x pid %04x, guid %s): %s\n", index, jname ? jname : "?",
+		       SDL_JoystickGetDeviceVendor(index), SDL_JoystickGetDeviceProduct(index), guid,
+		       SDL_IsGameController(index) ? "motion/touchpad sub-device" : "no GameController mapping");
+		fflush(stdout);
 		return false;
+	}
 	SDL_GameController* ctl = SDL_GameControllerOpen(index);
 	if (!ctl)
 		return false;
@@ -626,6 +640,12 @@ int pc_window_get_gamepad_binding_p2(int action) {
     return pc_window_scheme_default_gamepad_binding(sPadScheme, action);
 }
 
+void pc_window_note_text_window_input(void)
+{
+    sTextWindowNoted = true;
+    sTextWindowMs    = SDL_GetTicks();
+}
+
 bool pc_window_last_input_is_gamepad(void)
 {
 	return sLastInputIsGamepad;
@@ -973,6 +993,9 @@ bool pc_window_init(const char* title, int width, int height) {
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
 #endif
 
+    // Que el mando siga llegando aunque el terminal o el launcher sean la app
+    // en primer plano al arrancar.
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) < 0) {
         printf("[PC Port Error] SDL_Init failed: %s\n", SDL_GetError());
         fflush(stdout);
@@ -1013,11 +1036,7 @@ bool pc_window_init(const char* title, int width, int height) {
     bool retriedGpu = false;
     for (;;) {
         sWindow = SDL_CreateWindow(
-#ifdef __APPLE__
-            pc_build_window_title(title, std::getenv("PIKMIN_LAUNCHER_TITLE")),
-#else
             title,
-#endif
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
             sWindowWidth,
@@ -1113,7 +1132,12 @@ bool pc_window_init(const char* title, int width, int height) {
     }
     printf("[PC Port] Target refresh rate: %.2f Hz\n", sTargetRefreshRate);
 
+    // Mandos Xbox 360 por USB, que macOS no expone como HID (solo con libusb).
+    pc_xinput_usb_init();
+
     // Check for connected controllers
+    printf("[PC Port] SDL %d.%d.%d, sees %d joystick(s) at startup\n", SDL_MAJOR_VERSION, SDL_MINOR_VERSION,
+           SDL_PATCHLEVEL, SDL_NumJoysticks());
     for (int i = 0; i < SDL_NumJoysticks(); ++i) {
         pc_controller_open_slot(i);
     }
@@ -1305,6 +1329,7 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
 void pc_gfx_get_drawable_size(int* width, int* height); // gl/pc_gfx.h
 
 void pc_window_poll_events(PADStatus* pad) {
+    pc_xinput_usb_update();
     // Age a menu click only on the logical input sample. The present path
     // polls again with a null pad and must not drop a click the menu has not
     // seen yet.
@@ -1448,6 +1473,17 @@ void pc_window_poll_events(PADStatus* pad) {
             case SDL_TEXTINPUT:
                 pc_settings_text_input(event.text.text);
                 break;
+            case SDL_JOYDEVICEADDED: {
+                // Sale aunque SDL no tenga mapa de GameController para el mando:
+                // sirve para saber si macOS lo entrega o no.
+                const int jidx = event.jdevice.which;
+                const char* jname = SDL_JoystickNameForIndex(jidx);
+                printf("[PC Port] Joystick connected #%d \"%s\" (vid %04x pid %04x, game controller: %s)\n", jidx,
+                       jname ? jname : "?", SDL_JoystickGetDeviceVendor(jidx), SDL_JoystickGetDeviceProduct(jidx),
+                       SDL_IsGameController(jidx) ? "yes" : "no");
+                fflush(stdout);
+                break;
+            }
             case SDL_CONTROLLERDEVICEADDED:
                 pc_controller_open_slot(event.cdevice.which);
                 break;
@@ -1640,7 +1676,8 @@ void pc_window_poll_events(PADStatus* pad) {
 
     // Menus share one mapping. Enter, Space and left click accept. Escape,
     // Backspace and right click cancel. Arrows and WASD both move the cursor.
-    // Shift never cancels here. Free play keeps the bindings filled in above.
+    // Shift never cancels here, except that a text window still takes a Shift
+    // binding for B to show the whole page. Free play keeps the bindings above.
     if (pc_menu_mode_active()) {
         PcMenuPadKeys keys = {};
         auto down = [&](SDL_Scancode sc) { return state[sc] != 0; };
@@ -1671,18 +1708,17 @@ void pc_window_poll_events(PADStatus* pad) {
             keys.clickLeft  = false;
             keys.clickRight = false;
         }
+        const bool textWindow = pc_menu_pad_text_window_live(sTextWindowNoted, sTextWindowMs, SDL_GetTicks());
         auto keyBindHeld = [&](int bind) {
-            if (bind <= 0 || bind >= SDL_NUM_SCANCODES)
-                return false;
-            if (bind == SDL_SCANCODE_LSHIFT || bind == SDL_SCANCODE_RSHIFT)
-                return false;
-            return state[bind] != 0;
+            return pc_menu_pad_b_binding_counts(bind, textWindow) && state[bind] != 0;
         };
-        const bool nonShiftB = keyBindHeld(bindB1) || keyBindHeld(bindB2);
+        // Shift is included while a text window is live. Other menus pass a
+        // false binding check for it, so Shift still never cancels there.
+        const bool boundB = keyBindHeld(bindB1) || keyBindHeld(bindB2);
         std::uint16_t bits = button;
         std::int8_t sx = stickX;
         std::int8_t sy = stickY;
-        pc_menu_pad_apply(keys, true, nonShiftB, sKeyBindings[PC_KEY_ACT_START], sKeyBindings2[PC_KEY_ACT_START], bits, sx, sy);
+        pc_menu_pad_apply(keys, true, boundB, sKeyBindings[PC_KEY_ACT_START], sKeyBindings2[PC_KEY_ACT_START], bits, sx, sy);
         button = static_cast<u16>(bits);
         stickX = static_cast<s8>(sx);
         stickY = static_cast<s8>(sy);
@@ -1901,12 +1937,12 @@ void pc_gfx_end_swap_framebuffer(unsigned int bound);
 
 void pc_window_swap_buffers(void) {
     if (sWindow) {
-#if defined(__APPLE__)
-        // macOS shows the frame only when the default framebuffer is bound here.
+#if defined(__APPLE__) || defined(_WIN32)
+        // Bind the default framebuffer for presentation, then restore the render target.
         const unsigned int renderTarget = pc_gfx_begin_swap_framebuffer();
 #endif
         SDL_GL_SwapWindow(sWindow);
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_WIN32)
         pc_gfx_end_swap_framebuffer(renderTarget);
 #endif
         pc_button_prompt_frame_end();
@@ -1991,6 +2027,7 @@ void pc_window_set_swap_interval(int interval) {
 }
 
 void pc_window_shutdown(void) {
+    pc_xinput_usb_shutdown();
 #if PIKI_USE_JAUDIO
     StopAudioThread();
 #endif

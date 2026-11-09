@@ -7,13 +7,13 @@
 
 #include "gamecube_image.h"
 #include "asset_finalize.h"
+#include "asset_check.h"
 #include "prepared_image.h"
 #include "installer_ui.h"
 #include "install_directory.h"
 #include "launcher_gui.h"
 #include "crash_report.h"
 #include "launcher_platform.h"
-#include "gci_save_import.h"
 #include "nectar_paths/paths.h"
 #include "release_update.h"
 #include "texture_pack_download.h"
@@ -46,6 +46,7 @@ using pikmin::launcher::DiscIdentity;
 namespace {
 
 namespace platform = pikmin::launcher::platform;
+using pikmin::launcher::assetsReady;
 
 // Windows exige la extensión .exe; el resto de sistemas usan el nombre pelado.
 #ifdef _WIN32
@@ -115,50 +116,6 @@ fs::path askForInstallDirectoryConsole()
     const std::string selected = promptLine(
         "Install folder [" + fallback.string() + "]: ");
     return selected.empty() ? fallback : fs::path(selected);
-}
-
-bool assetsReady(const fs::path& dataRoot)
-{
-    const fs::path assets = dataRoot / "assets";
-    if (!fs::is_regular_file(assets / ".pikmin-assets")
-        || !fs::is_directory(assets / "dataDir")
-        || !fs::is_regular_file(assets / "dataDir/parms/gamePrms.bin")) {
-        return false;
-    }
-
-    // El marcador por si solo no garantiza que una extraccion interrumpida o
-    // una copia manual conserve los paquetes que el juego abre al arrancar.
-    // Sin cualquiera de estos pares el ejecutable terminaba en ERROR dentro de
-    // parseArchiveDirectory (issue #151); el launcher debe ofrecer reparar la
-    // instalacion antes de iniciarlo.
-    static const char* requiredArchives[] = {
-        "tekis", "bosses", "tekipara", "tekikey", "ufopartsbin", "bridges",
-        "gates", "bomb", "rope", "water", "fl_water", "pelletsbin",
-        "pikihead", "effshapes", "weeds", "goal"
-    };
-    const fs::path archives = assets / "dataDir/archives";
-    for (const char* name : requiredArchives) {
-        if (!fs::is_regular_file(archives / (std::string(name) + ".arc"))
-            || !fs::is_regular_file(archives / (std::string(name) + ".dir"))) {
-            return false;
-        }
-    }
-
-    // USA usa blo_eng; Europa lleva cinco paquetes con doble guion bajo.
-    // Validarlos tambien evita que cambiar el idioma convierta una instalacion
-    // parcialmente copiada en el mismo abort de archivo ausente.
-    const bool pal = fs::is_directory(assets / "dataDir/screen/ger_tex");
-    static const char* palLanguages[] = { "blo__eng", "blo__fre", "blo__ger", "blo__spa", "blo__ita" };
-    const char* const* languages = pal ? palLanguages : nullptr;
-    const size_t languageCount   = pal ? sizeof(palLanguages) / sizeof(palLanguages[0]) : 0;
-    if (!pal) {
-        if (!fs::is_regular_file(archives / "blo_eng.arc") || !fs::is_regular_file(archives / "blo_eng.dir")) return false;
-    }
-    for (size_t i = 0; i < languageCount; i++) {
-        const std::string name = languages[i];
-        if (!fs::is_regular_file(archives / (name + ".arc")) || !fs::is_regular_file(archives / (name + ".dir"))) return false;
-    }
-    return true;
 }
 
 std::string lowerExtension(const fs::path& path)
@@ -1029,12 +986,6 @@ fs::path installDirFile() { return nectar::paths::userFolderConfigFile("install_
 
 fs::path rememberedInstallDirectory() { return nectar::paths::readStoredPath(installDirFile()); }
 
-bool isManagedBundle()
-{
-    const char* value = std::getenv("PIKMIN_BUNDLE_MANAGED");
-    return value && std::strcmp(value, "1") == 0;
-}
-
 pikmin::launcher::DefaultInstallDirectoryRequest makeDefaultInstallDirectoryRequest(
     const fs::path& sourceDirectory, bool launcherInInstallFolder, const fs::path& pikmin1Directory, bool forPikmin2)
 {
@@ -1071,7 +1022,7 @@ void rememberInstallDirectory(const fs::path& directory)
     const fs::path previous = rememberedInstallDirectory();
     if (!previous.empty() && fs::equivalent(previous, install, ec)) return;
     if (!nectar::paths::writeStoredPath(file, install)) return;
-    if (!isManagedBundle()) platform::createDesktopShortcut(install / kLauncherExecutable);
+    platform::createDesktopShortcut(install / kLauncherExecutable);
 }
 
 // La ruta de dolphin-tool elegida también se recuerda (junto a pikmin2_dir):
@@ -1336,16 +1287,6 @@ int main(int argc, char** argv)
     // mueven) los de la carpeta del usuario, antes de escribir ninguno.
     nectar::paths::migrateUserFolderSettings();
 
-#ifdef __APPLE__
-    if (isManagedBundle()) {
-        const char* overridePath = std::getenv("PIKMIN_BUILD_INFO");
-        const fs::path manifest = overridePath && *overridePath ? fs::path(overridePath)
-            : platform::executablePath().parent_path().parent_path() / "Resources" / "build-info.json";
-        std::string backupError;
-        pikmin::launcher::maybeBackupCentralSaveForBuild(manifest, backupError);
-    }
-#endif
-
     const fs::path sourceDirectory = executableDirectory();
     // Instalación (de Pikmin 1, de Pikmin 2 o de los dos) junto a este launcher.
     const bool isInstallFolder = assetsReady(sourceDirectory)
@@ -1367,15 +1308,7 @@ int main(int argc, char** argv)
     // Fusion mantiene cada juego en su propio directorio de trabajo. Las
     // variables también hacen que el launcher siga siendo reubicable y que los
     // paquetes normales, que no las definen, conserven el comportamiento previo.
-    fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
-    // A managed app falls back to the remembered install only when its own
-    // folder (NECTAR_PIKMIN1_DIR, from Info.plist) has no game files. A folder
-    // that is ready always wins: a stale remembered folder (say, a test install
-    // under /tmp) must not take over the app's saves and settings.
-    if (isManagedBundle() && !assetsReady(pikmin1Directory)) {
-        const fs::path remembered = rememberedInstallDirectory();
-        if (!remembered.empty() && assetsReady(remembered)) pikmin1Directory = remembered;
-    }
+    const fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
     const fs::path pikmin1Executable = environmentPath(
         "NECTAR_PIKMIN1_EXECUTABLE", gameBinaryFor(pikmin1Directory));
     // Pikmin 2 instalado por el launcher está en pikmin2/; el de una build de
@@ -1434,9 +1367,7 @@ int main(int argc, char** argv)
     // abre el de la instalación, que es el que juega y actualiza. Antes se
     // copia a la instalación lo que trae este paquete: si es una versión
     // nueva, la instalación queda al día (partidas y ajustes no se tocan).
-    // A managed macOS app owns its bundled binaries and build manifest. Do
-    // not copy it over an unrelated remembered install or relaunch from there.
-    if (userArgs == 0 && !isInstallFolder && !isManagedBundle()) {
+    if (userArgs == 0 && !isInstallFolder) {
         const fs::path installed = rememberedInstallDirectory();
         std::error_code ec;
         if (!installed.empty() && !fs::equivalent(installed, sourceDirectory, ec)
@@ -1595,9 +1526,9 @@ int main(int argc, char** argv)
                         const pikmin::launcher::GameInstall game = hubState.games[int(choice.game)];
                         if (!game.installed || game.executable.empty()) continue;
                         pikmin::launcher::runTexturePackDownload(*home, int(choice.game), game.directory,
-                            [&game](const fs::path& zip, std::string& error) {
+                            [&game](const fs::path& zip, const std::string& variant, std::string& error) {
                                 std::string output;
-                                return platform::runAndCapture(game.executable, { "--texpack-install", zip.string() },
+                                return platform::runAndCapture(game.executable, { "--texpack-install", zip.string(), variant },
                                                                game.directory, output, error);
                             });
                         continue;
@@ -1787,7 +1718,7 @@ int main(int argc, char** argv)
 
         std::string failure;
         if (installerWindow) installerWindow->updateProgress(100, "Installing the launcher and game", "Finishing");
-        if (!isManagedBundle() && !installPackage(sourceDirectory, dataRoot, failure)) {
+        if (!installPackage(sourceDirectory, dataRoot, failure)) {
             if (reportError(failure)) continue;
             return 1;
         }
@@ -1797,14 +1728,14 @@ int main(int argc, char** argv)
             // portada de Pikmin ya juegue con lo recién instalado.
             hubState.games[0].installed = true;
             hubState.games[0].directory = dataRoot.string();
-            hubState.games[0].executable = (isManagedBundle() ? pikmin1Executable : gameBinaryFor(dataRoot)).string();
+            hubState.games[0].executable = gameBinaryFor(dataRoot).string();
             if (installerWindow && !installerWindow->showComplete(dataRoot.string(), !extractOnly)) return 0;
             else std::cout << "Installed in: " << dataRoot << '\n'
                            << (extractOnly ? "" : "The game will start now.\n");
         }
         if (extractOnly) return 0;
 
-        const fs::path gameBinary = isManagedBundle() ? pikmin1Executable : gameBinaryFor(dataRoot);
+        const fs::path gameBinary = gameBinaryFor(dataRoot);
         if (!fs::is_regular_file(gameBinary)) {
             std::cerr << "The game executable is not next to the launcher: " << gameBinary << '\n';
             return 1;

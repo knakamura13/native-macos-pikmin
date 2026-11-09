@@ -10,6 +10,7 @@ static_assert(PAD_BUTTON_LEFT == PC_MENU_PAD_LEFT && PAD_BUTTON_RIGHT == PC_MENU
                   && PAD_BUTTON_START == PC_MENU_PAD_START,
               "menu pad bits must match the GameCube pad");
 #include "pc_gyro.h"
+#include "pc_xinput_usb.h"
 #include "pc_icon.h"
 #include "pc_speedrun.h"
 #if PIKI_PC_TOUCH
@@ -1004,6 +1005,9 @@ bool pc_window_init(const char* title, int width, int height) {
     }
     printf("[PC Port] Target refresh rate: %.2f Hz\n", sTargetRefreshRate);
 
+    // Mandos Xbox 360 por USB, que macOS no expone como HID (solo con libusb).
+    pc_xinput_usb_init();
+
     // Check for connected controllers
     for (int i = 0; i < SDL_NumJoysticks(); ++i) {
         pc_controller_open_slot(i);
@@ -1185,6 +1189,7 @@ static int pc_window_poll_one(SDL_Event* event)
 }
 
 void pc_window_poll_events(PADStatus* pad) {
+    pc_xinput_usb_update();
 #if PIKI_P2_HOST
     // Pikmin 2: el audio lo pauta la cola de SDL desde VIWaitForRetrace.
 #elif PIKI_USE_JAUDIO
@@ -1738,12 +1743,12 @@ void pc_gfx_end_swap_framebuffer(unsigned int bound);
 
 void pc_window_swap_buffers(void) {
     if (sWindow) {
-#if defined(__APPLE__)
-        // macOS solo muestra el frame si aquí está enlazado el framebuffer por defecto.
+#if defined(__APPLE__) || defined(_WIN32)
+        // Bind the default framebuffer for presentation, then restore the render target.
         const unsigned int renderTarget = pc_gfx_begin_swap_framebuffer();
 #endif
         SDL_GL_SwapWindow(sWindow);
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_WIN32)
         pc_gfx_end_swap_framebuffer(renderTarget);
 #endif
         // VSync Off must not retain the software presentation limiter. Game
@@ -1829,6 +1834,7 @@ void pc_window_monitor_vsync_fallback(void) {
 }
 
 void pc_window_shutdown(void) {
+    pc_xinput_usb_shutdown();
 #if !PIKI_P2_HOST
 #if PIKI_USE_JAUDIO
     StopAudioThread();

@@ -159,6 +159,29 @@ option(NECTAR_ONLINE "Build the experimental direct online co-op layer" OFF)
 
 if(PIKMIN_BUILD_TESTS)
     enable_testing()
+    add_executable(texture_pack_catalog_test pc_port/mods/texture_pack_catalog_test.cpp
+        pc_port/mods/texture_pack_catalog_win32.cpp)
+    target_compile_features(texture_pack_catalog_test PRIVATE cxx_std_17)
+    add_test(NAME texture_pack_catalog_test COMMAND texture_pack_catalog_test)
+    add_executable(toast_layout_test pc_port/launcher/toast_layout_test.cpp)
+    target_compile_features(toast_layout_test PRIVATE cxx_std_17)
+    add_test(NAME toast_layout_test COMMAND toast_layout_test)
+    add_executable(settings_pack_test pc_port/launcher/settings_pack_test.cpp pc_port/launcher/settings_model.cpp)
+    target_compile_features(settings_pack_test PRIVATE cxx_std_17)
+    add_test(NAME settings_pack_test COMMAND settings_pack_test)
+    add_executable(texture_pack_download_test pc_port/launcher/texture_pack_download_test.cpp
+        pc_port/launcher/texture_pack_download.cpp pc_port/mods/texture_pack_catalog_win32.cpp)
+    target_compile_features(texture_pack_download_test PRIVATE cxx_std_17)
+    add_test(NAME texture_pack_download_test COMMAND texture_pack_download_test)
+    foreach(pack_test texture_pack_catalog_test toast_layout_test settings_pack_test texture_pack_download_test)
+        if(MSVC)
+            target_compile_options(${pack_test} PRIVATE /UNDEBUG)
+        else()
+            target_compile_options(${pack_test} PRIVATE -UNDEBUG)
+        endif()
+    endforeach()
+
+
 endif()
 
 # ─── Which release of the game this binary is built for ───
@@ -312,6 +335,7 @@ set(PC_PORT_SOURCES
     pc_port/pc_window.cpp
     pc_port/pc_keycaps.cpp
     pc_port/pc_gyro.cpp
+    pc_port/pc_xinput_usb.cpp
     pc_port/pc_pad_axis.cpp
     pc_port/pc_menu_pad.cpp
     pc_port/pc_menu_mode.cpp
@@ -334,12 +358,17 @@ set(PC_PORT_SOURCES
     pc_port/pc_speedrun.cpp
     pc_port/pc_livesplit.cpp
     pc_port/pc_day_history.cpp
+    pc_port/save/pc_progression_repair.cpp
+    pc_port/save/pc_progression_saved.cpp
+    pc_port/save/pc_progression_backup.cpp
+    pc_port/save/pc_progression_game.cpp
     pc_port/pc_art.cpp
     pc_port/pc_icon.cpp
     pc_port/settings/pc_glass_menu.cpp
     pc_port/pc_gpu_preference.cpp
     pc_port/mods/pc_hd_models.cpp
     pc_port/mods/pc_hd_model_convert.cpp
+    pc_port/mods/texture_pack_catalog_win32.cpp
     pc_port/mods/pc_vs_arena.cpp
     pc_port/mods/pc_vs_map.cpp
     pc_port/mods/pc_map_catalog.cpp
@@ -647,6 +676,24 @@ if (WIN32)
 endif()
 target_compile_options(${NECTAR_GAME} PRIVATE ${NATIVE_COMPILE_OPTIONS})
 target_link_libraries(${NECTAR_GAME} PRIVATE ${NECTAR_LEGACY} nectar_paths)
+
+# Mandos Xbox 360 (XInput) por USB en macOS, que no trae driver para ellos: se
+# leen con libusb y se presentan a SDL como mando virtual. Apagado por defecto
+# (la dylib de Homebrew no viaja en las releases); scripts/build-macos.sh lo
+# enciende.
+option(PIKMIN_XINPUT_USB "Read USB Xbox 360-protocol controllers with libusb (macOS)" OFF)
+if(PIKMIN_XINPUT_USB)
+    find_path(LIBUSB_INCLUDE_DIR libusb.h HINTS /opt/homebrew /usr/local PATH_SUFFIXES include/libusb-1.0 libusb-1.0)
+    find_library(LIBUSB_LIBRARY NAMES usb-1.0 HINTS /opt/homebrew/lib /usr/local/lib)
+    if(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARY)
+        target_include_directories(${NECTAR_GAME} PRIVATE ${LIBUSB_INCLUDE_DIR})
+        target_link_libraries(${NECTAR_GAME} PRIVATE ${LIBUSB_LIBRARY})
+        target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_XINPUT_USB=1)
+        message(STATUS "USB XInput controllers: libusb ${LIBUSB_LIBRARY}")
+    else()
+        message(WARNING "PIKMIN_XINPUT_USB=ON but libusb was not found (brew install libusb)")
+    endif()
+endif()
 if(NECTAR_ONLINE)
     if(NOT TARGET nectar_net)
         add_subdirectory("${NECTAR_LIBS_DIR}/nectar_net" "${CMAKE_BINARY_DIR}/nectar_net")
@@ -939,6 +986,15 @@ if (NOT ANDROID AND PIKMIN_GAME_VERSION STREQUAL "VERSION_GPIP01_00")
         COMMENT "Copying the PAL game as nectar-pal for the launcher")
 endif()
 
+if(PIKMIN_BUILD_TESTS AND NOT ANDROID)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME texture_pack_cli_test COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/texture_pack_cli_test.py" "$<TARGET_FILE:${NECTAR_GAME}>")
+        set_tests_properties(texture_pack_cli_test PROPERTIES TIMEOUT 60)
+    endif()
+endif()
+
 # Standalone first-run launcher. It accepts an original, uncompressed
 # GameCube ISO/GCM supplied by the user, extracts its FST into the per-user
 # data directory and then starts the game from there. Keeping the extractor in
@@ -1007,6 +1063,7 @@ if(ANDROID AND NOT TARGET nectar_launcher)
         pc_port/launcher/settings_model.cpp
         pc_port/launcher/release_update.cpp
         pc_port/launcher/texture_pack_download.cpp
+        pc_port/launcher/texture_pack_download_dialog.cpp
         pc_port/launcher/installer_ui.cpp
         pc_port/launcher/launcher_platform_android.cpp
         pc_port/pc_icon.cpp
@@ -1082,6 +1139,7 @@ if(PIKMIN_BUILD_LAUNCHER)
         pc_port/launcher/settings_model.cpp
         pc_port/launcher/release_update.cpp
         pc_port/launcher/texture_pack_download.cpp
+        pc_port/launcher/texture_pack_download_dialog.cpp
         pc_port/launcher/installer_ui.cpp
         ${NECTAR_LIBS_DIR}/nectar_assets/src/charpack.cpp
         pc_port/pc_icon.cpp
@@ -1152,12 +1210,6 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(gci_save_import_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME gci_save_import_test COMMAND gci_save_import_test)
 
-    add_executable(pc_card_save_root_test pc_port/dolphin_stubs/pc_card_save_root_test.cpp
-        pc_port/dolphin_stubs/pc_card_save_root.cpp)
-    target_include_directories(pc_card_save_root_test PRIVATE ${PC_PORT_DIR})
-    target_compile_options(pc_card_save_root_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
-    add_test(NAME pc_card_save_root_test COMMAND pc_card_save_root_test)
-
     add_executable(install_directory_test
         pc_port/launcher/install_directory_test.cpp
         pc_port/launcher/install_directory.cpp
@@ -1175,6 +1227,8 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
 
     add_executable(install_dialog_snapshot
         pc_port/launcher/install_dialog_snapshot.cpp
+        pc_port/launcher/install_note_layout.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/installer_ui.cpp
         pc_port/launcher/install_note_layout.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp
@@ -1210,6 +1264,10 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(launcher_sidebar_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME launcher_sidebar_layout_test COMMAND launcher_sidebar_layout_test)
 
+    add_executable(settings_row_layout_test pc_port/launcher/settings_row_layout_test.cpp)
+    target_compile_options(settings_row_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME settings_row_layout_test COMMAND settings_row_layout_test)
+
     add_executable(launcher_page_layout_test pc_port/launcher/launcher_page_layout_test.cpp)
     target_compile_options(launcher_page_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME launcher_page_layout_test COMMAND launcher_page_layout_test)
@@ -1218,6 +1276,11 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_link_libraries(asset_finalize_test PRIVATE Threads::Threads)
     target_compile_options(asset_finalize_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME asset_finalize_test COMMAND asset_finalize_test)
+
+    # La comprobacion de instalacion del launcher: paquetes obligatorios por region.
+    add_executable(asset_check_test pc_port/launcher/asset_check_test.cpp)
+    target_compile_options(asset_check_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME asset_check_test COMMAND asset_check_test)
 
     add_executable(prepared_image_test pc_port/launcher/prepared_image_test.cpp ${LAUNCHER_PLATFORM_SOURCE})
     target_compile_options(prepared_image_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
@@ -1280,6 +1343,14 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         target_compile_options(launcher_cursor_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
         target_link_libraries(launcher_cursor_test PRIVATE launcher_imgui)
         add_test(NAME launcher_cursor_test COMMAND launcher_cursor_test)
+
+        add_executable(texture_pack_row_test pc_port/launcher/texture_pack_row_test.cpp
+            "${LAUNCHER_EMBED_DIR}/font_fredoka.h")
+        set_property(TARGET texture_pack_row_test PROPERTY INCLUDE_DIRECTORIES "")
+        target_include_directories(texture_pack_row_test PRIVATE "${LAUNCHER_EMBED_DIR}")
+        target_compile_options(texture_pack_row_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        target_link_libraries(texture_pack_row_test PRIVATE launcher_imgui)
+        add_test(NAME texture_pack_row_test COMMAND texture_pack_row_test)
     endif()
 
     add_executable(launcher_scroll_test pc_port/launcher/launcher_scroll_test.cpp)
@@ -1300,11 +1371,43 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_bundle_compat_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_bundle_compat_test COMMAND pc_bundle_compat_test)
 
+    if(APPLE AND PIKMIN_XINPUT_USB AND LIBUSB_INCLUDE_DIR)
+        # Real SDL virtual controllers with a simulated USB transport: no pad/assets needed.
+        add_executable(pc_xinput_usb_test
+            ../../tests/pc_xinput_usb_test.cpp pc_port/pc_xinput_usb.cpp)
+        target_compile_definitions(pc_xinput_usb_test PRIVATE
+                PIKI_XINPUT_USB=1 SDL_CreateThread=pc_xinput_test_create_thread)
+        target_include_directories(pc_xinput_usb_test PRIVATE pc_port ${SDL2_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIR})
+        target_link_libraries(pc_xinput_usb_test PRIVATE ${SDL2_LIBRARIES} Threads::Threads)
+        add_test(NAME pc_xinput_usb_test COMMAND pc_xinput_usb_test)
+    endif()
+
     add_executable(pc_generator_cache_validation_test
         pc_port/save/pc_generator_cache_validation_test.cpp)
     target_include_directories(pc_generator_cache_validation_test PRIVATE pc_port/save)
     target_compile_options(pc_generator_cache_validation_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_generator_cache_validation_test COMMAND pc_generator_cache_validation_test)
+
+    # Stuck-save repair (fork issue 192): the decision function for every spec scenario
+    # and combination, then disc-free scenario saves through the load adapters, the
+    # backup and the save boundary. No game, disc, assets or real save involved.
+    add_executable(pc_progression_repair_test
+        pc_port/save/pc_progression_repair_test.cpp
+        pc_port/save/pc_progression_repair.cpp)
+    target_include_directories(pc_progression_repair_test PRIVATE pc_port/save)
+    target_compile_options(pc_progression_repair_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_progression_repair_test COMMAND pc_progression_repair_test)
+
+    add_executable(pc_progression_scenario_test
+        pc_port/save/pc_progression_scenario_test.cpp
+        pc_port/save/pc_progression_repair.cpp
+        pc_port/save/pc_progression_saved.cpp
+        pc_port/save/pc_progression_backup.cpp)
+    target_include_directories(pc_progression_scenario_test PRIVATE pc_port/save)
+    target_compile_definitions(pc_progression_scenario_test PRIVATE
+        PC_PROGRESSION_SCENARIO_DIR="${CMAKE_CURRENT_SOURCE_DIR}/pc_port/save/scenarios")
+    target_compile_options(pc_progression_scenario_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_progression_scenario_test COMMAND pc_progression_scenario_test)
 
     # Envelope smoke test executable (not linked into main game)
     add_executable(pc_envelope_test pc_port/audio/pc_envelope_test.cpp pc_port/audio/pc_envelope.cpp)
@@ -1340,11 +1443,56 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_pad_clamp_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_pad_clamp_test COMMAND pc_pad_clamp_test)
 
+    # Cutscene skip replays its keys by frame (header only)
+    add_executable(pc_cine_skip_order_test pc_port/pc_cine_skip_order_test.cpp)
+    target_include_directories(pc_cine_skip_order_test PRIVATE pc_port)
+    target_compile_options(pc_cine_skip_order_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_cine_skip_order_test COMMAND pc_cine_skip_order_test)
+
+    # Text window presses through the menu translator (no game needed)
+    add_executable(pc_text_window_press_test pc_port/pc_text_window_press_test.cpp pc_port/pc_menu_pad.cpp)
+    target_include_directories(pc_text_window_press_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
+    target_compile_options(pc_text_window_press_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_text_window_press_test COMMAND pc_text_window_press_test)
+
     # Permadeath save block (no game needed)
     add_executable(pc_permadeath_test pc_port/pc_permadeath_test.cpp pc_port/pc_permadeath.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
     target_include_directories(pc_permadeath_test PRIVATE pc_port include)
     target_compile_options(pc_permadeath_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_permadeath_test COMMAND pc_permadeath_test)
+
+    # No Day Limit: the voyage log's Misc pages never run out (no disc or save)
+    add_executable(pc_diary_misc_pool_test
+        pc_port/pc_diary_misc_pool_test.cpp
+        src/plugPikiKando/resultFlag.cpp)
+    target_include_directories(pc_diary_misc_pool_test BEFORE PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/result_flag_stubs)
+    target_include_directories(pc_diary_misc_pool_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin/OS
+        ${PC_PORT_DIR})
+    target_compile_options(pc_diary_misc_pool_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_diary_misc_pool_test COMMAND pc_diary_misc_pool_test)
+
+    # Touch control layer: simulated fingers in, PAD_* buttons and stick out.
+    # Renderer, window and settings are stubbed (tests/pc_touch_test_stubs.cpp),
+    # so it needs no GPU, window or art. The layer is only built with
+    # -DPIKMIN_TOUCH=ON (Android), so the test is too.
+    if(PIKMIN_TOUCH)
+        add_executable(pc_touch_test
+            ../../tests/pc_touch_test.cpp
+            ../../tests/pc_touch_test_stubs.cpp
+            pc_port/touch/pc_touch.cpp)
+        target_include_directories(pc_touch_test PRIVATE ${SDL2_INCLUDE_DIRS} ../../tests pc_port)
+        target_link_libraries(pc_touch_test PRIVATE ${SDL2_LIBRARIES})
+        target_compile_options(pc_touch_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        add_test(NAME pc_touch_test COMMAND pc_touch_test)
+        # A scratch working directory: the layer reads pikmin_touch_layout.conf
+        # from the current directory, and a player's saved layout must not leak in.
+        set_tests_properties(pc_touch_test PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
 
     # Photo mode camera convention (no stage needed)
     add_executable(pc_photo_mode_test pc_port/pc_photo_mode_test.cpp pc_port/pc_photo_mode.cpp)
@@ -1374,11 +1522,23 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_host_readable_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_host_readable_test COMMAND pc_host_readable_test)
 
+    # Throw grab: an early release waits for KEY_Action0 (no window needed).
+    add_executable(pc_throw_release_test pc_port/pc_throw_release_test.cpp)
+    target_include_directories(pc_throw_release_test PRIVATE pc_port)
+    target_compile_options(pc_throw_release_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_throw_release_test COMMAND pc_throw_release_test)
+
     # Sprout landing policy (no map or window)
     add_executable(pc_seed_landing_test pc_port/pc_seed_landing_test.cpp)
     target_include_directories(pc_seed_landing_test PRIVATE pc_port)
     target_compile_options(pc_seed_landing_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_seed_landing_test COMMAND pc_seed_landing_test)
+
+    # Breakable-wall sides stay after the sink animation (no disc or window).
+    add_executable(pc_wall_sides_test pc_port/pc_wall_sides_test.cpp)
+    target_include_directories(pc_wall_sides_test PRIVATE pc_port)
+    target_compile_options(pc_wall_sides_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_wall_sides_test COMMAND pc_wall_sides_test)
 
     # Title screen and main menu clicks (no window, no disc)
     add_executable(pc_menu_click_test pc_port/pc_menu_click_test.cpp pc_port/pc_menu_click.cpp)
@@ -1411,6 +1571,22 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_button_prompt_test PRIVATE pc_port)
     target_compile_options(pc_button_prompt_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_button_prompt_test COMMAND pc_button_prompt_test)
+
+    # Day-1 voyage log after Skip tutorial (no disc or save)
+    add_executable(pc_voyage_log_test
+        pc_port/pc_voyage_log_test.cpp
+        src/plugPikiKando/resultFlag.cpp)
+    target_compile_options(pc_voyage_log_test BEFORE PRIVATE
+        -I${CMAKE_CURRENT_SOURCE_DIR}/pc_port/voyage_log_stubs)
+    target_include_directories(pc_voyage_log_test BEFORE PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/voyage_log_stubs)
+    target_include_directories(pc_voyage_log_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin/OS
+        ${PC_PORT_DIR})
+    target_compile_options(pc_voyage_log_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_voyage_log_test COMMAND pc_voyage_log_test)
 
     # Host software DSP test (not linked into main game)
     add_executable(pc_dsp_host_test
@@ -1480,6 +1656,17 @@ if(PIKMIN_BUILD_TESTS)
         pc_port/timing/pc_visual_snapshot.cpp)
     target_compile_options(pc_visual_runtime_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_visual_runtime_test COMMAND pc_visual_runtime_test)
+
+    # Real replacement loader with GL dispatch stubs: no GPU, disc or pack download.
+    foreach(test pc_texpack_test pc_texpack_gles_test)
+        add_executable(${test} pc_port/gl/pc_texpack_test.cpp
+            pc_port/mods/texture_pack_catalog_win32.cpp)
+        target_include_directories(${test} PRIVATE ${SDL2_INCLUDE_DIRS}
+            third_party/stb third_party/bcdec)
+        target_compile_options(${test} PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        add_test(NAME ${test} COMMAND ${test})
+    endforeach()
+    target_compile_definitions(pc_texpack_gles_test PRIVATE PIKI_USE_GLES=1)
 
     add_executable(pc_tev_shader_test
         pc_port/gl/pc_tev_shader_test.cpp

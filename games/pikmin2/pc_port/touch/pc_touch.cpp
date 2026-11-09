@@ -27,6 +27,15 @@ static void pc_photo_mode_add_touch_look(float, float) { }
 #if PIKI_P2_HOST
 #include "settings/pc_p2_glass_assets.h"
 #include "JSystem/JKernel/JKRHeap.h"
+#include "pc_host_alloc.h"
+// El operator new global de Pikmin 2 reserva en el heap de la sección actual
+// (JKRHeap::sCurrentHeap). Las listas de esta capa viven toda la partida y
+// crecen durante el juego: con el allocator por defecto su memoria queda en un
+// heap que se destruye al cambiar de sección, y el siguiente push_back libera
+// un bloque ajeno (crash en JKRExpHeap::do_free desde pc_touch_pane_hit, #238).
+template <typename T> using PcTouchVector = std::vector<T, PcHostAllocator<T>>;
+#else
+template <typename T> using PcTouchVector = std::vector<T>;
 #endif
 
 // stb_image se compila una sola vez, en pc_port/gl/pc_texpack.cpp (plan
@@ -34,6 +43,21 @@ static void pc_photo_mode_add_touch_look(float, float) { }
 #define STBI_ONLY_PNG
 #define STBI_NO_STDIO
 #include "stb_image.h"
+
+bool pc_host_alloc_active();
+void pc_host_alloc_set(bool active);
+
+namespace {
+// Los vectores globales de este archivo crecen desde menús de secciones
+// distintas: su memoria no puede salir del heap JKR de una sección (al crecer
+// liberaban un bloque de una sección ya destruida: cuelgue al ir al
+// atardecer, #238).
+struct TouchHostAlloc {
+	bool prev = pc_host_alloc_active();
+	TouchHostAlloc() { pc_host_alloc_set(true); }
+	~TouchHostAlloc() { pc_host_alloc_set(prev); }
+};
+} // namespace
 
 namespace {
 
@@ -270,14 +294,14 @@ struct InlineIcon {
 	int button;
 	float cx, cy, size;
 };
-std::vector<InlineIcon> sInlineIcons;
+PcTouchVector<InlineIcon> sInlineIcons;
 
 // Iconos de la página de controles: igual, pero con las etiquetas extra.
 struct HelpIcon {
 	char tag;
 	float cx, cy, diam, alpha; // diam = diámetro de la burbuja en ventana
 };
-std::vector<HelpIcon> sHelpIcons;
+PcTouchVector<HelpIcon> sHelpIcons;
 
 // Botones que un menú ha "pedido" al mostrar su icono (mensajes, copiar/
 // borrar partida...): mientras el menú reclama la capa se dibujan y se pueden
@@ -1125,7 +1149,10 @@ void pc_touch_mark_inline_icon(char tag, float x, float y, float size)
 	// El texto se dibuja a veces dos veces (sombra + relleno): un solo icono.
 	for (const InlineIcon& other : sInlineIcons)
 		if (other.button == icon.button && std::fabs(other.cx - icon.cx) < icon.size * 0.5f && std::fabs(other.cy - icon.cy) < icon.size * 0.5f) return;
-	if (sInlineIcons.size() < 64) sInlineIcons.push_back(icon);
+	if (sInlineIcons.size() < 64) {
+		TouchHostAlloc hostAlloc;
+		sInlineIcons.push_back(icon);
+	}
 }
 
 static void push_help_icon(char tag, float cx, float cy, float diam, float alpha)
@@ -1141,6 +1168,7 @@ static void push_help_icon(char tag, float cx, float cy, float diam, float alpha
 	icon.cy = cy;
 	icon.diam = diam;
 	icon.alpha = alpha;
+	TouchHostAlloc hostAlloc;
 	sHelpIcons.push_back(icon);
 }
 
@@ -1214,7 +1242,7 @@ struct TrackedPane {
 	int drawnFrame;
 	int askedFrame;
 };
-std::vector<TrackedPane> sTrackedPanes;
+PcTouchVector<TrackedPane> sTrackedPanes;
 int sTouchFrame = 0;
 
 TrackedPane* find_tracked(const void* pane)
@@ -1249,6 +1277,7 @@ bool pc_touch_pane_rect(const void* pane, float* x0, float* y0, float* x1, float
 	if (!pane) return false;
 	TrackedPane* t = find_tracked(pane);
 	if (!t) {
+		TouchHostAlloc hostAlloc;
 		sTrackedPanes.push_back({ pane, 0, 0, 0, 0, -100, sTouchFrame });
 		return false;
 	}
@@ -1267,6 +1296,7 @@ bool pc_touch_pane_hit(const void* pane, float nx, float ny, float margin)
 	TrackedPane* t = find_tracked(pane);
 	if (!t) {
 		// Primera pregunta: aún no se sabe dónde está; se sabrá al dibujarlo.
+		TouchHostAlloc hostAlloc;
 		sTrackedPanes.push_back({ pane, 0, 0, 0, 0, -100, sTouchFrame });
 		return false;
 	}

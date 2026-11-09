@@ -562,6 +562,11 @@ struct DayOverModeState : public ModeState {
 			gamecore->exitDayEnd();
 			if (gameflow.mWorldClock.mCurrentDay < 2) {
 				gameflow.mWorldClock.mCurrentDay = 2;
+				// The results screen is not shown, but the voyage log still
+				// needs the day-1 entry. Record it only after the clock moves:
+				// getDocument stores mDaysSeen[getCurrDay()], and day 1 is slot 1.
+				int pageCount = 0;
+				playerState->mResultFlags.commitTutorialSkipDocument(gameflow.mWorldClock.mCurrentDay, pageCount);
 			}
 			pc_tutorial_skip_clear_pending();
 			mState = STATE_PcTutorialSkip;
@@ -1450,21 +1455,22 @@ void RunningModeState::postRender(Graphics& gfx)
  * it reads back as mMemCardSaveIndex -1, and there is then nothing to erase:
  * a run that died before it was ever saved.
  */
-static void pcErasePermadeathSave()
+static bool pcErasePermadeathSave()
 {
 	CardQuickInfo infos[4];
 	gameflow.mMemoryCard.getQuickInfos(infos);
 	const u32 slot = gameflow.mPlayState.mSaveSlot;
 	if (slot >= 3) {
 		PRINT("permadeath: save slot %d is out of range, erased nothing\n", slot);
-		return;
+		return false;
 	}
 	if (infos[slot].mMemCardSaveIndex == -1) {
 		PRINT("permadeath: slot %d held no save, erased nothing\n", slot);
-		return;
+		return false;
 	}
 	PRINT("permadeath: erasing save slot %d\n", slot);
 	gameflow.mMemoryCard.delFile(infos[slot]);
+	return true;
 }
 #endif
 
@@ -1523,8 +1529,8 @@ ModeState* MessageModeState::update(u32& result)
 			// into tomorrow. GameExit is queued first so the section tears its
 			// heaps down the same way every other exit does.
 			if (pc_permadeath_active()) {
-				pcErasePermadeathSave();
-				pc_erased_notice_queue();
+				// The notice says the save is gone, so only queue it when one was.
+				if (pcErasePermadeathSave()) pc_erased_notice_queue();
 				// Back to file select rather than the day-end results that
 				// would carry this file into tomorrow. It is the same exit the
 				// pause menu's "return to last save" takes out of live
@@ -1998,14 +2004,15 @@ ModeState* DayOverModeState::initialisePhaseTwo()
 		}
 
 		// advance the day and handle the end-of-day results entries
+		const int endedDay = gameflow.mWorldClock.mCurrentDay;
 #if defined(PIKI_PC_PORT)
 		if (!pc_settings_get_no_day_advance()) // cheat "No Day Limit"
 #endif
-		gameflow.mWorldClock.mCurrentDay++;
+			gameflow.mWorldClock.mCurrentDay++;
 		if (!gameflow.mIsChallengeMode) {
 			// story mode - get a diary entry to show at the end of the day, along with how many pages/screens it has
 			int pageCount              = 0;
-			zen::EnumResult diaryEntry = (zen::EnumResult)playerState->mResultFlags.getDocument(pageCount);
+			zen::EnumResult diaryEntry = (zen::EnumResult)playerState->mResultFlags.getDocument(pageCount, endedDay);
 			if (pageCount == 0) {
 				// bad!
 				ERROR("zero pages!\n");

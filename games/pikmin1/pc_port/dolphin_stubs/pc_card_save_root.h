@@ -17,10 +17,6 @@ struct PcCardSaveRootOptions {
 
 std::filesystem::path pc_card_resolve_save_root(PcCardSaveRootOptions options = {});
 
-// When NECTAR_SAVE_READ_ONLY is set to a non-zero value, card writes fail with
-// CARD_RESULT_IOERROR so the game keeps its normal "cannot save" handling.
-bool pc_card_save_writes_blocked();
-
 /// When `installDir/save/card0` is missing but a legacy save folder has one,
 /// returns that legacy folder (the source a first-run install would copy from).
 std::filesystem::path pc_card_legacy_save_migration_source(const std::filesystem::path& installDir);
