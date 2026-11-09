@@ -55,6 +55,12 @@ constexpr float kBlueOnionZ       = -400.0f;
 constexpr float kNextYellowX      = -300.0f; ///< the yellow Onion still to be found (`next`)
 constexpr float kNextYellowZ      = 0.0f;
 
+/// course2 (stages.ini id 2) boots the same map with one soft gate whose generator keeps
+/// it across day ends (gate_break_next_day).
+constexpr const char* kCourseGateStageIni = "stages/course2.ini";
+constexpr float kCourseGateX              = -100.0f;
+constexpr float kCourseGateZ              = -350.0f;
+
 /// Adds the stage's map, .ini and generators to `tree` (paths relative to assets/, with dataDir/),
 /// and the Onion stage's .ini and generators.
 bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error);

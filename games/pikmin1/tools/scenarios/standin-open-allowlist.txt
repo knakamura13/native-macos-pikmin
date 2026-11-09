@@ -239,3 +239,20 @@ dataDir/cinemas/demo13.cin
 dataDir/stages/practice/2.gen
 dataDir/cinemas/demo40.cin
 dataDir/cinemas/demo44.cin
+# gate_break_next_day: Day 2 and Day 3 on course 2 (stages/course2.ini, stages.ini id 2),
+# which writes only default.gen: its day files (1.gen, 2.gen), init.gen and plants.gen are
+# guarded and skipped, as above. The course's load banner (game.cpp levNames, intro/map2.bti)
+# is not written; a missing banner draws nothing. Its landing, day-end, take-off and Onion
+# movies for stage index 2 (demo30, demo34, demo42, demo58, demo62, demo66) are not written:
+# a missing movie ends at once, and the scenario asserts the gate, not the movies.
+dataDir/stages/course2/1.gen
+dataDir/stages/course2/2.gen
+dataDir/stages/course2/init.gen
+dataDir/stages/course2/plants.gen
+dataDir/intro/map2.bti
+dataDir/cinemas/demo30.cin
+dataDir/cinemas/demo34.cin
+dataDir/cinemas/demo42.cin
+dataDir/cinemas/demo58.cin
+dataDir/cinemas/demo62.cin
+dataDir/cinemas/demo66.cin

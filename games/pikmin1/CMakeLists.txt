@@ -2642,7 +2642,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         LABELS "game-assets" SKIP_RETURN_CODE 77 TIMEOUT 600)
 
     # Onion and enemy scenarios, name:stage:rates.
-    foreach(entry enemy_kills:sandbox_all_objects:30,60 onion_menu_transfer:sandbox_objects:30,60 navi_states:sandbox:30,60 gate_break:sandbox_all_objects:30,60)
+    foreach(entry enemy_kills:sandbox_all_objects:30,60 onion_menu_transfer:sandbox_objects:30,60 navi_states:sandbox:30,60 gate_break:sandbox_all_objects:30,60 gate_break_next_day:course2:30)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

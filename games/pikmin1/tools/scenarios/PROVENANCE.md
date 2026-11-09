@@ -39,7 +39,7 @@ against retail data are opt-in local lanes (last section). The README's
 | `stages/stages.ini` entries | `standin_generator.cpp` | `practice.ini`, `stage1.ini` are code literals (`game.cpp` `setStage`); `course2.ini`..`course4.ini` authored | Retail-only names replaced |
 | Stage `.ini` text | `standin_generator.cpp`, `standin_objects_stage.cpp` | `map_file` and `day_multiply 1.0`, the source default | Kept |
 | Tutorial stage (`stages/practice/`) | `standin_practice_stage.{h,cpp}` | Authored placements, facings, push distance, route grid; object names and the push box's pushers and speed are code names and source defaults | Kept |
-| Onion stage and world-map courses | `standin_objects_stage.{h,cpp}` | Authored positions; the `next` ownership gate is the game's (`GenObjectItem::birth`) | Kept |
+| Onion stage and world-map courses | `standin_objects_stage.{h,cpp}` | Authored positions; the `next` ownership gate is the game's (`GenObjectItem::birth`). course2's soft gate: authored position and health (days 12, hours 12); its carry-over flags are the code's `GENCARRY_SaveGenerator` and `GENCARRY_SaveCreature` (`Generator.h`) | Kept |
 | Open allowlist | `standin-open-allowlist.txt` | Policy file; paths are code literals or code-composed names | Kept; comments state what the chain needs, not retail contents |
 | Golden screenshots | `golden/<os>/*.png` | Renders of the stand-in tree (outputs, not inputs) | macOS `boot_smoke_tick100.png` regenerated locally for the authored HUD; Linux and Windows `boot_smoke_tick100.png` need a hosted refresh (`refresh_goldens.sh`) |
 | Synthetic throw expectations | `check_throw_flight.py` `SYNTHETIC_EXPECTED` | The port's own results on the authored fixtures | Kept (public CI profile) |

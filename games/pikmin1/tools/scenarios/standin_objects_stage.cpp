@@ -167,6 +167,24 @@ std::vector<nectar::ObjectGenSpec> onionGenerators()
 	return g;
 }
 
+/// course2's default.gen: one soft gate, kept across day ends. The carry-over flags
+/// (Generator.h) keep the generator and the gate it made (GENCARRY_SaveGenerator 1,
+/// GENCARRY_SaveCreature 2), so the day end stores the gate in the generator cache and
+/// the next day rebuilds it through BuildingItem::doLoad (gate_break_next_day). Health
+/// as the all-objects stage's gate: hours + days * 24 = 300. A chosen value.
+std::vector<nectar::ObjectGenSpec> courseGateGenerators()
+{
+	nectar::ObjectGenSpec s;
+	s.kind      = nectar::ObjectGenSpec::Item;
+	s.name      = "sluice soft";
+	s.memo      = "soft gate";
+	s.carryOver = 1 | 2;
+	s.itemDays  = 12;
+	s.itemHours = 12;
+	s.pos       = { kCourseGateX, 0.0f, kCourseGateZ };
+	return { s };
+}
+
 /// Draw-only dressing (standin_map_dressing.h): rock faces along the map edge and
 /// over the cliff's face (with a rim at its top), and a soil path from the
 /// captain's start towards the Onions.
@@ -261,7 +279,8 @@ bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std
 	// The play stage: the same .ini, the object stage's generators plus two Onions.
 	tree[std::string("dataDir/") + kPlayStageIni]                  = compiled.ini;
 	tree[std::string("dataDir/stages/sandbox_play/default.gen")] = nectar::writeObjectGenFile(playGenerators());
-	// Story courses for the world map: stage1 uses the Onion layout; the rest boot the same map empty.
+	// Story courses for the world map: stage1 uses the Onion layout, course2 one soft gate
+	// kept across day ends; the rest boot the same map empty.
 	const Bytes onionGen = nectar::writeObjectGenFile(onionGenerators());
 	const Bytes emptyGen = nectar::writeObjectGenFile({});
 	tree["dataDir/stages/stage1.ini"]            = compiled.ini;
@@ -272,6 +291,7 @@ bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std
 		genPath.replace(genPath.size() - 4, 4, "/default.gen");
 		tree[genPath] = emptyGen;
 	}
+	tree["dataDir/stages/course2/default.gen"] = nectar::writeObjectGenFile(courseGateGenerators());
 	return true;
 }
 

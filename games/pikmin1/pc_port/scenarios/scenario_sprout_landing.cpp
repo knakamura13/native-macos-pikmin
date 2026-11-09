@@ -9,27 +9,31 @@
 // pellet, one enemy), so a generator or asset change shows here and not as a
 // vague later failure.
 //
-// Then six seeds are launched the way GoalAI::BootEmit launches them (an
+// Then seven seeds are launched the way GoalAI::BootEmit launches them (an
 // Onion-born PikiHeadItem: init at a position, colour, velocity, startAI, parent
 // Onion, start Flying), from the cliff's foot toward the face at different
 // heights and speeds, a few ticks apart. Each is followed through Flying,
-// Bounce and Bury to the planted Wait state. Only what holds at every frame
-// rate is asserted:
+// Bounce and Bury to the planted Wait state. Asserted:
 //  - every seed plants (Wait) within a bound, so none is lost in the air or
 //    pushed back and forth forever;
-//  - a planted seed's ground triangle is not a steep face (normal y >= 0.5):
-//    the push off a steep face holds at every frame rate;
+//  - the start of Bury follows the frame rate (BuryInit,
+//    pc_seed_landing_snaps_to_ground): at 30 Hz the seed is frozen where the
+//    bounce left it and keeps the bounce's residual speed (1.8 to 1.9 units per
+//    second here, asserted above 0.5); at 60 Hz it is dropped to the ground and
+//    its speed is 0;
+//  - a planted seed's ground triangle is not a steep face (normal y >= 0.5);
 //  - it is not below the ground at its position, and not floating above it by
 //    more than a bounce's worth (no seed is planted in mid-air on the cliff).
-// The height and speed at the start of Bury are printed per seed and not
-// asserted, so the run records the behaviour it saw.
 //
-// Known limit: on this stage the 76 degree face is a wall to a flying seed, so
-// the seeds stop about 13 units short of it (x = 37), bounce and drop to the
-// floor, and BuryExec's push off a steep face never runs ("pushed off 0"). The
-// edge case of a seed landing on a triangle whose collision normal
-// says ground and whose face normal says wall, needs a surface built for it;
-// the stage does not have one yet.
+// The steep-face push (BuryExec, pc_seed_landing_pushes_off_steep_face) runs
+// when a seed in Bury has a ground triangle whose face normal y is under 0.5:
+// a landing on the top edge of a steep face, where the collision normal points
+// up but the triangle is a wall. No landing on this stage leaves that state:
+// at the cliff's top edge the plateau triangle is the one stored, and a seed
+// that comes to rest against the face has no ground triangle. So the seventh
+// seed is given it: on its first Bury tick it is moved onto the middle of the
+// face (x = 75, y = 100) with the face as its ground triangle. It must be pushed
+// off at least once and then plant on a floor like the others.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -51,7 +55,12 @@
 
 namespace {
 
-constexpr int kSeeds = 6;
+constexpr int kSeeds = 7;
+// The seed moved onto the cliff face on its first Bury tick (see the header).
+constexpr int kSteepSeed = 6;
+// At 30 Hz BuryInit keeps the bounce's residual velocity (1.8 to 1.9 units per
+// second on this stage); a seed dropped to the ground has speed 0.
+constexpr float kMinResidualSpeed = 0.5f;
 // A planted seed may hover this far above the ground it was dropped on (a
 // bounce's residual height) before it counts as planted in mid-air; a seed up the cliff face would sit
 // 50 to 200 units above the floor at its position.
@@ -59,6 +68,7 @@ constexpr float kMaxGapAboveGround = 30.0f;
 // Cliff geometry of the stage (standin_objects_stage.h): the face runs from the
 // foot at x = 50 to the top at x = 100 and rises 200.
 constexpr float kFootX = 50.0f;
+constexpr float kFaceX = 75.0f;
 
 struct Tracked {
 	PikiHeadItem* seed = nullptr;
@@ -120,7 +130,8 @@ public:
 		if (mLaunched < kSeeds && t >= 3 && (t - 3) % launchGap == 0) launch(t);
 
 		int plantedCount = 0;
-		for (Tracked& k : mSeeds) {
+		for (std::size_t i = 0; i < mSeeds.size(); i++) {
+			Tracked& k = mSeeds[i];
 			if (k.planted) {
 				plantedCount++;
 				continue;
@@ -139,6 +150,7 @@ public:
 				k.buryGroundY = mapMgr->getMinY(k.seed->mSRT.t.x, k.seed->mSRT.t.z, true);
 				k.burySpeed   = std::sqrt(k.seed->mVelocity.x * k.seed->mVelocity.x + k.seed->mVelocity.y * k.seed->mVelocity.y
 				                          + k.seed->mVelocity.z * k.seed->mVelocity.z);
+				if (i == std::size_t(kSteepSeed) && !placeOnFace(t, k)) return;
 			}
 			if (id == PikiHeadAI::PIKIHEAD_Wait || id == PikiHeadAI::PIKIHEAD_Unk5) {
 				k.planted        = true;
@@ -161,6 +173,24 @@ public:
 	}
 
 private:
+	// Moves a seed that has just entered Bury onto the middle of the cliff face and makes the face its ground
+	// triangle, the state a landing on the top edge of a steep face leaves (see the header).
+	bool placeOnFace(unsigned t, Tracked& k)
+	{
+		const float z       = k.seed->mSRT.t.z;
+		CollTriInfo* face   = mapMgr->getCurrTri(kFaceX, z, true);
+		if (!face || face->mTriangle.mNormal.y >= 0.5f) {
+			scenarioFailf(t, "a steep cliff face triangle (normal y < 0.5) at x = 75", "%s, normal y %.2f", face ? "a triangle" : "no triangle",
+			              face ? face->mTriangle.mNormal.y : 0.0f);
+			return false;
+		}
+		k.seed->mSRT.t.set(kFaceX, mapMgr->getMinY(kFaceX, z, true), z);
+		k.seed->mGroundTriangle = face;
+		std::printf("[scenario] sprout_landing seed %d: placed on the face at (%.0f, %.1f, %.0f), face normal y=%.2f\n", kSteepSeed, kFaceX,
+		            k.seed->mSRT.t.y, z, face->mTriangle.mNormal.y);
+		return true;
+	}
+
 	void launch(unsigned t)
 	{
 		const int i = mLaunched;
@@ -199,10 +229,27 @@ private:
 			if (k.seed->mSRT.t.x > kFootX) hits++;
 		}
 		std::printf("[scenario] sprout_landing: %d of %d seeds ended beyond the cliff foot (x > %.0f)\n", hits, kSeeds, kFootX);
+		// The 30 Hz step is the GameCube's; the faster rates take the drop to the ground.
+		const bool snaps = pc_scenario_ticks_per_second() > 30;
 		for (int i = 0; i < kSeeds; i++) {
 			const Tracked& k = mSeeds[(std::size_t)i];
 			if (!k.sawBury) {
 				scenarioFailf(t, "every seed passes through Bury", "seed %d planted without a Bury tick", i);
+				return;
+			}
+			if (snaps) {
+				if (k.burySpeed > 0.01f || std::fabs(k.buryY - k.buryGroundY) > 0.5f) {
+					scenarioFailf(t, "above 30 Hz Bury starts on the ground with speed 0", "seed %d: gap %.1f, speed %.2f", i, k.buryY - k.buryGroundY,
+					              k.burySpeed);
+					return;
+				}
+			} else if (k.burySpeed < kMinResidualSpeed || k.buryY < k.buryGroundY - 1.0f) {
+				scenarioFailf(t, "at 30 Hz Bury starts where the bounce left the seed, with its residual speed (> 0.5)",
+				              "seed %d: gap %.1f, speed %.2f", i, k.buryY - k.buryGroundY, k.burySpeed);
+				return;
+			}
+			if (i == kSteepSeed && k.pushes < 1) {
+				scenarioFailf(t, "the seed in Bury on the steep face is pushed off it", "seed %d pushed off %d times", i, k.pushes);
 				return;
 			}
 			if (k.plantedNormalY < 0.5f) {
