@@ -125,6 +125,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_onion_menu_transfer(),
 		pc_scenario_make_navi_states(),
 		pc_scenario_make_gate_break(),
+		pc_scenario_make_gate_break_next_day(),
 		pc_scenario_make_title_boot(),
 		pc_scenario_make_world_map_day_end(),
 		pc_scenario_make_world_map_cancel(),

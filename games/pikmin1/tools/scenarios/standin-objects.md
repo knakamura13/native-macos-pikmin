@@ -181,20 +181,30 @@ stay on the object stage and keep their hash logs.
 ## sprout_landing
 
 `pc_port/scenarios/scenario_sprout_landing.cpp`. Asserts the stage's content, then
-launches six seeds the way `GoalAI::BootEmit` launches them, from the cliff's
-foot toward the face, and follows each through Flying, Bounce and Bury to Wait. It
-asserts only what holds at every frame rate: every seed plants within 30 s, none
-on a steep face (ground normal y at least 0.5), none below the ground, none more
-than 30 units above it. The height and speed at the start of Bury are printed per seed, not asserted.
+launches seven seeds the way `GoalAI::BootEmit` launches them, from the cliff's
+foot toward the face, and follows each through Flying, Bounce and Bury to Wait.
+Every seed must plant within 30 s, none on a steep face (ground normal y at least
+0.5), none below the ground, none more than 30 units above it. The start of Bury is
+asserted per rate (`BuryInit`, `pc_seed_landing_snaps_to_ground`): at 30 Hz the seed
+keeps the bounce's residual speed (above 0.5 units per second) and is not below the
+ground; at 60 Hz it is on the ground with speed 0.
 
-Observed (macOS, both rates): all six seeds first bury at x = 37, about 13 units
-short of the face, and plant on the floor with gap 0; the push off a steep face
-never runs. On this 76 degree face the seeds bounce off the wall; the case of a seed
-landing on an edge whose collision normal reads as ground while the face normal
-reads as wall needs a surface built for it. At 30 Hz the branch reaches Bury on the
-floor (gap 0.0) and the printed speed at the start of Bury is 1.8 to 3.1; the height
-gap is still 0.0 because the seeds first bury on the floor, so this stage cannot show
-the mid-air case.
+Observed (macOS, both rates): the six seeds aimed at the face first bury at x = 37,
+about 13 units short of it, and plant on the floor with gap 0. At 30 Hz the speed at
+the start of Bury is 1.8 to 1.9; at 60 Hz it is 0.0.
+
+No landing on this stage leaves a seed in Bury with a steep ground triangle, the
+state the push off a steep face (`BuryExec`, `pc_seed_landing_pushes_off_steep_face`)
+acts on. At the cliff's top edge the plateau's triangle is the one stored as ground,
+and a seed resting against the face has no ground triangle. A local trial of a raised
+spike and a raised block on the plateau gave the same result: the seed slides off
+or rests against a face. So the seventh seed is moved, on its first Bury tick, onto
+the middle of the face (x = 75, y = 100) with the face (normal y 0.24) as its ground
+triangle. It must be pushed off at least once and then plant on the floor.
+
+A seed that comes to rest against a steep face with no ground triangle plants
+there, above the floor; the six aimed seeds do not reach that state, and nothing
+here asserts it.
 
 ## Tutorial stage (`stages/practice.ini`)
 
@@ -251,7 +261,7 @@ Other inputs this stage relies on (their provenance is in `PROVENANCE.md`):
 
 ## What remains
 
-- A surface that makes a seed land on a steep edge (a seed on an edge whose collision normal reads as ground).
+- A surface where a landing, not the scenario, leaves a seed in Bury with a steep ground triangle.
 - The sprout is launched by the scenario, not by the Onion. Making the Onion shoot
   its own seeds needs its enter animation and a container state (`aiEnter`).
 - Enemy, boss, plant and bridge behaviour is not asserted: they are placed and

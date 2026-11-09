@@ -99,6 +99,7 @@ PcScenario* pc_scenario_make_enemy_kills(void);
 PcScenario* pc_scenario_make_onion_menu_transfer(void);
 PcScenario* pc_scenario_make_navi_states(void);
 PcScenario* pc_scenario_make_gate_break(void);
+PcScenario* pc_scenario_make_gate_break_next_day(void);
 PcScenario* pc_scenario_make_title_boot(void);
 PcScenario* pc_scenario_make_world_map_day_end(void);
 PcScenario* pc_scenario_make_world_map_cancel(void);

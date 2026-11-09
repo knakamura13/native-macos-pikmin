@@ -5,6 +5,7 @@
 #include "netplay/pc_netplay_policy.h"
 #include "netplay/pc_netplay_present.h"
 #endif
+#include "scenarios/pc_scenario_note.h"
 #if defined(PIKI_PC_PORT)
 #include "settings/pc_settings.h"
 #if PIKI_SCENARIOS
@@ -1245,6 +1246,8 @@ void BuildingItem::refresh(Graphics& gfx)
 #endif
 			gfx.useMatrix(Matrix4f::ident, 0);
 			mItemShapeObject->mShape->drawshape(gfx, *gfx.mCamera, &mAnimatedMaterials);
+			// Scenarios read whether a wall's model was submitted (gate_break).
+			PC_SCENARIO_NOTE("wall_drawn", mObjType);
 		}
 	}
 
