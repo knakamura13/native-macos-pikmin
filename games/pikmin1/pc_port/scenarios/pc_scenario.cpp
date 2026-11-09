@@ -727,6 +727,30 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		sRealtime = true;
 		visible   = !sProbe.active;
 	}
+	// PIKMIN_SCENARIO_NO_RENDER=1: no draws and no swap (pc_gfx_scenario_set_no_render).
+	// Refused with anything that captures or shows the picture, which would be blank.
+	bool noRender = false;
+	if (const char* env = std::getenv("PIKMIN_SCENARIO_NO_RENDER"); env != nullptr && *env != '\0') {
+		if (std::strcmp(env, "0") != 0 && std::strcmp(env, "1") != 0) {
+			usage((std::string("PIKMIN_SCENARIO_NO_RENDER must be 0 or 1, not ") + env).c_str());
+			return PC_SCENARIO_EXIT_USAGE;
+		}
+		noRender = env[0] == '1';
+	}
+	if (noRender) {
+		const char* evidence = std::getenv("PIKMIN_SCENARIO_EVIDENCE_DIR");
+		const char* frameDump = std::getenv("PIKMIN_FRAME_DUMP");
+		const char* conflict = pc_scenario_screenshot_any()           ? "--scenario-screenshot"
+		                       : evidence != nullptr && *evidence != '\0' ? "PIKMIN_SCENARIO_EVIDENCE_DIR"
+		                       : frameDump != nullptr                  ? "PIKMIN_FRAME_DUMP"
+		                       : sHandoffRequested                     ? "--scenario-handoff"
+		                       : visible                               ? "--scenario-visible"
+		                                                               : nullptr;
+		if (conflict != nullptr) {
+			usage((std::string("PIKMIN_SCENARIO_NO_RENDER=1 cannot be combined with ") + conflict + ": the run draws no picture").c_str());
+			return PC_SCENARIO_EXIT_USAGE;
+		}
+	}
 
 	// Data gate, as --audio-self-test does: the caller's environment names the
 	// directory that holds assets/, and the game opens files relative to it.
@@ -808,6 +832,10 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	if (windowWidth > 0) pc_settings_scenario_set_window_size(windowWidth, windowHeight);
 	pc_scenario_screenshot_set_base_window_size(windowWidth > 0 ? windowWidth : 64, windowHeight > 0 ? windowHeight : 36);
 	pc_gfx_set_min_render_size(1, 1); // the window size, below the player's 160x120 floor
+	if (noRender) {
+		pc_gfx_scenario_set_no_render(1);
+		std::printf("[scenario] no-render mode: draws and swaps skipped (PIKMIN_SCENARIO_NO_RENDER)\n");
+	}
 	pc_window_set_hidden(!visible);
 	pc_input_log_set_provider(providerThunk);
 	std::printf("[scenario] %s at %d ticks per second, stage %s, data %s%s%s%s%s\n", name, rate, sStageFile.c_str(), dataDir,

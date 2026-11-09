@@ -3179,4 +3179,49 @@ if(PIKMIN_BUILD_SCENARIOS)
             set_tests_properties(${_name} PROPERTIES COST ${_cost})
         endif()
     endwhile()
+
+    # No-render mode (tools/scenarios/README.md, "No-render mode"): the runner refuses
+    # PIKMIN_SCENARIO_NO_RENDER=1 with a screenshot, an evidence capture or a hand-off
+    # (exit 2). These two entries apply it to such runs and expect that refusal: the
+    # real boot_smoke screenshot check, and playthrough_day1's step captures.
+    add_test(NAME scenario_screenshot_no_render_refused_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/no_render_refused_30
+            -DUSE_FULL_WINDOW=1
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
+    # The check exits non-zero here; it passes only on the runner's refusal line.
+    set_tests_properties(scenario_screenshot_no_render_refused_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV};PIKMIN_SCENARIO_NO_RENDER=1"
+        PASS_REGULAR_EXPRESSION "PIKMIN_SCENARIO_NO_RENDER=1 cannot be combined with --scenario-screenshot: the run draws no picture"
+        TIMEOUT 600)
+    add_test(NAME scenario_evidence_no_render_refused_30
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=playthrough_day1 -DEXPECT=2
+            "-DEXPECT_OUTPUT=PIKMIN_SCENARIO_NO_RENDER=1 cannot be combined with PIKMIN_SCENARIO_EVIDENCE_DIR"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_evidence_no_render_refused_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/practice.ini;PIKMIN_SCENARIO_EVIDENCE_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/no_render_refused_evidence;PIKMIN_SCENARIO_NO_RENDER=1"
+        TIMEOUT 120)
+
+    # Every other stand-in entry runs in no-render mode: none of them reads a pixel.
+    # Left out: the screenshot and golden checks, the hand-off runs, entries that set
+    # PIKMIN_SCENARIO_EVIDENCE_DIR, and the disc entries (game-assets).
+    get_property(_scenario_tests DIRECTORY PROPERTY TESTS)
+    foreach(_name IN LISTS _scenario_tests)
+        if(NOT _name MATCHES "^scenario_" OR _name MATCHES "screenshot|golden|handoff"
+           OR _name MATCHES "no_render_refused")
+            continue()
+        endif()
+        get_test_property(${_name} LABELS _labels)
+        get_test_property(${_name} ENVIRONMENT _env)
+        if("game-assets" IN_LIST _labels OR _env MATCHES "PIKMIN_SCENARIO_EVIDENCE_DIR")
+            continue()
+        endif()
+        set_property(TEST ${_name} APPEND PROPERTY ENVIRONMENT "PIKMIN_SCENARIO_NO_RENDER=1")
+    endforeach()
 endif()
