@@ -145,6 +145,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `PIKMIN_SCENARIO_HANDOFF_PROBE` | `1` with `--scenario-handoff`: the headless hand-off check that `check_scenario_handoff.cmake` runs (hidden window, a virtual SDL game controller, a PASS or FAIL line from the probe, then exit). Test use only. |
 | `PIKMIN_SCENARIO_EVIDENCE_DIR` | Folder for the captures a scenario asks for at its own steps (`pc_scenario_screenshot_evidence`; only `playthrough_day1` does). Each is the next tick's finished frame, written as `--scenario-screenshot` writes one. Unset or empty, nothing is captured. |
 | `PIKMIN_SCENARIO_SCREENSHOT_WINDOW` | Window and render size on capture ticks only, default **`640x480`** (GameCube GX virtual size). Smaller sizes (for example the old 128×72 default) often produce a blank readback in headless CI because the port maps GX in 640×480 space. The sim does not read the picture; state-hash logs match runs without `--scenario-screenshot`. |
+| `PIKMIN_SCENARIO_NO_RENDER` | `1`: no draws, clears, window blit or swap; the run produces no picture. `0` or unset: normal rendering. Anything else exits 2, as does `1` with `--scenario-screenshot`, `PIKMIN_SCENARIO_EVIDENCE_DIR`, `PIKMIN_FRAME_DUMP`, `--scenario-handoff` or `--scenario-visible`. CTest sets it for every stand-in entry that reads no pixels. See [No-render mode](#no-render-mode). |
 
 **Screenshot verification (`scenario_screenshot_boot_smoke_30`):** every OS run checks width/height, non-blank pixels, at least 80 distinct RGB values and RGB variance ≥ 80 (catches a blank frame). The CTest driver sets `PIKMIN_SCENARIO_WINDOW=640x480` for the whole run so CI does not rely on a mid-tick resize from 64×36 (headless stacks often read back an empty enlarged FBO). **Linux** also fuzzy-compares against `tools/scenarios/golden/boot_smoke_tick100_640x480.png` (llvmpipe, tolerance 10 per channel, up to 3% differing pixels). macOS (Apple GL) and Windows (Mesa WGL) are expected to differ in fine detail and colour; those runners skip the golden file and rely on the statistical guards. Same scenario and tick on one machine should be repeatable; do not expect byte-identical PNGs across GPU stacks.
 
@@ -230,13 +231,51 @@ scenario and rate, on the stand-in and the disc tree, and `throw_release`
 measures the same K. Set `PIKMIN_SCENARIO_WINDOW=640x360` (or larger) to
 compare, or with `--scenario-visible` to watch a run at a readable size.
 
+### No-render mode
+
+`PIKMIN_SCENARIO_NO_RENDER=1` skips the GL calls that only make pixels: every
+draw, clear and the window blit (macros in `pc_gfx.cpp`), and the buffer swap
+(`pc_window_swap_buffers`). Everything around them still runs: display lists are
+parsed, vertices built, GL state and textures set, and `pc_gfx_present` still
+updates the aspect ratio and render size the game reads. Nothing reads GL output
+back into the simulation, so the per-tick state hash log is the same as with
+rendering. The run produces no picture: the runner refuses the mode (exit 2)
+together with `--scenario-screenshot`, `PIKMIN_SCENARIO_EVIDENCE_DIR`,
+`PIKMIN_FRAME_DUMP`, `--scenario-handoff` or `--scenario-visible`.
+
+CTest sets it on every stand-in entry except the screenshot and golden checks,
+the hand-off runs, the entries that set `PIKMIN_SCENARIO_EVIDENCE_DIR`
+(`scenario_playthrough_day1_*`) and the disc entries (the loop at the end of the
+scenario block in `games/pikmin1/CMakeLists.txt`). Two entries apply it where it
+must not go and expect the refusal: `scenario_screenshot_no_render_refused_30`
+(the real `boot_smoke` screenshot check) and
+`scenario_evidence_no_render_refused_30` (`playthrough_day1` step captures).
+To run an entry with rendering, run the game by hand without the variable;
+`ctest` gives each test its own environment, so setting it to `0` around
+`ctest` does not reach the entries that have it.
+
+Measured on an M3 Max, each `run_standin_scenario.cmake` entry run once with the
+variable at `0` and once at `1`, serially:
+
+| Renderer | Entries | Hash logs identical | Wall, 0 → 1 | User CPU, 0 → 1 | System CPU, 0 → 1 |
+|----------|---------|---------------------|-------------|-----------------|-------------------|
+| GPU (Apple M3 Max) | 234 | 234 | 620 s → 337 s | 336 s → 273 s | 119 s → 32 s |
+| Apple Software Renderer (local, uncommitted `SDL_GL_ACCELERATED_VISUAL` 0) | 12 | 12 | 644 s → 72 s | 588 s → 68 s | 12 s → 3 s |
+
+The software renderer subset: `throw_flight_leaf_120` 208 s → 4 s,
+`pikmin_cap_999_60` 169 s → 8 s, `tutorial_day1_60` 80 s → 3.5 s,
+`boot_smoke_60` 20 s → 0.6 s. What stays is the simulation itself:
+`carry_blocked_30` goes from 64 s to 51 s. Its hash logs also match the GPU
+run's. Linux CI (llvmpipe under Xvfb) and Windows (Mesa) were not measured
+locally.
+
 ### Exit codes
 
 | Code | Meaning |
 |------|---------|
 | `0` | Pass. After a `--scenario-handoff`, closing the window (or any normal exit). |
 | `1` | A check failed (one `[scenario] FAIL ...: expected ..., observed ...` line on stderr), the boot never reached the stage, the stage name is not in `stages.ini`, the watchdog fired, or the process ended before a verdict (closing the window before the hand-off included). |
-| `2` | Unknown scenario, bad arguments or a rejected flag, `--scenario-handoff` with a scenario that has no hand-off point, or a data directory that is set but cannot be entered. Before any window exists. |
+| `2` | Unknown scenario, bad arguments or a rejected flag, `PIKMIN_SCENARIO_NO_RENDER=1` with a capture, a hand-off or a visible window, `--scenario-handoff` with a scenario that has no hand-off point, or a data directory that is set but cannot be entered. Before any window exists. |
 | `4` | Window or GL context creation failed (from the code; not reproduced, because this Mac has a GL context). |
 | `77` | Skip: `PIKMIN_SCENARIO_DATA_DIR` unset or empty, no `assets/dataDir/parms/gamePrms.bin`, or the scenario does not support the rate (no scenario refuses a rate today). |
 
@@ -410,6 +449,8 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | `scenario_screenshot_world_map_<rate>` | stand-in tree | none | 30 and 60, `RUN_SERIAL`: `check_scenario_world_map_screenshot.cmake` captures `world_map_day_end` between stages, the map idle (between-tick 7/3 × rate) and with the "Land here?" window open (4 × rate). Idle: planet greens, gold pin, side panel, and no confirm window; confirm: gold title, the window's blue and gold text, planet, pin, panel. |
 | `scenario_screenshot_title_screens_<rate>` | stand-in tree | none | 30 and 60, `RUN_SERIAL`: `check_scenario_title_screens_screenshot.cmake` captures `title_boot` at boot ticks 314 (Press START), 350 (main menu open) and 528 (file select). Boot ticks match at both rates (the captures are pixel-identical). Each screen is checked for its own regions and against the others' (no menu on Press START, no file-select plate on the menu). |
 | `scenario_exit_handoff_unsupported` | none | none | `--scenario-handoff` with `boot_smoke` (no hand-off point) exits 2 with `boot_smoke has no hand-off point`. |
+| `scenario_screenshot_no_render_refused_30` | stand-in tree | none | The `scenario_screenshot_boot_smoke_30` check with `PIKMIN_SCENARIO_NO_RENDER=1`: passes only on the runner's refusal line (`cannot be combined with --scenario-screenshot`). See [No-render mode](#no-render-mode). |
+| `scenario_evidence_no_render_refused_30` | stand-in tree | none | `playthrough_day1` with `PIKMIN_SCENARIO_EVIDENCE_DIR` and `PIKMIN_SCENARIO_NO_RENDER=1` exits 2 with `cannot be combined with PIKMIN_SCENARIO_EVIDENCE_DIR`. |
 | `scenario_<save scenario>_<rate>` | stand-in tree | none | The save scenarios (`save_load`, `save_load_flags`, `save_load_repair`, `results_nosave_map`, `results_nosave_cardselect`, `card_errors`, `card_errors_saved`, `card_other_game`, `pause_continue`, `permadeath_erase`, `permadeath_unsaved`, `permadeath_bad_slot`, `permadeath_off`) at the rates in the Tick rates table, registered from one `name:stage:rates` list after the other stand-in lists. Same runner and properties as `scenario_<name>_<rate>`. |
 | `scenario_save_dir_permadeath_erase` | stand-in tree | none | `check_scenario_save_dir.cmake` with `-DSCENARIO=permadeath_erase`: the Permadeath erase writes, deletes and rewrites files, and nothing outside its scratch save directory may change. The script (also behind `scenario_save_dir`, which keeps `boot_smoke`) checks the card and shader cache land in the scratch directory, that no `save/`, `shader_cache/`, `card0/` or `card1/` appears in the working, data or executable directory or the per-user default, and that every file under the data directory keeps its size and time stamp. |
 
