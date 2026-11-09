@@ -15,6 +15,10 @@ enum PcScenarioCapturePhase {
 bool pc_scenario_screenshot_parse_arg(const char* tickAndPath);
 void pc_scenario_screenshot_set_base_window_size(int width, int height);
 bool pc_scenario_screenshot_any(void);
+// A capture the scenario asks for at one of its own steps: when PIKMIN_SCENARIO_EVIDENCE_DIR
+// is set, the next scenario tick's finished frame is written to <dir>/<fileName>, the same
+// way as --scenario-screenshot. Unset, nothing is captured. Returns whether one was queued.
+bool pc_scenario_screenshot_evidence(const char* fileName);
 
 // Called from System::run before idle() on scenario ticks after the intro gate.
 void pc_scenario_screenshot_on_tick_begin(unsigned tick);

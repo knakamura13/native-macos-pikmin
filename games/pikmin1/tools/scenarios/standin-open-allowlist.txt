@@ -49,7 +49,9 @@ dataDir/stages/sandbox_play/1.gen
 dataDir/stages/sandbox_play/2.gen
 dataDir/stages/sandbox_play/init.gen
 dataDir/stages/sandbox_play/plants.gen
-# Forest of Hope (stage1.ini) after the world map on Day 3 (onion_day3).
+# Forest of Hope (stage1.ini) after the world map on Day 3 (onion_day3), and on Day 2
+# (1.gen) after the tutorial day (playthrough_day1).
+dataDir/stages/stage1/1.gen
 dataDir/stages/stage1/2.gen
 dataDir/stages/stage1/init.gen
 dataDir/stages/stage1/plants.gen
