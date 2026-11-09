@@ -492,6 +492,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_skip.cpp
         pc_port/scenarios/scenario_tutorial_firsts.cpp
         pc_port/scenarios/scenario_tutorial_day1.cpp
+        pc_port/scenarios/scenario_playthrough.cpp
         pc_port/scenarios/scenario_carry_blocked.cpp
         pc_port/scenarios/scenario_bomb_firsts.cpp
         pc_port/scenarios/scenario_pikmin_cap.cpp
@@ -2827,6 +2828,50 @@ if(PIKMIN_BUILD_SCENARIOS)
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
+
+    # One day played as a chain on the stand-in tree (scenario_playthrough.cpp): the
+    # tutorial stage from the boot, walk, pluck, throw, carry, whistle, the Main Engine
+    # found and delivered, the day end, the save, the save read back from disk, and Day 2
+    # on the Forest course. Its hash logs join the cross-OS comparison (scenario-logs);
+    # its step captures go to scenario-logs/playthrough_day1_<rate>/ and are not compared
+    # with goldens (tools/scenarios/README.md, "Play-through"). The determinism pair runs it
+    # twice per rate. The negative control declines the save and must fail at that step.
+    set(PIKMIN_PRACTICE_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/practice.ini")
+    foreach(rate 30 60)
+        add_test(NAME scenario_playthrough_day1_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=playthrough_day1 -DRATE=${rate}
+                -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+        set_tests_properties(scenario_playthrough_day1_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+            ENVIRONMENT "${PIKMIN_PRACTICE_ENV};PIKMIN_SCENARIO_EVIDENCE_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs/playthrough_day1_${rate}"
+            TIMEOUT 600)
+        add_test(NAME scenario_determinism_playthrough_day1_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=playthrough_day1 -DRATE=${rate}
+                -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+        set_tests_properties(scenario_determinism_playthrough_day1_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+            ENVIRONMENT "${PIKMIN_PRACTICE_ENV}"
+            TIMEOUT 1200)
+    endforeach()
+    add_test(NAME scenario_playthrough_day1_nosave_fail_30
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=playthrough_day1_nosave -DRATE=30 -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL playthrough_day1_nosave tick [0-9]+: expected Save: a save before the results screen closes"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_playthrough_day1_nosave_fail_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_PRACTICE_ENV}"
+        TIMEOUT 600)
 
     add_test(NAME scenario_input_replay_boot_smoke_30
         COMMAND ${CMAKE_COMMAND}
