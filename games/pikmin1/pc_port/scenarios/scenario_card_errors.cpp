@@ -37,6 +37,16 @@
 // leaves for MapSelect. Read back from disk, slot A holds the new day (3); on the
 // saved card slots B and C keep their block, checksum and day.
 //
+// card_other_game: Pikmin 2's save file shares the card folder (both games read and
+// write save/card0). Before the day end the scenario puts a file named
+// "Pikmin2_SaveData" on the empty card, with a stat record that names Pikmin 2's game
+// code (GPVE) and maker (01), as a Pikmin 2 save leaves it. With no fault, the save
+// then runs as save_load's: the memory-card check finds no Pikmin 1 file
+// (getMemoryCardState, MemoryCard::checkUseFile), makes the default file and saves
+// to slot A. Asserted: the save succeeds and leaves for MapSelect, and the Pikmin 2
+// file and its stat record are byte-identical afterwards (checkUseFile skips a file
+// of another game, so the check never takes it for one of its own temporary files).
+//
 // Not covered: the format itself (Yes on "format?" erases card0, CARDFormat), the
 // repair of a broken file section (RepairFile) and the faults during the slot
 // screen's own second check.
@@ -45,6 +55,9 @@
 #if PIKI_SCENARIOS
 
 #include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 
 #include "Dolphin/card.h"
 #include "MemoryCard.h"
@@ -222,6 +235,76 @@ private:
 	CardQuickInfo mInfosBefore[4] = {};
 };
 
+class OtherGameFile : public DayEndResults {
+public:
+	OtherGameFile()
+	    : DayEndResults("card_other_game")
+	{
+	}
+
+protected:
+	static constexpr const char* kFile = "card0/Pikmin2_SaveData";
+	static constexpr const char* kStat = "card0/.meta_Pikmin2_SaveData";
+
+	bool setup(unsigned t) override
+	{
+		namespace fs   = std::filesystem;
+		const fs::path card = fs::path(saveDir()) / "card0";
+		std::error_code ec;
+		fs::create_directories(card, ec);
+		// The file's bytes do not matter to Pikmin 1, only its name and stat record.
+		std::vector<char> data(0x6000);
+		for (size_t i = 0; i < data.size(); i++) data[i] = char(i * 31 + 7);
+		CARDStat stat {};
+		std::strncpy(stat.fileName, "Pikmin2_SaveData", CARD_FILENAME_MAX - 1);
+		stat.length = u32(data.size());
+		std::memcpy(stat.gameName, "GPVE", 4);
+		std::memcpy(stat.company, "01", 2);
+		stat.iconAddr = stat.commentAddr = 0xffffffffu;
+		std::ofstream(card / "Pikmin2_SaveData", std::ios::binary).write(data.data(), std::streamsize(data.size()));
+		std::ofstream(card / ".meta_Pikmin2_SaveData", std::ios::binary).write(reinterpret_cast<const char*>(&stat), sizeof(stat));
+		mBefore = listSaveDir();
+		printFiles(mName, "before the day end", mBefore);
+		if (!mBefore.count(kFile) || !mBefore.count(kStat) || mBefore.count("card0/Pikmin dataFile")) {
+			scenarioFailf(t, "an empty card that holds only the Pikmin 2 file and its stat record", "%s: Pikmin 2 file %d, stat %d, Pikmin 1 file %d", mName,
+			              (int)mBefore.count(kFile), (int)mBefore.count(kStat), (int)mBefore.count("card0/Pikmin dataFile"));
+			return false;
+		}
+		mDriver.setPlan({}); // Yes, A everywhere
+		return true;
+	}
+
+	void onTerminal(unsigned t, int next) override
+	{
+		if (next != ONEPLAYER_MapSelect || !noteSeen("savemgr", 14) || gameflow.mMemoryCard.mDidSaveFail) {
+			scenarioFailf(t, "the save succeeds and leaves for MapSelect", "%s: section %d, save manager %s, failed %d", mName, next,
+			              noteHistory("savemgr").c_str(), (int)gameflow.mMemoryCard.mDidSaveFail);
+			return;
+		}
+		waitCardIdle();
+		const FileMap after = listSaveDir();
+		printFiles(mName, "after the save", after);
+		for (const char* path : { kFile, kStat }) {
+			const auto now = after.find(path);
+			if (now == after.end() || now->second != mBefore.at(path)) {
+				scenarioFailf(t, "the Pikmin 2 file and its stat record are byte-identical after the Pikmin 1 save", "%s: %s %s", mName, path,
+				              now == after.end() ? "erased" : "changed");
+				return;
+			}
+		}
+		CardQuickInfo infos[4];
+		if (!reloadCard(t, mName, infos)) return;
+		if (infos[0].mSaveStatus != PlayState::ReadyToSave || infos[0].mCurrentDay != 3) {
+			scenarioFailf(t, "slot A holds the save of day 3", "%s: status %u day %d", mName, infos[0].mSaveStatus, infos[0].mCurrentDay);
+			return;
+		}
+		scenarioPass();
+	}
+
+private:
+	FileMap mBefore;
+};
+
 } // namespace
 
 PcScenario* pc_scenario_make_card_errors(void)
@@ -248,6 +331,12 @@ PcScenario* pc_scenario_make_card_errors_saved(void)
 	                        { "broken", PC_CARD_FAULT_CHECK_RESULT, CARD_RESULT_BROKEN, 11, { Yes, No, No } },
 	                        { "no card", PC_CARD_FAULT_PROBE, 1, 8, { Yes, No } },
 	                    });
+	return &s;
+}
+
+PcScenario* pc_scenario_make_card_other_game(void)
+{
+	static OtherGameFile s;
 	return &s;
 }
 

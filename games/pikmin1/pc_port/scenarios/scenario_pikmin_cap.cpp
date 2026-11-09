@@ -24,6 +24,11 @@
 //           set to each story stage in turn (0..4, DF21-DF25) for the call, as ship_parts does;
 //           a second seed at the limit on stage 0 sets no flag and opens no text.
 //
+//   Exit    At the limit, the Onion is asked for one of the Pikmin it holds (GoalItem::exitPikis, the
+//           call the Onion menu's transfer makes). PikiMgr::birth refuses it (containerExitMode does not
+//           lift the limit), the Onion skips that Pikmin and the run goes on: within 1 s the Onion has
+//           stopped dispensing, it still holds the same Pikmin, the live count and mapPikis are unchanged.
+//
 //   DF17    At the stage start (GameCoreSection::finalSetup) PostExtinctionSeed is set when an owned
 //           colour has no Pikmin: in pikmin_cap_1 only (the red Onion, no red sprout), clear in the
 //           others (the negative control).
@@ -32,7 +37,7 @@
 // sprouts and the field starts at the limit; there is no Seed phase and the stage sprout is the one
 // plucked. pikmin_cap_999 is the setting's maximum (PIKI_FIELD_LIMIT_MAX).
 //
-// Not covered: a real Onion emission (the Onion menu, mPikisToExit), challenge mode (no flag
+// Not covered: the Onion menu itself (it clamps a withdrawal at the limit, onion_menu_transfer), challenge mode (no flag
 // there), a movie active at the time (no text), and the test-map collision of stage id 5 + 21
 // with DEMOFLAG_FirstNectar (26), which no disc stage can reach.
 //
@@ -302,9 +307,8 @@ public:
 					return;
 				}
 				if (t - mWindowTick < 2 * rate) return;
-				mPhase = Done;
 				std::printf("[scenario] %s: flags now %s; Onion holds %u leaf Pikmin\n", mName, setBits(demoFlags()).c_str(), mOnion->mHeldPikis[Leaf]);
-				scenarioPass();
+				enter(Exit, t);
 				return;
 			}
 			if (opened > mTexts0) {
@@ -327,12 +331,42 @@ public:
 			}
 			return;
 		}
+		case Exit: {
+			if (!mExitAsked) {
+				topUpToLimit(navi);
+				mExitStore = mOnion->getTotalStorePikis();
+				mLiveBefore = liveCount(Blue);
+				if (GameStat::mapPikis != mLimit || mExitStore < 1 || mOnion->mIsDispensingPikis) {
+					fail(t, "the field at the limit and an idle Onion that holds Pikmin", "mapPikis %d (limit %d), Onion holds %d, dispensing %d",
+					     (int)GameStat::mapPikis, mLimit, mExitStore, (int)mOnion->mIsDispensingPikis);
+					return;
+				}
+				mOnion->exitPikis(1);
+				mExitAsked = true;
+				return;
+			}
+			if (mOnion->mIsDispensingPikis) {
+				if (span > rate) fail(t, "the Onion stops dispensing within 1 s", "still dispensing, %d to go", mOnion->mPikisToExit);
+				return;
+			}
+			std::printf("[scenario] %s: one Pikmin asked from the Onion at the limit: Onion holds %d -> %d, live Pikmin %d -> %d, mapPikis %d\n", mName,
+			            mExitStore, mOnion->getTotalStorePikis(), mLiveBefore, liveCount(Blue), (int)GameStat::mapPikis);
+			if (mOnion->getTotalStorePikis() != mExitStore || liveCount(Blue) != mLiveBefore || GameStat::mapPikis != mLimit) {
+				fail(t, "at the limit the Onion skips the Pikmin it cannot birth: its store, the live count and mapPikis unchanged",
+				     "Onion %d -> %d, live %d -> %d, mapPikis %d", mExitStore, mOnion->getTotalStorePikis(), mLiveBefore, liveCount(Blue),
+				     (int)GameStat::mapPikis);
+				return;
+			}
+			mPhase = Done;
+			scenarioPass();
+			return;
+		}
 		case Done: return;
 		}
 	}
 
 private:
-	enum Phase { Seed, Fill, Plate, Cap, Done };
+	enum Phase { Seed, Fill, Plate, Cap, Exit, Done };
 	struct Snap {
 		int born, container, held;
 	};
@@ -397,7 +431,8 @@ private:
 	Phase mPhase        = Seed;
 	unsigned mPhaseTick = 0, mWindowTick = 0;
 	int mTexts0 = 0, mSeedCount = 0, mLiveBefore = 0, mStage = 0, mStart = 0, mBorn = 0;
-	bool mEmitted = false, mSawText = false, mRepeat = false;
+	bool mEmitted = false, mSawText = false, mRepeat = false, mExitAsked = false;
+	int mExitStore = 0;
 	Snap mBefore {};
 	GoalItem* mOnion     = nullptr;
 	PikiHeadItem* mSeed  = nullptr;
