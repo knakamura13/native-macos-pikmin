@@ -80,6 +80,8 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_tutorial_skip(),
 		pc_scenario_make_tutorial_firsts(),
 		pc_scenario_make_tutorial_day1(),
+		pc_scenario_make_playthrough_day1(),
+		pc_scenario_make_playthrough_day1_nosave(),
 		pc_scenario_make_pellet_table(),
 		pc_scenario_make_ufo_part_discovery(),
 		pc_scenario_make_blue_onion_boot(), pc_scenario_make_red_onion_boot(), pc_scenario_make_yellow_onion_boot(),

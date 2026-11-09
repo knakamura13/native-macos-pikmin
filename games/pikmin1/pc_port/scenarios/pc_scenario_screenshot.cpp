@@ -27,6 +27,8 @@ struct Capture {
 };
 
 std::vector<Capture> sCaptures;
+// Evidence captures waiting for the next scenario tick (pc_scenario_screenshot_evidence).
+std::vector<std::string> sNextTick;
 int sBaseWindowW = 64;
 int sBaseWindowH = 36;
 // Game GX draws in a 640x480 virtual space; the port maps that to the internal
@@ -132,9 +134,19 @@ void pc_scenario_screenshot_set_base_window_size(int width, int height)
 
 bool pc_scenario_screenshot_any(void) { return !sCaptures.empty(); }
 
+bool pc_scenario_screenshot_evidence(const char* fileName)
+{
+	const char* dir = std::getenv("PIKMIN_SCENARIO_EVIDENCE_DIR");
+	if (dir == nullptr || *dir == '\0' || fileName == nullptr || *fileName == '\0') return false;
+	sNextTick.push_back((std::filesystem::path(dir) / fileName).string());
+	return true;
+}
+
 void pc_scenario_screenshot_on_tick_begin(unsigned tick)
 {
 	sSizedUpThisTick = false;
+	for (std::string& path : sNextTick) sCaptures.push_back({ PC_CAPTURE_SIM, tick, std::move(path) });
+	sNextTick.clear();
 	if (sCaptures.empty()) return;
 	if (capturesForTick(PC_CAPTURE_SIM, tick).empty()) return;
 	beginCaptureWindow();

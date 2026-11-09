@@ -62,6 +62,8 @@ PcScenario* pc_scenario_make_onion_day3_skip(void);
 PcScenario* pc_scenario_make_tutorial_skip(void);
 PcScenario* pc_scenario_make_tutorial_firsts(void);
 PcScenario* pc_scenario_make_tutorial_day1(void);
+PcScenario* pc_scenario_make_playthrough_day1(void);
+PcScenario* pc_scenario_make_playthrough_day1_nosave(void);
 PcScenario* pc_scenario_make_pellet_table(void);
 PcScenario* pc_scenario_make_ufo_part_discovery(void);
 PcScenario* pc_scenario_make_blue_onion_boot(void);

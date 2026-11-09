@@ -124,7 +124,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `title_boot`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `day_end`, `day_end_day29`, `extinction_day30`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu`, `piki_hazard_deaths`, `piki_drown`, `piki_throw_water`, or `objects_smoke`, or a save scenario: `save_load`, `save_load_flags`, `results_nosave_map`, `results_nosave_cardselect`, `card_errors`, `card_errors_saved`, `pause_continue`, `permadeath_erase`, `permadeath_unsaved`, `permadeath_bad_slot`, `permadeath_off`. Also `pellet_table`, `ufo_part_discovery`, `pellet_carry`, `ship_part_carry`, `nectar_growth`, `bomb_firsts`, `carry_blocked` (stages in the table below). Also `pikmin_cap`, `pikmin_cap_1`, `pikmin_cap_250`, `pikmin_cap_999`, `day_clock`, `demo_timers`, `throw_levels`, `whistle_radius`, `navi_invincible`, `whistle_gather_release`, `whistle_pluck_held` (stages in the table below). Also `enemy_kills`, `onion_menu_transfer`, `navi_states`, `gate_break` (stages in the table below). Also `map_menu`, `map_menu_lockout`, `world_map_day_end`, `title_round_trip`, `day_end_handoff` (stages in the table below). Object-stage scenarios need `PIKMIN_SCENARIO_STAGE` (see the table below). `tutorial_skip`, `tutorial_firsts`, `tutorial_day1`, `ufo_part_discovery`, `ship_part_carry` and `demo_timers` need `stages/practice.ini`. |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `title_boot`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `day_end`, `day_end_day29`, `extinction_day30`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu`, `piki_hazard_deaths`, `piki_drown`, `piki_throw_water`, or `objects_smoke`, or a save scenario: `save_load`, `save_load_flags`, `results_nosave_map`, `results_nosave_cardselect`, `card_errors`, `card_errors_saved`, `pause_continue`, `permadeath_erase`, `permadeath_unsaved`, `permadeath_bad_slot`, `permadeath_off`. Also `pellet_table`, `ufo_part_discovery`, `pellet_carry`, `ship_part_carry`, `nectar_growth`, `bomb_firsts`, `carry_blocked` (stages in the table below). Also `pikmin_cap`, `pikmin_cap_1`, `pikmin_cap_250`, `pikmin_cap_999`, `day_clock`, `demo_timers`, `throw_levels`, `whistle_radius`, `navi_invincible`, `whistle_gather_release`, `whistle_pluck_held` (stages in the table below). Also `enemy_kills`, `onion_menu_transfer`, `navi_states`, `gate_break` (stages in the table below). Also `map_menu`, `map_menu_lockout`, `world_map_day_end`, `title_round_trip`, `day_end_handoff` (stages in the table below). Object-stage scenarios need `PIKMIN_SCENARIO_STAGE` (see the table below). `tutorial_skip`, `tutorial_firsts`, `tutorial_day1`, `ufo_part_discovery`, `ship_part_carry` and `demo_timers` need `stages/practice.ini`. `playthrough_day1` and `playthrough_day1_nosave` start there too and load it themselves when `PIKMIN_SCENARIO_STAGE` is unset (see [Play-through](#play-through)). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value (or a missing one) exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. A visible window is also positioned and may move the real mouse pointer (see [Mouse pointer](#mouse-pointer)). |
 | `--scenario-realtime` | Pace the ticks in real time at the tick rate (the fixed-step scheduler) instead of unthrottled. Deterministic mode stays on, so the per-tick state is the same (`scenario_realtime_determinism_first_yellow_30`). With `--scenario-visible` the window defaults to 1280x720. |
@@ -143,6 +143,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `PIKMIN_LOG_FILE_OPENS` | File path. Appends `<game path>\t<OK\|FAILED>` per `DVDOpen`. Works in any build, used to make the boot manifest. The file is appended to, so use a fresh path per run. |
 | `PIKMIN_SCENARIO_WINDOW` | Window size `WxH`, default `64x36` (`1280x720` for a visible real-time run: `--scenario-handoff`, or `--scenario-realtime` with `--scenario-visible`). The scene renders at the same size (render scale 1, no 160x120 floor). Anything but two positive integers up to 8192 exits 2. See [Window size](#window-size). |
 | `PIKMIN_SCENARIO_HANDOFF_PROBE` | `1` with `--scenario-handoff`: the headless hand-off check that `check_scenario_handoff.cmake` runs (hidden window, a virtual SDL game controller, a PASS or FAIL line from the probe, then exit). Test use only. |
+| `PIKMIN_SCENARIO_EVIDENCE_DIR` | Folder for the captures a scenario asks for at its own steps (`pc_scenario_screenshot_evidence`; only `playthrough_day1` does). Each is the next tick's finished frame, written as `--scenario-screenshot` writes one. Unset or empty, nothing is captured. |
 | `PIKMIN_SCENARIO_SCREENSHOT_WINDOW` | Window and render size on capture ticks only, default **`640x480`** (GameCube GX virtual size). Smaller sizes (for example the old 128×72 default) often produce a blank readback in headless CI because the port maps GX in 640×480 space. The sim does not read the picture; state-hash logs match runs without `--scenario-screenshot`. |
 
 **Screenshot verification (`scenario_screenshot_boot_smoke_30`):** every OS run checks width/height, non-blank pixels, at least 80 distinct RGB values and RGB variance ≥ 80 (catches a blank frame). The CTest driver sets `PIKMIN_SCENARIO_WINDOW=640x480` for the whole run so CI does not rely on a mid-tick resize from 64×36 (headless stacks often read back an empty enlarged FBO). **Linux** also fuzzy-compares against `tools/scenarios/golden/boot_smoke_tick100_640x480.png` (llvmpipe, tolerance 10 per channel, up to 3% differing pixels). macOS (Apple GL) and Windows (Mesa WGL) are expected to differ in fine detail and colour; those runners skip the golden file and rely on the statistical guards. Same scenario and tick on one machine should be repeatable; do not expect byte-identical PNGs across GPU stacks.
@@ -311,6 +312,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `tutorial_skip` | 30, 60 | The clock lock is checked per tick, and the skip's request, its application and the day-over exit each take a tick or two whose count differs per rate; the bounds are in seconds. Read from code, not shown to fail at either rate. |
 | `tutorial_firsts` | 30, 60 | The captain's walks (the trigger radii are crossed on different ticks), the discovery movie (half a frame per tick at 60 Hz), the Onion's boot motion and the plucks run on frame-time arithmetic; the seed lands elsewhere at 60 Hz (`BuryInit`'s snap, `sprout_landing`). |
 | `tutorial_day1` | 30, 60 | Push, carry and suck speeds are per-second arithmetic over per-tick steps, and the movies advance half a frame per tick at 60 Hz; both rates run the whole Day 1 to its end. |
+| `playthrough_day1` | 30, 60 | The reasons of `tutorial_day1`, `throw_levels` (the throw's grab and release keys) and `onion_day3` (the world map and the next stage load) together: every step's tick count differs per rate. The negative control `playthrough_day1_nosave` runs at 30 only; the save prompt does not depend on the rate. |
 | `ship_parts` | 30, 60 | Nothing in `getUfoParts` depends on the rate (it is direct calls, one part per tick); both rates are kept because the run costs half a second and the intro gate and the tick counter differ (intro 15 ticks on the stand-ins, 45 on the disc). Not shown to fail at either rate. |
 | `first_yellow` | 30, 60 | The captain's walk to the sprout runs on frame-time arithmetic (`Navi::updateWalkAnimation`, as in `onion_unlock`), so where and when he stops differs per rate: parked at 2.00 s at both, 8.3 units from the sprout at 30 Hz and 9.0 at 60 Hz. |
 | `coop_smoke` | 30, 60 | The rate is boot configuration, as for `boot_smoke`; each rate must boot two captains and draw split screen. |
@@ -366,6 +368,7 @@ software run are byte-identical for every entry.
 | `tutorial_skip` | 93 / 183 | 0.7 s / 0.9 s (CTest wall time, `-j 3`) | not measured |
 | `tutorial_firsts` | 1824 / 3501 | 4.8 s / 8.7 s (CTest wall time, `-j 3`) | not measured |
 | `tutorial_day1` | 3778 / 7114 | 9.1 s / 12.8 s (CTest wall time, `-j 3`) | not measured |
+| `playthrough_day1` (Day 1 and Day 2) | 3401 / 6293 | 8.2 s / 10.8 s (CTest wall time, `-j 3`, 2026-11-09, Apple M3 Max) | not measured |
 
 The object stage costs nothing at load any more: `sprout_landing` (287 ticks, 0.8 s)
 and `day30_clock` on the plain stage (277 ticks, 0.8 s) take the same time. The 17 s
@@ -386,6 +389,7 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | `scenario_map_menu*_<rate>`, `scenario_world_map_day_end_<rate>`, `scenario_title_round_trip_<rate>` | stand-in tree | none | At 30 and 60: `map_menu` and `map_menu_lockout` on `stages/practice.ini`, `world_map_day_end` and `title_round_trip` on `stages/sandbox_objects.ini`. |
 | `scenario_world_map_cancel_fail_<rate>`, `scenario_title_round_trip_continue_fail_<rate>`, `scenario_day_end_handoff_cancel_fail_<rate>` | stand-in tree | none | negative controls through `check_scenario_exit.cmake` (`EXPECT=1`): each must fail with its own message and print no PASS or hand-off line. `day_end_handoff_cancel` runs with `--scenario-handoff` and the probe. |
 | `scenario_onion_day3*_<rate>_disc` | a real install | `game-assets` | The same six scenarios at 30 and 60 on the runner's default stage (Forest of Hope), in their own `foreach` after the disc entries above, which are unchanged. |
+| `scenario_playthrough_day1_<rate>`, `scenario_determinism_playthrough_day1_<rate>`, `scenario_playthrough_day1_nosave_fail_30` | stand-in tree | none | At 30 and 60 on `stages/practice.ini`, in their own block after the determinism negative control. The run writes its hash log to `scenario-logs` (the cross-OS comparison) and its four step captures to `scenario-logs/playthrough_day1_<rate>/` (`PIKMIN_SCENARIO_EVIDENCE_DIR`). The determinism pair runs it twice per rate (1200 s timeout). The negative control declines the save through `check_scenario_exit.cmake` (`EXPECT=1`) and must fail with the Save step's message and print no PASS line. |
 | `scenario_gamestat_invariant_fail` | stand-in tree | none | Negative control for the GameStat invariant check (see below): the test-only scenario `gamestat_corrupt` raises `workPikis[Blue]` by 3 at tick 5 with no Pikmin behind it; `check_scenario_exit.cmake` asserts exit 1 and the `FAIL gamestat_corrupt tick 5` line. |
 | `scenario_first_yellow_<rate>`, `scenario_coop_smoke_<rate>`, `scenario_coop_look_30` | stand-in tree | none | As `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates). `first_yellow` passes at its hand-off point (no `--scenario-handoff`). |
 | `scenario_handoff_free_play_30`, `_60`, `scenario_handoff_first_yellow_30`, `scenario_handoff_day_end_handoff_30`, `_60` | a private copy of the stand-in tree | none | `check_scenario_handoff.cmake`, see [The hand-off check](#the-hand-off-check). About 6 to 8 s each: the scripted part and 2 s after the hand-off run in real time. 600 s timeout. |
@@ -432,6 +436,7 @@ stages do not exist on a real install. `coop_smoke` and `coop_look` have none ei
 | `world_map_day_end`, `title_round_trip`, `day_end_handoff` | `stages/sandbox_objects.ini` (Day 2; the world map then picks the Impact Site, `stages/practice.ini`, for Day 3) |
 | `demo_timers` | `stages/practice.ini` (the tutorial stage, for its demo parms) |
 | `ship_part_carry` | `stages/practice.ini` |
+| `playthrough_day1`, `playthrough_day1_nosave` | `stages/practice.ini` for Day 1, then the world map picks `stages/stage1.ini` (the stand-in Forest course) for Day 2 |
 | `tutorial_skip`, `tutorial_firsts`, `tutorial_day1` | `stages/practice.ini`, the tutorial stage: the Impact Site's file name, first in `stages.ini` with `id 0`, so a new game's Day 1 there is the tutorial (`isTutorial()`). Red Onion, the not-yet-owned blue and yellow Onions, the ship, the Main Engine, the push box and a red pellet, from the disc's generator files' kinds and parameters (`standin-objects.md`, Tutorial stage). |
 
 `sprout_landing`, `onion_skip`, `container_menu`, `onion_unlock`, `onion_unlock_whistle` and `objects_smoke` have no `_disc` entry: their
@@ -677,6 +682,8 @@ run above is wine 9.0).
 | `navi_states` | Day 1 | EC-34, EC-51 (geyser): InteractGeyzer is taken once (the second is refused), flies the captain to the target (within 40 units) and ends in Walk; InteractBury is taken once (the second refused, invincible), costs its damage, and with no input the captain is out after the 5 s escape timer (150 ticks at 30 Hz, scaled by `PC_TICKS30`) plus his get-up motion, 5 to 7 s at both rates; at health 5 a Bury takes him to Dead. Rope, Funbari, Stuck, Pellet, Pick and Water are not driven (no injection path on a stand-in stage). |
 | `gate_break` | Day 1, all-objects stage | EC-51 (gate): the soft gate (health 300 from the stand-in generator: days 12, hours 12) takes a 1-damage scratch with no stage change, then one stage per stage's worth of damage, its waypoint opens, and a completed gate refuses hits. The reinforced and bomb gates, the bridge and the push box are not covered. |
 | `tutorial_day1` | Day 1, tutorial stage | The Pikmin firsts and the tutorial's own day end (DF14, DF15, DF10, DF12 by a Pikmin, DF13, T16). Red Pikmin are born free beside each object and handed to `Piki::actOnSituaton`, as a thrown Pikmin's landing does. Nine at the push box (the disc's 10 Pikmin, speed 50, 270 units) move nothing for 3 s; a tenth sets StartBoxPush as it starts; FinishBoxPush when it arrives 270 units on. One carries the red pellet into the red Onion (CollectFirstPellet). Twenty at the Main Engine set ApproachEngine (`Piki::demoCheck`, the captain over 1,000 away) and carry it to the ship: CollectEngine with ship text CollectEngine and no part id, then the ship takes it (a visible part, 1 part, level 1, Forest open). The day ends only through the ship-upgrade movie (stand-in demo17's ForceDayEnd) with the clock still at 14.8 h; `DayOverModeState` with no take-off movie, Day 2 once, the Day 1 diary entry `RESFLAG_EndFirstDay` (two pages), the results for at least 3 s, the soft reset to MapSelect, `isTutorial()` false. The captain plucks every sprout first. |
+| `playthrough_day1` | Day 1, tutorial stage, then Day 2 on the Forest course | One day chained from the boot: walk, pluck, throw, carry, whistle, find and deliver the Main Engine, the day end, the save, the save read back from disk, and the next day. See [Play-through](#play-through). |
+| `playthrough_day1_nosave` | as `playthrough_day1` | The negative control: answers No to the save, so the run fails at the Save step. |
 | `extinction_day30` | Day 30 | Every Pikmin dies on the last day (T05, EC-12). Three blue Pikmin are killed as in `extinction`. Asserted, each within a bound in seconds: PikiZero; `GAMEEND_PikminExtinction` with demo46 playing; demo46's own key resets the flag to `GAMEEND_None` while demo46 still plays and the clock is still below the end hour (the Day 30 branch of `GameMovieInterface::parse`); `DayOverModeState` follows at once and sets the clock to 19:00; the bad ending runs (demo73 with the final results window, which A presses take through the scores, the parts list and the options save, up at least 4 s); the soft reset goes to `ONEPLAYER_GameExit` within 60 s of demo73. Throughout: demo47 (ExtDayEnd) never starts, the flag is set once, the day stays 30, `mEndingType` stays None. A build without the Day 30 test at NPG:3323 fails with `demo47 started`. At 30 Hz: flag t=35, reset t=93, demo73 t=97, GameExit t=517; at 60 Hz: 35, 150, 157, 966. Needs the stand-in demo73 and the results screens (`standin-cinema.md`). |
 | `save_load`, `save_load_flags` | Day 2, object stage | A day-end save through the real results screen and card stubs, read back from disk and loaded. `day_end`'s sunset (two blue Pikmin into the blue Onion, a red one lost) with a run state set before it: 7 ship parts (6 required), per-stage parts, upgrade level 1, a part on the day graph, red, blue and yellow container bits; `save_load_flags` also starts the run as Permadeath and Hard. On the results screen: Yes to "save?", the card check makes the default file, slot A, the save (ogSaveMgr 5, 6, 14, `mDidSaveFail` false), the exit to MapSelect. The scratch save directory holds the card file and its stat record, and `card0/days/slot0/day03.bin` only for the non-Permadeath run. The card file is read back from disk (in-memory image cleared), is not broken, slot A shows day 3, 7 parts and the Pikmin counts; after CardSelect's reset and `loadCurrentGame` every saved field equals the snapshot taken at the save (day, play state, parts, containers, per-stage and per-day parts, Onion Pikmin per colour and stage, demo and result flags). The slot's Permadeath and Hard marks and the rules the load adopts are the run's (off, or on), with the rules forced to the opposite before the load. PASS at tick 497 (30 Hz) and 827 (60 Hz). |
 | `results_nosave_map`, `results_nosave_cardselect` | Day 2, object stage | The results screen's exits without a save (T13): "save?" No, then the second question Yes, to MapSelect; or B (the menu closes, ExitFailure 12, A again), No and No, to CardSelect (AlternativeExitSuccess 15). Both: the second question shown, no save ran, no card file in the scratch save directory. PASS at tick 306 and 344 (30 Hz). |
@@ -709,6 +716,54 @@ run above is wine 9.0).
 tree (authored fixtures and source defaults) K is 10 at 30 Hz and 20 at 60 Hz; a
 real install gives its own value, which only the local disc lanes check. A change
 to the squad AI, collision, the sim RNG or the stand-in ThrowWait motion moves it.
+
+## Play-through
+
+`playthrough_day1` (`pc_port/scenarios/scenario_playthrough.cpp`) plays one day as a
+chain, so the stand-in game is checked from the boot to the next day without a
+person at the controls. Each step is driven by pad input where the game reads one
+and asserted on game state within a bound in seconds; no step asserts an exact tick.
+
+| Step | Driven by | Asserted |
+|------|-----------|----------|
+| Walk | stick to the red Onion | `DEMOFLAG_DiscoverRedOnyon`; the discovery movie boots the Onion (`GOAL_Wait`) |
+| Pluck | stick and A at the Onion's seed | one red Pikmin, in the party, `DEMOFLAG_PluckRedPikmin` |
+| Throw | the cursor on the red 1-pellet, A held to the grab | a Pikmin flies, lands and takes the pellet by itself (`Piki::actOnSituaton`, a carrier place) |
+| Carry | none | `DEMOFLAG_CollectFirstPellet` with the red Onion as goal; its seed plucked: two red Pikmin, the carrier out of the party |
+| Whistle | the cursor on the carrier, B held | both red Pikmin in the party |
+| Find | stick to the Main Engine | the captain sets `DEMOFLAG_ApproachEngine` within the trigger radius (`Navi::demoCheck`) |
+| Deliver | two throws at the engine | both take carrier places; two do not move it for 2 s; the other ten carriers are born beside it (the practice stage has one pellet); `DEMOFLAG_CollectEngine`, the engine a visible part (1 part, level 1, Forest open) |
+| Day end | none | the ship-upgrade movie ends the day; Day 2; all twelve Pikmin go into the red Onion, none lost (`GameCoreSection::exitDayEnd`) |
+| Save | Yes to "save?", A elsewhere (`scen_save::ResultsDriver`) | the save manager's statuses 5, 6 and 14, no save failure, the soft reset to MapSelect |
+| Reload | none | the card file read back from disk; slot A shows Day 2, one part and twelve red Pikmin; after the file select's reset and load the game equals the one at the save, field by field (`scen_save::compareSnapshots`) |
+| Next day | stick on the real world map, then the Forest course | Day 2 on `stages/stage1.ini`, not the tutorial, the engine on the ship, the red Onion owned, booted and holding the twelve, none on the field; for 2 s the captain walks and the clock runs |
+
+`playthrough_day1_nosave` is the same chain answering No to the save; it must fail
+with `expected Save: a save before the results screen closes`.
+
+### Step captures
+
+With `PIKMIN_SCENARIO_EVIDENCE_DIR` set (the CTest entries set
+`<build>/scenario-logs/playthrough_day1_<rate>/`), the run writes four 640x480 PNGs
+of the tick after each step boundary. They are evidence for a reviewer, not golden
+comparisons, and no golden needs refreshing when they change.
+
+| File | Frame | What to look for |
+|------|-------|------------------|
+| `01_first_pluck.png` | the first Pikmin settled in the party | the captain beside one red Pikmin, the red Onion behind them, the HUD's red count at 1 |
+| `02_pellet_carry.png` | the thrown Pikmin takes the pellet | a red Pikmin at the small pellet beside the cliff, the captain about 60 units away |
+| `03_engine_carry.png` | the engine has moved 20 units | the Main Engine on the field, its carriers small around its base, the captain nearer the camera; the HUD counts 12 Pikmin |
+| `04_day2.png` | the first Day 2 tick | the Forest course's cliff and path with the captain at his start, no Pikmin on the field (the red Onion is out of frame) |
+
+A blank, single-colour or garbled picture, or one that does not show its step, is
+worth a look even though the run passed: the state checks do not read the frame.
+The results screen has no capture: taken at the save question or when the save
+completes, the frame is black apart from the achievement banner, so it would show
+nothing a reviewer can check.
+
+Not covered: the push box (`tutorial_day1`), the carriers' route and speed (only
+that they arrive within the bound), and take-off and landing movies on a
+non-tutorial day (the stand-in stages play none).
 
 ## Writing a scenario
 
