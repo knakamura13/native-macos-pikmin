@@ -515,7 +515,10 @@ public:
 	AramAllocator* mActiveAramAllocator;             // _328
 	vu32 mDmaComplete;                               // _32C
 	vu32 mTexComplete;                               // _330
-#if defined(WIN32)                                   // The WIN32 `System` class was very different.
+// The Windows build of the original `System` class was very different. The tail below belongs to
+// that layout only: it is gated on an explicit macro that no build sets, because `WIN32` is defined
+// in some translation units and not others on MinGW, and every unit must agree on `sizeof(System)`.
+#if defined(PIKI_WIN32_DLL_LAYOUT)
 	u8 _334[0x3B8 - 0x334];                          // _334
 	char _3B8[];                                     // _3B8, major TODO here.
 #endif
