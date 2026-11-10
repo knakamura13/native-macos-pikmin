@@ -1,5 +1,5 @@
 # Extra fork branches to merge when rebuilding kyle-develop, after the open upstream PRs.
 # One branch name per line. Blank lines and lines starting with # are ignored.
 
-# Disc-free gameplay scenario tests (replaces fork PR #73; issues #59, #76, #77). Holds only disc-free changes, no kyle-patches files.
-knakamura/disc-free-gameplay-develop
+# Disc-free generated stand-in tree and scenario runner for CI (fork PR #197). Replaces knakamura/disc-free-gameplay-develop, which fell 389 commits behind main and no longer merges.
+knakamura/disc-free-gameplay-scenarios
