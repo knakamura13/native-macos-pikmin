@@ -1586,8 +1586,13 @@ u32 System::copyRamToCache(u32 mainMemAddr, u32 size, u32 aramCacheAddr)
 
 	gsys->mDmaComplete = FALSE;
 
+	// On PC the transfer below is not performed (ARQPostRequest in os_stubs.cpp) and `mainMemAddr` is a
+	// 32-bit value that has already lost the top half of a host pointer, so the range would name
+	// unrelated memory.
+#if !defined(PIKI_PC_PORT)
 	// sync data cache and RAM
 	DCStoreRange((void*)mainMemAddr, size);
+#endif
 
 	// send request to the aram queue (high priority)
 	ARQPostRequest(cache, (u32)(uintptr_t)cache, ARQ_TYPE_MRAM_TO_ARAM, ARQ_PRIORITY_HIGH, mainMemAddr, adjustedCacheAddr, size, doneDMA);
@@ -1623,8 +1628,13 @@ void System::copyCacheToRam(u32 mainMemAddr, u32 aramCacheAddr, u32 size)
 
 	gsys->mDmaComplete = FALSE;
 
+	// On PC the transfer below is not performed (ARQPostRequest in os_stubs.cpp) and `mainMemAddr` is a
+	// 32-bit value that has already lost the top half of a host pointer, so the range would name
+	// unrelated memory.
+#if !defined(PIKI_PC_PORT)
 	// make sure data cache is clear for where we're putting this
 	DCInvalidateRange((void*)mainMemAddr, size);
+#endif
 
 	// send request to the aram queue (high priority)
 	ARQPostRequest(cache, (u32)(uintptr_t)cache, ARQ_TYPE_ARAM_TO_MRAM, ARQ_PRIORITY_HIGH, aramCacheAddr, mainMemAddr, size, doneDMA);
