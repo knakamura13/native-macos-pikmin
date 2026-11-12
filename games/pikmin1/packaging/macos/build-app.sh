@@ -627,7 +627,18 @@ if command -v ccache >/dev/null 2>&1; then
     cache_flags+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
 fi
 
-cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release ${cache_flags[@]+"${cache_flags[@]}"}
+# Override any value left in a reused CMake cache with this source's launcher version.
+launcher_version="$(python3 - "${repo_root}/versions.json" <<'PY'
+import json, re, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    version = json.load(f)["launcher"]
+if not isinstance(version, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version):
+    sys.exit("Invalid launcher version in versions.json")
+print(version)
+PY
+)"
+cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release \
+    -DOPEN_NECTAR_VERSION="${launcher_version}" ${cache_flags[@]+"${cache_flags[@]}"}
 cmake --build "${build_dir}" --target pikmin_pc pikmin_launcher -j "$(sysctl -n hw.ncpu)"
 
 # Pikmin 2 in both regions, as upstream scripts/release-macos.sh ships it. The
