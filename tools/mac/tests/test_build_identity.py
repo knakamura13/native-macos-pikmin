@@ -13,6 +13,16 @@ spec = importlib.util.spec_from_file_location('build_identity', path)
 identity = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(identity)
 
+
+def without_rebuild_marker(env):
+    """build-app.sh promotes an unset role to develop when the checkout's last commit is the
+    kyle-develop rebuild marker, as on kyle-develop itself. Hide the repository from it so a
+    test sees the role it sets, on any branch."""
+    env = dict(env)
+    env['GIT_DIR'] = os.devnull
+    return env
+
+
 class IdentityTests(unittest.TestCase):
     def test_marker_keeps_inputs_and_skip_reason(self):
         marker = 'kyle-develop-rebuild-v1\n\nupstream_main abc\nkyle_patches def\nmerged_pr 205 123\nskipped_pr 212 456 tests failed\n'
@@ -64,7 +74,8 @@ class IdentityTests(unittest.TestCase):
             sentinel = app / 'keep'
             sentinel.write_text('keep')
             script = path.parents[2] / 'games/pikmin1/packaging/macos/build-app.sh'
-            result = subprocess.run(['bash', str(script), '--output-dir', str(output)], capture_output=True, text=True)
+            result = subprocess.run(['bash', str(script), '--output-dir', str(output)], capture_output=True, text=True,
+                                    env=without_rebuild_marker(os.environ))
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('Refusing to replace an existing output app', result.stderr)
             self.assertEqual(sentinel.read_text(), 'keep')
@@ -72,7 +83,7 @@ class IdentityTests(unittest.TestCase):
     def test_install_needs_a_role(self):
         script = path.parents[2] / 'games/pikmin1/packaging/macos/build-app.sh'
         with tempfile.TemporaryDirectory() as tmp:
-            env = dict(os.environ, PIKMIN_BUILD_ROLE='unknown')
+            env = without_rebuild_marker(dict(os.environ, PIKMIN_BUILD_ROLE='unknown'))
             result = subprocess.run(['bash', str(script), '--install', tmp], capture_output=True, text=True, env=env)
             self.assertEqual(result.returncode, 2)
             self.assertIn('Refusing --install for a build with no role', result.stderr)
