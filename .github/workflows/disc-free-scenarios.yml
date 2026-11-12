@@ -44,7 +44,9 @@ on:
     # golden-refresh/** starts a golden refresh (refresh_goldens.sh pushes one).
     # A branch push works where workflow_dispatch
     # does not: GitHub only dispatches a workflow file that exists on the default branch.
-    branches: [main, 'golden-refresh/**']
+    # kyle-develop: the fork's generated branch (upstream main plus fork work), force-pushed
+    # by tools/kyle-develop/rebuild.sh; each rebuild runs the suite against current upstream.
+    branches: [main, kyle-develop, 'golden-refresh/**']
   workflow_dispatch:
     inputs:
       float_det:
@@ -63,11 +65,12 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels the run it replaces. Pushes (main, the listed branches,
-# golden-refresh/**) and manual runs each get their own group (the run id) and are never cancelled.
+# A new push to a pull request, or a new kyle-develop rebuild, cancels the run it replaces. Other
+# pushes (main, golden-refresh/**) and manual runs each get their own group (the run id) and are
+# never cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/kyle-develop' && 'kyle-develop' || github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/kyle-develop' }}
 
 env:
   BUILD_TYPE: Release
