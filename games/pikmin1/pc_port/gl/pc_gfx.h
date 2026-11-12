@@ -291,6 +291,27 @@ void pc_gfx_set_dof_focus(float viewDistance);
  */
 unsigned int pc_gfx_get_colour_texture(void);
 void pc_gfx_get_render_size(int* width, int* height);
+/**
+ * @brief Lowest internal render size the render scale may produce. Default
+ * 160x120. --scenario lowers it, because nothing reads its picture.
+ */
+void pc_gfx_set_min_render_size(int width, int height);
+
+#if PIKI_SCENARIOS
+// Writes the scene colour buffer (post-process output) to path. sourceFramebuffer
+// is the same target PIKMIN_FRAME_DUMP reads (finished frame before the window blit).
+bool pc_gfx_write_scene_png(const char* path, unsigned int sourceFramebuffer, int width, int height, int* outW,
+                            int* outH);
+// Capture-tick window resize: sync drawable + native FBO before the sim tick renders.
+void pc_gfx_scenario_prepare_capture(int renderW, int renderH);
+// Netplay presentation pass after a capture-tick resize (GX mapping + clear).
+void pc_gfx_scenario_presentation_pass_begin(void);
+// No-render mode (PIKMIN_SCENARIO_NO_RENDER): draws, clears, the window blit and
+// the swap are skipped; everything else the frame does still runs. Set before
+// the first tick; a run in this mode has no picture to capture or show.
+void pc_gfx_scenario_set_no_render(int on);
+int pc_gfx_scenario_no_render(void);
+#endif
 
 /**
  * @brief Peak use of the two fixed draw pools since the process started.

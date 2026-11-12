@@ -5,9 +5,13 @@
 #include "netplay/pc_netplay_policy.h"
 #include "netplay/pc_netplay_present.h"
 #endif
+#include "scenarios/pc_scenario_note.h"
 #if defined(PIKI_PC_PORT)
 #include "settings/pc_settings.h"
 #include "Generator.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 #endif
 #include "AIConstant.h"
 #include "BaseInf.h"
@@ -813,7 +817,17 @@ void ItemCreature::refresh(Graphics& gfx)
 
 		if (!isOffCamera) {
 			gfx.useMatrix(Matrix4f::ident, 0);
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+			// Disc-free stand-ins with Blender art: the bomb rock and the
+			// nectar carry their shading in vertex colours, which only the unlit
+			// stand-in draw shows.
+			const bool unlit = mObjType == OBJTYPE_Bomb || mObjType == OBJTYPE_Water || mObjType == OBJTYPE_FallWater;
+			if (unlit) pc_scenario_push_creature_unlit_draw();
+#endif
 			mItemShapeObject->mShape->drawshape(gfx, *gfx.mCamera, nullptr);
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+			if (unlit) pc_scenario_pop_creature_unlit_draw();
+#endif
 		}
 		return;
 	}
@@ -1233,6 +1247,8 @@ void BuildingItem::refresh(Graphics& gfx)
 #endif
 			gfx.useMatrix(Matrix4f::ident, 0);
 			mItemShapeObject->mShape->drawshape(gfx, *gfx.mCamera, &mAnimatedMaterials);
+			// Scenarios read whether a wall's model was submitted (gate_break).
+			PC_SCENARIO_NOTE("wall_drawn", mObjType);
 		}
 	}
 
