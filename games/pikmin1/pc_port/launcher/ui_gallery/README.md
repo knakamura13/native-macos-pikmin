@@ -5,9 +5,8 @@ or component in a fixed state. It is drawn by the real launcher code
 (`HubWindow::Impl` / `Hub` in `launcher_gui.cpp`), not a copy of it. The same
 stories feed three things:
 
-- **`ui_gallery`**: an interactive window. Pick a story, a window size, 1x/2x
-  DPI, phone layout and an input mode (mouse hover, gamepad/keys focus, or
-  touch), and see the live layout lint.
+- **`ui_gallery`**: an interactive window laid out like Storybook (see
+  [The window](#the-window)).
 - **`ui_gallery --capture OUT`**: a headless render of every story at every
   viewport into `OUT/shots/<story>/<viewport>.png`, with a contact sheet
   (`OUT/index.html`) and a lint report (`OUT/lint.md`).
@@ -37,6 +36,66 @@ for the window), so no real saves, settings or downloads show up or get
 touched. Buttons never fire. Pointer clicks are released off-screen, Enter and
 Space are not forwarded, and dialogs that would block are shown as message
 modals.
+
+## The window
+
+![The ui_gallery window](https://raw.githubusercontent.com/knakamura13/native-macos-pikmin/pr-assets/ui-gallery/ui-gallery/storybook-window.png)
+
+The window's chrome lives in `tool/` (`storybook.cpp`, `widgets.cpp`,
+`theme.cpp`, and Noto Sans in `tool/fonts/`, under the OFL). It is kept apart
+from the stories and is never part of a capture. Only the tool is styled;
+stories keep the launcher's own look.
+
+- **Sidebar**: *Find components* filters stories as you type (press `/` to
+  jump to it, `Esc` to clear it). The tree groups Screens and Components by
+  area (Home, Move Install, Settings, Install, Dialogs, Components). Click a
+  story, or use Up / Down, to open it. **Run story** / **Run all** at the
+  bottom run what the ctest checks (layout lint, pointer and focus lint at
+  1180x780, and the reference comparison) and show pass / fail / known
+  counts. Each story that has been run gets a green or red dot.
+- **Toolbar**: reload, zoom in / out / reset (fit; `Ctrl` + wheel zooms too),
+  the window size (the capture matrix and the two phone screens), 1x / 2x
+  display scale, the input the story gets (Mouse, Pad / keys, Touch), the
+  canvas background (light, dark, checkerboard), *Outline and measure*
+  (every widget box from the layout data, overlapping clickables in red, and
+  the size of the box under the pointer), full screen (`Esc` leaves it) and
+  **Save PNG** (full resolution, to the current folder).
+- **Addon panel** (drag its top edge to resize it, or use the chevron to
+  hide it):
+  - **Controls**: the story's args. Edits re-render the story live.
+    **Reset controls** goes back to the defaults. Tests and references always
+    use the defaults.
+  - **Visual tests**: the reference, the current picture and the difference,
+    at the selected size. **Accept as new reference** writes the picture and
+    layout into `references/` in the source tree (with the default controls
+    only).
+  - **Layout**: lint results for the frame on screen. The count on the tab
+    turns red for problems and orange for known issues. Click a result to
+    show its boxes on the canvas.
+  - **Actions**: pointer downs, clicks (never run), focus changes and keys.
+    Hover can be logged too.
+
+Every tool control shows the hand cursor. Text fields show the text cursor,
+and the splitters show resize cursors. The chrome is drawn with SDL_Renderer
+at the screen's pixel density. On Windows and Linux screens above 120 DPI the
+chrome scales up (`--ui-scale N` overrides this).
+
+```sh
+build/bin/ui_gallery --story 'hub/update-notice' --viewport 1440x900@2x
+# A scripted screenshot of the window (used for the docs):
+build/bin/ui_gallery --size 1440x900 --story hub/home --tab controls --screenshot window.png
+```
+
+### Story controls
+
+A story with args gets controls. Defaults are what captures use:
+
+```cpp
+addArgs("dialog/replace-save", "Dialogs", "Replace a save",
+        { textArg("Title", "Replace save?"), boolArg("Error", false),
+          numberArg("Height", 44, 32, 72), choiceArg("Width", { "Small", "Medium" }, 1) },
+        [](const Args& a) { Fixture f = /* ... */; f.messageTitle = argText(a, "Title"); return f; });
+```
 
 ## Viewports
 
