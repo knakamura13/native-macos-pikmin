@@ -1,0 +1,6 @@
+# ui 560x120 scale 2.000
+notice 309 18 542 58 ##hub | Open Nectar 1.4 is available
+button 309 18 542 58 ##hub | ##release
+label 309 18 542 58 ##hub | Open Nectar 1.4 is available
+button 153 18 297 58 ##hub | What's new
+label 153 18 297 58 ##hub | What's new

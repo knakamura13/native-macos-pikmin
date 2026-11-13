@@ -1,0 +1,2 @@
+# ui 720x200 scale 1.000
+toast 167 105 553 142 foreground | Pikmin 2 is not installed yet. Install it here to play.

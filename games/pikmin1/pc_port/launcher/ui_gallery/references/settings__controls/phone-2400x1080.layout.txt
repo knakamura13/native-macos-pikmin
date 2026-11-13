@@ -1,0 +1,49 @@
+# ui 1733x780 scale 1.385
+logo 517 18 1217 171 ##hub | logo
+button 637 181 781 223 ##hub | Games
+label 637 181 781 223 ##hub | Games
+button 795 181 939 223 ##hub | Settings
+label 795 181 939 223 ##hub | Settings
+button 953 181 1097 223 ##hub | Move Install
+label 953 181 1097 223 ##hub | Move Install
+button 717 239 861 277 ##hub | Pikmin
+label 717 239 861 277 ##hub | Pikmin
+button 873 239 1017 277 ##hub | Pikmin 2
+label 873 239 1017 277 ##hub | Pikmin 2
+button 367 301 557 334 ##hub | Display
+label 367 301 557 334 ##hub | Display
+button 367 342 557 375 ##hub | Graphics
+label 367 342 557 375 ##hub | Graphics
+button 367 383 557 416 ##hub | Controls
+label 367 383 557 416 ##hub | Controls
+button 367 424 557 456 ##hub | Camera
+label 367 424 557 456 ##hub | Camera
+button 367 464 557 497 ##hub | Gameplay
+label 367 464 557 497 ##hub | Gameplay
+button 367 505 557 538 ##hub | Cheats
+label 367 505 557 538 ##hub | Cheats
+button 367 546 557 579 ##hub | Texture Packs
+label 367 546 557 579 ##hub | Texture Packs
+button 367 587 557 619 ##hub | HD Models
+label 367 587 557 619 ##hub | HD Models
+button 367 627 557 660 ##hub | Saves
+label 367 627 557 660 ##hub | Saves
+button 367 672 557 716 ##hub | Reset all
+label 367 672 557 716 ##hub | Reset all
+button 1032 375 1332 414 ##hub | #a4a2d51f
+button 1032 769 1332 808 ##hub | #65cc1038
+button 1032 820 1332 859 ##hub | #d9b27e8a
+button 1032 871 1332 910 ##hub | #4ec3894b
+button 1032 922 1332 961 ##hub | #089cb0d3
+button 1032 1029 1332 1068 ##hub | #9fed4712
+button 1032 1080 1332 1119 ##hub | #239329a0
+button 1032 1131 1332 1170 ##hub | #b4e2de61
+button 1032 1238 1332 1277 ##hub | #5e838235
+button 1032 1289 1332 1328 ##hub | #c9f275f4
+button 1032 1340 1332 1379 ##hub | #758c1b46
+button 1032 1447 1332 1486 ##hub | #e2fdec87
+button 1032 1498 1332 1537 ##hub | #f9326876
+button 1032 1549 1332 1588 ##hub | #6e439fb7
+button 1032 1600 1332 1639 ##hub | #d23df105
+button 1032 1651 1332 1690 ##hub | #454c06c4
+button 1032 1702 1332 1741 ##hub | #af2d5a90

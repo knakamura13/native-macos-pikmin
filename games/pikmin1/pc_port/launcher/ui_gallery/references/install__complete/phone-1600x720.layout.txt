@@ -1,0 +1,26 @@
+# ui 1600x720 scale 1.000
+logo 450 18 1150 171 ##hub | logo
+button-disabled 570 181 714 223 ##hub | Games
+label 570 181 714 223 ##hub | Games
+button-disabled 728 181 872 223 ##hub | Settings
+label 728 181 872 223 ##hub | Settings
+button-disabled 886 181 1030 223 ##hub | Move Install
+label 886 181 1030 223 ##hub | Move Install
+button-disabled 533 247 669 438 ##hub | cover
+button-disabled 451 498 595 542 ##hub | Map editor
+label 451 498 595 542 ##hub | Map editor
+button-disabled 607 498 751 542 ##hub | Model maker
+label 607 498 751 542 ##hub | Model maker
+button-disabled 451 552 595 596 ##hub | HD textures
+label 451 552 595 596 ##hub | HD textures
+button-disabled 607 552 751 596 ##hub | Characters
+label 607 552 751 596 ##hub | Characters
+button-disabled 931 247 1067 438 ##hub | cover
+button-disabled 904 498 1094 542 ##hub | Install
+label 904 498 1094 542 ##hub | Install
+button-disabled 705 628 895 672 ##hub | Update
+label 705 628 895 672 ##hub | Update
+button 784 427 928 477 ##modal | Back
+label 784 427 928 477 ##modal | Back
+button 942 427 1086 477 ##modal | Play now
+label 942 427 1086 477 ##modal | Play now

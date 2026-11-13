@@ -1,0 +1,28 @@
+# ui 1387x780 scale 1.385
+logo 343 18 1043 171 ##hub | logo
+button 463 181 607 223 ##hub | Games
+label 463 181 607 223 ##hub | Games
+button 621 181 765 223 ##hub | Settings
+label 621 181 765 223 ##hub | Settings
+button 779 181 923 223 ##hub | Move Install
+label 779 181 923 223 ##hub | Move Install
+button 417 247 596 498 ##hub | cover
+button 356 558 500 602 ##hub | Map editor
+label 356 558 500 602 ##hub | Map editor
+button 512 558 656 602 ##hub | Model maker
+label 512 558 656 602 ##hub | Model maker
+button 356 612 500 656 ##hub | HD textures
+label 356 612 500 656 ##hub | HD textures
+button 512 612 656 656 ##hub | Characters
+label 512 612 656 656 ##hub | Characters
+button 791 247 970 498 ##hub | cover
+button 785 558 975 602 ##hub | Install
+label 785 558 975 602 ##hub | Install
+button 598 688 788 732 ##hub | Update to 1.4
+label 598 688 788 732 ##hub | Update to 1.4
+notice 1136 18 1369 58 ##hub | Open Nectar 1.4 is available
+button 1136 18 1369 58 ##hub | ##release
+label 1136 18 1369 58 ##hub | Open Nectar 1.4 is available
+button 980 18 1124 58 ##hub | What's new
+label 980 18 1124 58 ##hub | What's new
+toast 500 685 887 722 foreground | Pikmin 2 is not installed yet. Install it here to play.

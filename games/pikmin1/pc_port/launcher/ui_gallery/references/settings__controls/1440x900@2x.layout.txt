@@ -1,0 +1,49 @@
+# ui 1248x780 scale 2.308
+logo 275 18 973 171 ##hub | logo
+button 394 181 538 223 ##hub | Games
+label 394 181 538 223 ##hub | Games
+button 552 181 696 223 ##hub | Settings
+label 552 181 696 223 ##hub | Settings
+button 710 181 854 223 ##hub | Move Install
+label 710 181 854 223 ##hub | Move Install
+button 474 239 618 277 ##hub | Pikmin
+label 474 239 618 277 ##hub | Pikmin
+button 630 239 774 277 ##hub | Pikmin 2
+label 630 239 774 277 ##hub | Pikmin 2
+button 124 301 314 334 ##hub | Display
+label 124 301 314 334 ##hub | Display
+button 124 342 314 375 ##hub | Graphics
+label 124 342 314 375 ##hub | Graphics
+button 124 383 314 415 ##hub | Controls
+label 124 383 314 415 ##hub | Controls
+button 124 423 314 456 ##hub | Camera
+label 124 423 314 456 ##hub | Camera
+button 124 464 314 497 ##hub | Gameplay
+label 124 464 314 497 ##hub | Gameplay
+button 124 505 314 538 ##hub | Cheats
+label 124 505 314 538 ##hub | Cheats
+button 124 546 314 578 ##hub | Texture Packs
+label 124 546 314 578 ##hub | Texture Packs
+button 124 586 314 619 ##hub | HD Models
+label 124 586 314 619 ##hub | HD Models
+button 124 627 314 660 ##hub | Saves
+label 124 627 314 660 ##hub | Saves
+button 124 672 314 716 ##hub | Reset all
+label 124 672 314 716 ##hub | Reset all
+button 790 375 1090 414 ##hub | #a4a2d51f
+button 790 769 1090 808 ##hub | #65cc1038
+button 790 820 1090 859 ##hub | #d9b27e8a
+button 790 871 1090 910 ##hub | #4ec3894b
+button 790 922 1090 961 ##hub | #089cb0d3
+button 790 1029 1090 1068 ##hub | #9fed4712
+button 790 1080 1090 1119 ##hub | #239329a0
+button 790 1131 1090 1170 ##hub | #b4e2de61
+button 790 1238 1090 1277 ##hub | #5e838235
+button 790 1289 1090 1328 ##hub | #c9f275f4
+button 790 1340 1090 1379 ##hub | #758c1b46
+button 790 1447 1090 1486 ##hub | #e2fdec87
+button 790 1498 1090 1537 ##hub | #f9326876
+button 790 1549 1090 1588 ##hub | #6e439fb7
+button 790 1600 1090 1639 ##hub | #d23df105
+button 790 1651 1090 1690 ##hub | #454c06c4
+button 790 1702 1090 1741 ##hub | #af2d5a90

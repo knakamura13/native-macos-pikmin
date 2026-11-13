@@ -1,0 +1,31 @@
+# ui 1180x780 scale 2.000
+logo 260 18 920 163 ##hub | logo
+button-disabled 360 173 504 215 ##hub | Games
+label 360 173 504 215 ##hub | Games
+button-disabled 518 173 662 215 ##hub | Settings
+label 518 173 662 215 ##hub | Settings
+button-disabled 676 173 820 215 ##hub | Move Install
+label 676 173 820 215 ##hub | Move Install
+button-disabled 333 239 519 498 ##hub | cover
+button-disabled 276 558 420 602 ##hub | Map editor
+label 276 558 420 602 ##hub | Map editor
+button-disabled 432 558 576 602 ##hub | Model maker
+label 432 558 576 602 ##hub | Model maker
+button-disabled 276 612 420 656 ##hub | HD textures
+label 276 612 420 656 ##hub | HD textures
+button-disabled 432 612 576 656 ##hub | Characters
+label 432 612 576 656 ##hub | Characters
+button-disabled 661 239 847 498 ##hub | cover
+button-disabled 659 558 849 602 ##hub | Install
+label 659 558 849 602 ##hub | Install
+button-disabled 495 688 685 732 ##hub | Update to 1.4
+label 495 688 685 732 ##hub | Update to 1.4
+notice 929 18 1162 58 ##hub | Open Nectar 1.4 is available
+button-disabled 929 18 1162 58 ##hub | ##release
+label 929 18 1162 58 ##hub | Open Nectar 1.4 is available
+button-disabled 773 18 917 58 ##hub | What's new
+label 773 18 917 58 ##hub | What's new
+button 574 437 718 487 ##modal | Not now
+label 574 437 718 487 ##modal | Not now
+button 732 437 876 487 ##modal | Update now
+label 732 437 876 487 ##modal | Update now

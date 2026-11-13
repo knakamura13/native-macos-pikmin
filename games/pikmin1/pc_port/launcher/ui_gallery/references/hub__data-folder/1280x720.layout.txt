@@ -1,0 +1,24 @@
+# ui 1280x720 scale 1.000
+logo 290 18 990 171 ##hub | logo
+button 410 181 554 223 ##hub | Games
+label 410 181 554 223 ##hub | Games
+button 568 181 712 223 ##hub | Settings
+label 568 181 712 223 ##hub | Settings
+button 726 181 870 223 ##hub | Move Install
+label 726 181 870 223 ##hub | Move Install
+button 399 247 535 438 ##hub | cover
+button 317 498 461 542 ##hub | Map editor
+label 317 498 461 542 ##hub | Map editor
+button 473 498 617 542 ##hub | Model maker
+label 473 498 617 542 ##hub | Model maker
+button 317 552 461 596 ##hub | HD textures
+label 317 552 461 596 ##hub | HD textures
+button 473 552 617 596 ##hub | Characters
+label 473 552 617 596 ##hub | Characters
+button 745 247 881 438 ##hub | cover
+button 718 498 908 542 ##hub | HD textures
+label 718 498 908 542 ##hub | HD textures
+button 545 628 735 672 ##hub | Update
+label 545 628 735 672 ##hub | Update
+button 1112 670 1262 710 ##hub | Change folder
+label 1112 670 1262 710 ##hub | Change folder

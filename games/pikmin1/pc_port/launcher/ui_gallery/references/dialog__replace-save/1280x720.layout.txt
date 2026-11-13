@@ -1,0 +1,42 @@
+# ui 1280x720 scale 1.000
+logo 290 18 990 171 ##hub | logo
+button-disabled 410 181 554 223 ##hub | Games
+label 410 181 554 223 ##hub | Games
+button-disabled 568 181 712 223 ##hub | Settings
+label 568 181 712 223 ##hub | Settings
+button-disabled 726 181 870 223 ##hub | Move Install
+label 726 181 870 223 ##hub | Move Install
+button-disabled 490 239 634 277 ##hub | Pikmin
+label 490 239 634 277 ##hub | Pikmin
+button-disabled 646 239 790 277 ##hub | Pikmin 2
+label 646 239 790 277 ##hub | Pikmin 2
+button-disabled 140 290 330 320 ##hub | Display
+label 140 290 330 320 ##hub | Display
+button-disabled 140 325 330 355 ##hub | Graphics
+label 140 325 330 355 ##hub | Graphics
+button-disabled 140 360 330 390 ##hub | Controls
+label 140 360 330 390 ##hub | Controls
+button-disabled 140 395 330 425 ##hub | Camera
+label 140 395 330 425 ##hub | Camera
+button-disabled 140 430 330 460 ##hub | Gameplay
+label 140 430 330 460 ##hub | Gameplay
+button-disabled 140 465 330 495 ##hub | Cheats
+label 140 465 330 495 ##hub | Cheats
+button-disabled 140 500 330 530 ##hub | Texture Packs
+label 140 500 330 530 ##hub | Texture Packs
+button-disabled 140 535 330 565 ##hub | HD Models
+label 140 535 330 565 ##hub | HD Models
+button-disabled 140 570 330 600 ##hub | Saves
+label 140 570 330 600 ##hub | Saves
+button-disabled 140 612 330 656 ##hub | Reset all
+label 140 612 330 656 ##hub | Reset all
+button-disabled 368 507 608 553 ##hub | Import a save
+label 368 507 608 553 ##hub | Import a save
+button-disabled 620 507 860 553 ##hub | Open save folder
+label 620 507 860 553 ##hub | Open save folder
+button-disabled 368 690 608 736 ##hub | #f0626ccc
+label 368 690 608 736 ##hub | Open backups folder
+button 782 427 926 477 ##modal | Replace
+label 782 427 926 477 ##modal | Replace
+button 354 427 498 477 ##modal | Cancel
+label 354 427 498 477 ##modal | Cancel
