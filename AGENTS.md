@@ -1,12 +1,12 @@
 # Working in this fork
 
-This fork (`knakamura13/native-macos-pikmin-1`) tracks the upstream project `SSunnKing/Open-Nectar---Pikmin-Native-PC-Mobile-Port`. The upstream remote is named `upstream`. The fork remote is `origin`.
+This fork (`knakamura13/native-macos-pikmin`, previously `knakamura13/native-macos-pikmin-1`) tracks the upstream project `SSunnKing/Open-Nectar---Pikmin-Native-PC-Mobile-Port`. The upstream remote is named `upstream`. The fork remote is `origin`.
 
 ## Branches
 
 - `main` mirrors `upstream/main`. Change it only by fast-forward. Never commit to it.
 - `kyle-patches` is a small linear stack of fork-only commits on top of `main`: the macOS app bundle, fork notes, and anything else that is not upstream and not in an open upstream PR. Commit fork-only work here. The rebuild replays only its plain (non-merge) commits. Merges of upstream `main`, and PR merges whose branch holds only plain commits and merges of upstream `main`, are fine; any other merge commit makes the rebuild stop without pushing.
-- `kyle-develop` is generated. A rebuild starts from `upstream/main`, cherry-picks `kyle-patches`, then merges every open upstream PR whose head repository is this fork. The result is force-pushed. Never commit to `kyle-develop` directly. A local checkout updates with:
+- `kyle-develop` is generated. A rebuild starts from `upstream/main`, cherry-picks `kyle-patches`, then merges every open upstream PR whose head repository is this fork. The fork is `origin`, plus either name this fork has used (`knakamura13/native-macos-pikmin` and `knakamura13/native-macos-pikmin-1`). The result is force-pushed. Never commit to `kyle-develop` directly. A local checkout updates with:
 
   ```sh
   git fetch origin
@@ -30,7 +30,7 @@ tools/kyle-develop/rebuild.sh
 
 `--dry-run` does the same work, including the test suites, and does not push.
 
-The script reads the public GitHub API with no token. It needs `origin` (this fork, with push access) and `upstream` (added if missing). It builds and runs the Pikmin 1 and Pikmin 2 test suites from each game's README (`cmake --build`, then `ctest`). When a merge conflicts and every hunk has text on both sides, the script keeps both sides (the tree so far, then the incoming change) and records a `resolved_pr` line. A delete-against-edit conflict, a binary file, or markers it cannot parse aborts that one step, records the files, and continues. If the tests fail, the script rebuilds without the step that introduced the failure and leaves that step out. It does not push a result whose tests fail.
+The script reads the public GitHub API with no token. It needs `origin` (this fork, with push access) and `upstream` (added if missing). It builds and runs the Pikmin 1 and Pikmin 2 test suites from each game's README (`cmake --build`, then `ctest`). When a merge conflicts and every hunk has text on both sides, the script keeps both sides (the tree so far, then the incoming change) and records a `resolved_pr` line. A delete-against-edit conflict, a binary file, or markers it cannot parse aborts that one step, records the files, and continues. If the tests fail, the script rebuilds without the step that introduced the failure and leaves that step out. It does not push a result whose tests fail. Every open upstream PR is merged, skipped with a reason, or listed as someone else's (`other_open_prs`). A PR from this fork's owner under an unrecognized repository name, or a PR with no head repository and no owner, stops the rebuild instead of being left out.
 
 The last commit on `kyle-develop` is empty. Its message is the rebuild marker. A scheduled job reads it with `git log -1 --format=%B origin/kyle-develop` and rebuilds only when an input SHA below no longer matches the public API.
 
@@ -62,12 +62,12 @@ Compare, and rebuild when any of these differ:
 
 1. `upstream_main` against upstream `main`.
 2. `kyle_patches` against `origin/kyle-patches`.
-3. The set of open upstream PRs whose head repository is `knakamura13/native-macos-pikmin-1` (number and head SHA, drafts included) against the `merged_pr` and `skipped_pr` lines together.
+3. The set of open upstream PRs that belong to this fork (number and head SHA, drafts included) against the `merged_pr` and `skipped_pr` lines together. A PR belongs to this fork when its head repository is `origin` or either name this fork has used (`knakamura13/native-macos-pikmin` and `knakamura13/native-macos-pikmin-1`). A missing head repository still counts when the head owner is the fork's owner.
 4. Each branch named in `include.txt` on `origin/kyle-patches` against the `merged_include` and `skipped_include` line for that branch.
 
 `exclude.txt` is covered by (2): it lives on `kyle-patches`. A closed PR drops out of (3), so the next run starts from upstream, which now contains it.
 
-The script prints one JSON object on stdout as its last output, with the same SHAs plus `tests`, `pushed`, `dry_run`, and `kyle_develop` (the new tip, or null when nothing was pushed).
+The script prints one JSON object on stdout as its last output, with the same SHAs plus `tests`, `pushed`, `dry_run`, `kyle_develop` (the new tip, or null when nothing was pushed), and `other_open_prs` (open upstream PRs that are not this fork).
 
 ## What goes upstream
 
