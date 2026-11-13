@@ -64,7 +64,6 @@ private:
 
 struct Session::State {
     SoftRenderer renderer;
-    std::unique_ptr<ScopedTextureBackend> backend;
     ImGuiContext* ctx = nullptr;
     ImGuiContext* previous = nullptr;
     HubWindow window; // only its Impl is used; never opened
@@ -97,7 +96,10 @@ Session::Session(const Story& story, const Viewport& viewport) : mState(new Stat
         mViewport.width = story.canvasW;
         mViewport.height = story.canvasH;
     }
-    s.backend = std::make_unique<ScopedTextureBackend>(s.renderer);
+    // Every texture this session's hub makes or frees goes to its own CPU
+    // renderer: here, in frame() and in the destructor (input lint runs other
+    // sessions while this one is alive).
+    ScopedTextureBackend textures(s.renderer);
     s.previous = ImGui::GetCurrentContext();
     s.ctx = ImGui::CreateContext();
     ImGui::SetCurrentContext(s.ctx);
@@ -200,6 +202,7 @@ Session::Session(const Story& story, const Viewport& viewport) : mState(new Stat
 Session::~Session()
 {
     State& s = *mState;
+    ScopedTextureBackend textures(s.renderer);
     ImGui::SetCurrentContext(s.ctx);
     HubWindow::Impl& m = s.impl();
     if (m.hub) {
@@ -208,6 +211,12 @@ Session::~Session()
     }
     ImGui::DestroyContext(s.ctx);
     ImGui::SetCurrentContext(s.previous == s.ctx ? nullptr : s.previous);
+}
+
+[[noreturn]] void noOpenGl(const char* where)
+{
+    std::fprintf(stderr, "ui_gallery: %s reached OpenGL: no CPU texture backend is active\n", where);
+    std::abort();
 }
 
 void Session::applyScale()
@@ -309,6 +318,7 @@ void Session::focus(const Widget& widget)
 void Session::frame(float dt)
 {
     State& s = *mState;
+    ScopedTextureBackend textures(s.renderer);
     ImGui::SetCurrentContext(s.ctx);
     activeSession() = this;
     probe::sink() = &probeSink;

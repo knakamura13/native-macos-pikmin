@@ -9,6 +9,8 @@
 
 #include "imgui.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <string>
@@ -175,5 +177,9 @@ private:
 
 // ImGui's test-engine hooks (imgui_internal.h) forward here while a session runs.
 Session*& activeSession();
+
+// The gallery has no GL context: a texture call that would fall through to
+// OpenGL is a bug (it crashes on macOS), so it stops the run instead.
+[[noreturn]] void noOpenGl(const char* where);
 
 } // namespace pikmin::launcher::gallery

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "launcher_texture_hooks.h"
 
 #include <cstdint>
 #include <string>
@@ -44,13 +45,19 @@ private:
 };
 
 // Makes the CPU renderer the launcher's texture backend (launcher_texture_hooks.h)
-// for as long as it lives.
+// for as long as it lives. Scopes nest: the destructor puts back whatever
+// renderer was active before, so one session's teardown never leaves
+// another's textures to fall through to OpenGL.
 class ScopedTextureBackend {
 public:
     explicit ScopedTextureBackend(SoftRenderer& renderer);
     ~ScopedTextureBackend();
     ScopedTextureBackend(const ScopedTextureBackend&) = delete;
     ScopedTextureBackend& operator=(const ScopedTextureBackend&) = delete;
+
+private:
+    SoftRenderer* mPreviousRenderer;
+    const TextureBackend* mPreviousBackend;
 };
 
 // compression: 0..9 (zlib level). Big screenshots favour speed; checked-in
