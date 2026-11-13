@@ -44,6 +44,9 @@
 
 #include "imgui.h"
 #include "imgui_internal.h" // cola de eventos: escalar la posición del ratón
+#if PIKMIN_UI_GALLERY
+#include "ui_gallery/gallery_host.h"
+#endif
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl2.h"
 
@@ -3722,6 +3725,31 @@ struct HubWindow::Impl {
         return quitRequested ? std::string() : result;
     }
 
+    // The hub with its fonts, logo and game art; nothing started in the
+    // background yet (covers, release check, settings). The UI gallery
+    // (#215) builds its hubs the same way.
+    void createHub()
+    {
+        hub = std::make_unique<Hub>(state, result);
+#ifndef __ANDROID__
+        hub->askModal = [this](const std::string& title, const std::string& text, const std::string& primary,
+                               const std::string& secondary, bool isError, const std::string& cancel) {
+            return message(title, text, primary, secondary, isError, cancel);
+        };
+#endif
+        loadFonts(hub->fonts);
+        hub->logo = loadImageTexture(kLogoOpenNectar, kLogoOpenNectarSize, 160);
+        hub->art.load(state.gameDataDirectory);
+        if (hub->art.worldMap.valid()) {
+            // El paisaje del mapa del mundo entra en el pase de fondo.
+            hub->slideshow.add(hub->art.worldMap);
+            hub->art.worldMap = Texture();
+        }
+        // Las fotos del diario de Olimar también: ahora son fondos, no marcos.
+        for (Texture& photo : hub->art.logs) hub->slideshow.add(photo);
+        hub->art.logs.clear();
+    }
+
     // Muestra un mensaje hasta que se pulsa un botón. -1 si se cierra la ventana.
     int message(const std::string& heading, const std::string& text, const std::string& primary,
                 const std::string& secondary, bool isError, const std::string& cancel = std::string())
@@ -3819,25 +3847,8 @@ bool HubWindow::open(const HubState& state, std::string& error)
 #endif
     applyTheme();
 
-    m.hub = std::make_unique<Hub>(m.state, m.result);
+    m.createHub();
     Hub& hub = *m.hub;
-#ifndef __ANDROID__
-    hub.askModal = [&m](const std::string& title, const std::string& text, const std::string& primary,
-                        const std::string& secondary, bool isError, const std::string& cancel) {
-        return m.message(title, text, primary, secondary, isError, cancel);
-    };
-#endif
-    loadFonts(hub.fonts);
-    hub.logo = loadImageTexture(kLogoOpenNectar, kLogoOpenNectarSize, 160);
-    hub.art.load(m.state.gameDataDirectory);
-    if (hub.art.worldMap.valid()) {
-        // El paisaje del mapa del mundo entra en el pase de fondo.
-        hub.slideshow.add(hub.art.worldMap);
-        hub.art.worldMap = Texture();
-    }
-    // Las fotos del diario de Olimar también: ahora son fondos, no marcos.
-    for (Texture& photo : hub.art.logs) hub.slideshow.add(photo);
-    hub.art.logs.clear();
     hub.startCoverDownloads();
 #ifdef __ANDROID__
     const bool checkReleases = m.state.games[0].installed || m.state.games[1].installed; // Android: sin pestañas, pero sí Update
