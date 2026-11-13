@@ -87,10 +87,10 @@ struct Session::State {
     }
 };
 
-Session::Session(const Story& story, const Viewport& viewport) : mState(new State), mViewport(viewport)
+Session::Session(const Story& story, const Viewport& viewport, const Args* args) : mState(new State), mViewport(viewport)
 {
     State& s = *mState;
-    s.fixture = story.make ? story.make() : Fixture();
+    s.fixture = makeFixture(story, args);
     if (story.canvasW > 0 && !viewport.phone) {
         // Components draw on a canvas of their own size at the viewport's scale.
         mViewport.width = story.canvasW;

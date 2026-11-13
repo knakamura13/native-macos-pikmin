@@ -101,14 +101,44 @@ struct Fixture {
     std::string target;
 };
 
+// A story setting the gallery window shows as an editable control (like
+// Storybook's args). Captures always use the defaults.
+struct Arg {
+    enum class Kind { Bool, Text, Number, Choice };
+    std::string name;
+    Kind kind = Kind::Text;
+    bool flag = false;
+    std::string text;
+    float number = 0.0f, min = 0.0f, max = 100.0f, step = 1.0f;
+    int choice = 0;
+    std::vector<std::string> choices;
+};
+using Args = std::vector<Arg>;
+
+Arg boolArg(std::string name, bool value);
+Arg textArg(std::string name, std::string value);
+Arg numberArg(std::string name, float value, float min, float max, float step = 1.0f);
+Arg choiceArg(std::string name, std::vector<std::string> choices, int value);
+// Values by name; a missing name gives the type's zero.
+bool argFlag(const Args& args, const std::string& name);
+const std::string& argText(const Args& args, const std::string& name);
+float argNumber(const Args& args, const std::string& name);
+int argChoice(const Args& args, const std::string& name);
+bool sameArgs(const Args& a, const Args& b);
+
 struct Story {
     std::string name;  // "hub/update-notice"; also the file name
     std::string group; // "Screens", "Settings", "Dialogs", "Components"
     std::string summary;
-    std::function<Fixture()> make;
+    std::function<Fixture()> make; // with the default args
     // Components: fixed canvas in points, drawn at 1x and 2x only.
     int canvasW = 0, canvasH = 0;
+    Args args;                                   // defaults; empty = no controls
+    std::function<Fixture(const Args&)> makeWith; // set when `args` is not empty
 };
+
+// The story's fixture, with `args` when given (else the defaults).
+Fixture makeFixture(const Story& story, const Args* args = nullptr);
 
 const std::vector<Story>& stories();
 const Story* findStory(const std::string& name);
@@ -121,7 +151,8 @@ struct LowRes {
 
 class Session {
 public:
-    Session(const Story& story, const Viewport& viewport);
+    // `args`: the story's controls as edited in the window (nullptr = defaults).
+    Session(const Story& story, const Viewport& viewport, const Args* args = nullptr);
     ~Session();
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
