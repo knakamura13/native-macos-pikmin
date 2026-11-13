@@ -4,6 +4,13 @@
 Reads the public GitHub API. No token is required. Prints one JSON object on
 stdout as its last output. Progress goes to stderr.
 
+A fork PR is an open upstream pull whose head repository is origin, or a
+previous name of this fork (KNOWN_FORK_REPOS). The owner comes from the origin
+remote, so a rename follows that remote. A pull from that owner under any
+other repository name, or a pull with no head repository and no owner, stops
+the rebuild instead of being skipped. Other people's pulls are listed and left
+out.
+
   tools/kyle-develop/rebuild.sh
   tools/kyle-develop/rebuild.sh --dry-run
 
@@ -23,14 +30,22 @@ import urllib.request
 from pathlib import Path
 
 UPSTREAM_REPO = "SSunnKing/Open-Nectar---Pikmin-Native-PC-Mobile-Port"
-FORK_REPO = "knakamura13/native-macos-pikmin-1"
+# Names this fork has used. origin's current name is added as well, so a
+# checkout whose remote URL is still the pre-rename name keeps matching pulls
+# opened after the rename, and the other way around.
+KNOWN_FORK_REPOS = (
+    "knakamura13/native-macos-pikmin-1",
+    "knakamura13/native-macos-pikmin",
+)
 UPSTREAM_URL = f"https://github.com/{UPSTREAM_REPO}.git"
-FORK_URL = f"https://github.com/{FORK_REPO}.git"
 MARKER_MAGIC = "kyle-develop-rebuild-v1"
 BRANCH = "kyle-develop"
 WORKTREE = Path("/tmp/kyle-develop-rebuild")
 API = f"https://api.github.com/repos/{UPSTREAM_REPO}/pulls?state=open&per_page=100"
 BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+GITHUB_REPO_RE = re.compile(
+    r"github\.com[:/](?P<owner>[A-Za-z0-9_.-]+)/(?P<name>[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
+)
 
 
 class RebuildError(Exception):
@@ -119,29 +134,160 @@ def next_link(header):
     return None
 
 
-def open_fork_prs():
+def redact_url(url):
+    return re.sub(r"(https?://)[^/@\s]+@", r"\1", url or "")
+
+
+def parse_github_repo(url):
+    """owner/name from a GitHub remote URL, ignoring any embedded credentials."""
+    match = GITHUB_REPO_RE.search((url or "").strip())
+    if not match:
+        return None
+    return f"{match.group('owner')}/{match.group('name')}"
+
+
+def fork_identity(origin_url):
+    """Which head repositories count as this fork, derived from origin.
+
+    Accepted names are origin itself plus KNOWN_FORK_REPOS entries with the
+    same owner. The fetch URL is the public https URL, never the credentialed
+    remote string.
+    """
+    full = parse_github_repo(origin_url)
+    if not full:
+        raise RebuildError(f"origin is not a GitHub repository URL: {redact_url(origin_url)}")
+    owner = full.split("/", 1)[0]
+    accepted = {full}
+    for known in KNOWN_FORK_REPOS:
+        known_owner = known.split("/", 1)[0]
+        if known_owner.lower() == owner.lower():
+            accepted.add(known)
+    return {
+        "owner": owner,
+        "repos": accepted,
+        "url": f"https://github.com/{full}.git",
+    }
+
+
+def pull_head_identity(pr):
+    """(owner, full_name) for a pull's head. Either may be None.
+
+    GitHub omits head.repo when the head repository is gone. The head user
+    and the label (`owner:branch`) still name the owner.
+    """
+    head = pr.get("head") or {}
+    repo = head.get("repo") if isinstance(head.get("repo"), dict) else None
+    full = None
+    owner = None
+    if repo:
+        full = repo.get("full_name") or None
+        owner = ((repo.get("owner") or {}).get("login")) or None
+        if not owner and isinstance(full, str) and "/" in full:
+            owner = full.split("/", 1)[0]
+    if not owner:
+        user = head.get("user") if isinstance(head.get("user"), dict) else None
+        if user:
+            owner = user.get("login") or None
+    if not owner:
+        label = head.get("label") or ""
+        if isinstance(label, str) and ":" in label:
+            owner = label.split(":", 1)[0] or None
+    return owner, full
+
+
+def classify_pull(pr, fork_owner, accepted_repos):
+    """fork, other, or unrecognized.
+
+    unrecognized is a pull this rebuild must not drop: the fork owner pushed
+    it from a repository we do not know, or the head has no repository and no
+    owner at all.
+    """
+    owner, full = pull_head_identity(pr)
+    accepted = {name.lower() for name in accepted_repos}
+    if full and full.lower() in accepted:
+        return "fork"
+    if owner and fork_owner and owner.lower() == fork_owner.lower():
+        if not full:
+            return "fork"
+        return "unrecognized"
+    if not owner and not full:
+        return "unrecognized"
+    return "other"
+
+
+def pull_problem(pr):
+    number = pr.get("number")
+    owner, full = pull_head_identity(pr)
+    head = pr.get("head") or {}
+    ref = head.get("ref") or "?"
+    if full:
+        where = full
+    elif owner:
+        where = f"{owner} (no head repository)"
+    else:
+        where = "(no head repository or owner)"
+    return f"#{number} head {where} ref {ref}"
+
+
+def select_fork_pulls(pulls, fork_owner, accepted_repos):
+    """Split open pulls into fork PRs and everyone else's.
+
+    Raises when a pull cannot be classified. Every input pull is one of the
+    two returned lists or named in that error.
+    """
+    selected = []
+    others = []
+    problems = []
+    for pr in pulls:
+        kind = classify_pull(pr, fork_owner, accepted_repos)
+        head = pr.get("head") or {}
+        ref = head.get("ref") or ""
+        owner, full = pull_head_identity(pr)
+        if kind == "other":
+            others.append({
+                "number": pr.get("number"),
+                "repo": full,
+                "ref": ref,
+                "owner": owner,
+            })
+            continue
+        if kind != "fork":
+            problems.append(pr)
+            continue
+        number = int(pr["number"])
+        sha = head.get("sha") or ""
+        if not valid_branch(ref):
+            raise RebuildError(f"PR #{number} has an unsafe head ref {ref!r}")
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise RebuildError(f"PR #{number} has no full head SHA")
+        selected.append({"number": number, "ref": ref, "sha": sha, "repo": full})
+    accounted = len(selected) + len(others) + len(problems)
+    if accounted != len(pulls):
+        raise RebuildError(
+            f"classified {accounted} of {len(pulls)} open pulls; refusing to continue"
+        )
+    if problems:
+        recognized = ", ".join(sorted(accepted_repos))
+        raise RebuildError(
+            "refusing to skip unclassified open upstream PRs: "
+            + "; ".join(pull_problem(pr) for pr in problems)
+            + f". Recognized fork repositories: {recognized}"
+        )
+    selected.sort(key=lambda item: item["number"])
+    others.sort(key=lambda item: (item["number"] is None, item["number"]))
+    return selected, others
+
+
+def open_fork_prs(fork_owner, accepted_repos):
     url = API
-    found = []
+    pulls = []
     while url:
         batch, link = http_json(url)
         if not isinstance(batch, list):
             raise RebuildError("GitHub pulls API did not return a list")
-        for pr in batch:
-            head = pr.get("head") or {}
-            repo = (head.get("repo") or {}).get("full_name")
-            if repo != FORK_REPO:
-                continue
-            number = int(pr["number"])
-            ref = head.get("ref") or ""
-            sha = head.get("sha") or ""
-            if not valid_branch(ref):
-                raise RebuildError(f"PR #{number} has an unsafe head ref {ref!r}")
-            if not re.fullmatch(r"[0-9a-f]{40}", sha):
-                raise RebuildError(f"PR #{number} has no full head SHA")
-            found.append({"number": number, "ref": ref, "sha": sha})
+        pulls.extend(batch)
         url = next_link(link)
-    found.sort(key=lambda item: item["number"])
-    return found
+    return select_fork_pulls(pulls, fork_owner, accepted_repos)
 
 
 def ensure_upstream_remote(repo):
@@ -467,7 +613,7 @@ def marker_message(upstream_sha, patches_sha, asm):
     return "\n".join(lines) + "\n"
 
 
-def summary_object(upstream_sha, patches_sha, asm, final_sha, pushed, dry_run, tests):
+def summary_object(upstream_sha, patches_sha, asm, final_sha, pushed, dry_run, tests, other_prs=None):
     return {
         "format": MARKER_MAGIC,
         "upstream_main": upstream_sha,
@@ -490,6 +636,10 @@ def summary_object(upstream_sha, patches_sha, asm, final_sha, pushed, dry_run, t
         "kyle_develop": final_sha,
         "pushed": pushed,
         "dry_run": dry_run,
+        "other_open_prs": [
+            {"number": item["number"], "repo": item["repo"], "ref": item["ref"]}
+            for item in (other_prs or [])
+        ],
     }
 
 
@@ -552,7 +702,13 @@ def check_patch_merges(repo, base, patches_sha, upstream_sha):
         )
 
 
-def build_steps(repo, patches_sha, upstream_sha, exclude, include_names):
+def format_other_pr(item):
+    repo = item.get("repo") or "missing repo"
+    ref = item.get("ref") or "?"
+    return f"#{item['number']} ({repo} {ref})"
+
+
+def build_steps(repo, patches_sha, upstream_sha, exclude, include_names, fork):
     base = git(["merge-base", patches_sha, upstream_sha], repo).stdout.strip()
     check_patch_merges(repo, base, patches_sha, upstream_sha)
     # Merge commits carry no changes of their own here: the plain commits they
@@ -564,10 +720,16 @@ def build_steps(repo, patches_sha, upstream_sha, exclude, include_names):
     for sha in patch_commits:
         steps.append({"kind": "patch", "sha": sha, "ident": f"patch:{sha}"})
 
-    prs = open_fork_prs()
+    prs, others = open_fork_prs(fork["owner"], fork["repos"])
     eprint(f"open fork PRs: {', '.join('#' + str(pr['number']) for pr in prs) or '(none)'}")
+    eprint(f"other open PRs: {', '.join(format_other_pr(item) for item in others) or '(none)'}")
     seen_refs = set()
     for pr in prs:
+        if not pr.get("repo"):
+            eprint(
+                f"PR #{pr['number']} has no head repository; "
+                "keeping it because the owner matches the fork"
+            )
         seen_refs.add(pr["ref"])
         if pr["ref"] in exclude:
             steps.append({
@@ -620,7 +782,7 @@ def build_steps(repo, patches_sha, upstream_sha, exclude, include_names):
                 },
             })
             continue
-        fetched, err = fetch_sha(repo, FORK_URL, f"refs/heads/{name}")
+        fetched, err = fetch_sha(repo, fork["url"], f"refs/heads/{name}")
         if name in seen_refs:
             # The open-PR pass already merges this branch. Record it so the
             # marker still names the include, and the scheduler can see its SHA.
@@ -655,7 +817,7 @@ def build_steps(repo, patches_sha, upstream_sha, exclude, include_names):
             "sha": fetched,
             "ident": f"include:{name}",
         })
-    return steps
+    return steps, others
 
 
 def omit_step(steps, ident, reason):
@@ -732,14 +894,20 @@ def main():
         else:
             patches_sha = git(["rev-parse", patches_ref], repo).stdout.strip()
 
+        origin_url = git(["remote", "get-url", "origin"], repo).stdout.strip()
+        fork = fork_identity(origin_url)
         exclude = set(parse_list(git_show(repo, patches_sha, "tools/kyle-develop/exclude.txt")))
         include_names = parse_list(git_show(repo, patches_sha, "tools/kyle-develop/include.txt"))
         eprint(f"upstream_main {upstream_sha}")
         eprint(f"kyle_patches {patches_sha}")
+        eprint(f"fork {fork['url']}")
+        eprint(f"fork repos {', '.join(sorted(fork['repos']))}")
         eprint(f"exclude {sorted(exclude) or '(empty)'}")
         eprint(f"include {include_names or '(empty)'}")
 
-        steps = build_steps(repo, patches_sha, upstream_sha, exclude, include_names)
+        steps, other_prs = build_steps(
+            repo, patches_sha, upstream_sha, exclude, include_names, fork
+        )
         worktree = prepare_worktree(repo, upstream_sha)
         cache = {}
         asm = None
@@ -783,6 +951,7 @@ def main():
             pushed,
             args.dry_run,
             {"pikmin1": "pass", "pikmin2": "pass"},
+            other_prs,
         )
         print(json.dumps(payload, indent=2))
         return 0
