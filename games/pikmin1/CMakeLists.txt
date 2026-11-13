@@ -1325,6 +1325,7 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         third_party/imgui/imgui_tables.cpp
         third_party/imgui/imgui_widgets.cpp
         third_party/imgui/backends/imgui_impl_sdl2.cpp
+        third_party/imgui/backends/imgui_impl_sdlrenderer2.cpp
         third_party/imgui/backends/imgui_impl_opengl3.cpp)
     set_property(TARGET launcher_imgui_gallery PROPERTY INCLUDE_DIRECTORIES "")
     target_include_directories(launcher_imgui_gallery PUBLIC
@@ -1341,6 +1342,9 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
 
     set(UI_GALLERY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/ui_gallery")
     embed_file("${UI_GALLERY_DIR}/fixtures/pikmin1-settings.json" "${LAUNCHER_EMBED_DIR}/pikmin1_settings_fixture.h" kPikmin1Settings)
+    # The window's own font (Noto Sans, Latin subset, OFL): the tool chrome only.
+    embed_file("${UI_GALLERY_DIR}/tool/fonts/NotoSans-Regular.ttf" "${LAUNCHER_EMBED_DIR}/ui_gallery_font_regular.h" kNotoSansRegular)
+    embed_file("${UI_GALLERY_DIR}/tool/fonts/NotoSans-Bold.ttf" "${LAUNCHER_EMBED_DIR}/ui_gallery_font_bold.h" kNotoSansBold)
     # The launcher's own sources, without its main().
     get_target_property(UI_GALLERY_LAUNCHER_SOURCES pikmin_launcher SOURCES)
     list(REMOVE_ITEM UI_GALLERY_LAUNCHER_SOURCES pc_port/launcher/launcher_main.cpp)
@@ -1351,8 +1355,14 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         ${UI_GALLERY_DIR}/stories.cpp
         ${UI_GALLERY_DIR}/soft_raster.cpp
         ${UI_GALLERY_DIR}/imgui_test_hooks.cpp
+        # Storybook-style window chrome, kept apart from the stories.
+        ${UI_GALLERY_DIR}/tool/storybook.cpp
+        ${UI_GALLERY_DIR}/tool/theme.cpp
+        ${UI_GALLERY_DIR}/tool/widgets.cpp
         ${UI_GALLERY_LAUNCHER_SOURCES}
-        "${LAUNCHER_EMBED_DIR}/pikmin1_settings_fixture.h")
+        "${LAUNCHER_EMBED_DIR}/pikmin1_settings_fixture.h"
+        "${LAUNCHER_EMBED_DIR}/ui_gallery_font_regular.h"
+        "${LAUNCHER_EMBED_DIR}/ui_gallery_font_bold.h")
     set_property(TARGET ui_gallery PROPERTY INCLUDE_DIRECTORIES "")
     target_include_directories(ui_gallery PRIVATE
         ${PC_PORT_DIR}
@@ -1362,7 +1372,8 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         ${NECTAR_LIBS_DIR}/nectar_assets/include
         ${NECTAR_LIBS_DIR}/nectar_assets/third_party
         ${SDL2_INCLUDE_DIRS})
-    target_compile_definitions(ui_gallery PRIVATE PIKMIN_UI_GALLERY=1 OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}")
+    target_compile_definitions(ui_gallery PRIVATE PIKMIN_UI_GALLERY=1 OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}"
+        UI_GALLERY_SOURCE_DIR="${UI_GALLERY_DIR}")
     target_link_libraries(ui_gallery PRIVATE launcher_imgui_gallery pikmin_disc_image nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
     if (WIN32)
         target_link_libraries(ui_gallery PRIVATE comdlg32 ole32 shell32 uuid winhttp)
