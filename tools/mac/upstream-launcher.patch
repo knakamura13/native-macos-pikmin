@@ -1,5 +1,5 @@
 diff --git a/games/pikmin1/pc_port/launcher/launcher_gui.cpp b/games/pikmin1/pc_port/launcher/launcher_gui.cpp
-index dc4f83491..89d67182c 100644
+index 7b2fec367..b41765bff 100644
 --- a/games/pikmin1/pc_port/launcher/launcher_gui.cpp
 +++ b/games/pikmin1/pc_port/launcher/launcher_gui.cpp
 @@ -15,6 +15,7 @@
@@ -10,7 +10,7 @@ index dc4f83491..89d67182c 100644
  
  #include "bti_decode.h"
  #include "button_layout.h"
-@@ -3147,17 +3148,17 @@ struct Hub {
+@@ -3196,17 +3197,17 @@ struct Hub {
  
      // El pie va en la ventana del hub (debajo de modales y de "What's new"),
      // en su franja reservada; si la ruta no cabe se recorta por delante.
@@ -31,10 +31,10 @@ index dc4f83491..89d67182c 100644
                                               - fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, "Installed in: ").x));
          // Placa semitransparente para que el texto se lea sobre la hierba.
          const ImVec2 extent = fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, where.c_str());
-@@ -3238,17 +3239,71 @@ struct Hub {
-         }
+@@ -3288,17 +3289,71 @@ struct Hub {
  
          drawReleaseNotice(size, t);
+         drawVersionLabel(size, logoAt, logoW, logoH);
 +#ifdef __APPLE__
 +        const float footerButtonH = 40.0f;
 +        const float infoWidth = buttons::fitWidth("Build information", footerButtonH, buttons::kLabelSize, measureLabel());
@@ -104,7 +104,7 @@ index dc4f83491..89d67182c 100644
          ImGui::End();
          toastTime = std::max(0.0f, toastTime - dt);
          drawToast(size);
-@@ -3737,7 +3792,9 @@ bool HubWindow::open(const HubState& state, std::string& error)
+@@ -3798,7 +3853,9 @@ bool HubWindow::open(const HubState& state, std::string& error)
      SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
                                            SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_ALLOW_HIGHDPI);
  #else
@@ -116,10 +116,10 @@ index dc4f83491..89d67182c 100644
  #endif
      if (!window) {
 diff --git a/games/pikmin1/pc_port/launcher/launcher_main.cpp b/games/pikmin1/pc_port/launcher/launcher_main.cpp
-index 5637dc896..6f36df4e9 100644
+index bf31188a3..d7bc97d52 100644
 --- a/games/pikmin1/pc_port/launcher/launcher_main.cpp
 +++ b/games/pikmin1/pc_port/launcher/launcher_main.cpp
-@@ -1007,6 +1007,12 @@ fs::path defaultInstallDirectory(const fs::path& sourceDirectory, bool launcherI
+@@ -999,6 +1000,12 @@ fs::path defaultInstallDirectory(const fs::path& sourceDirectory, bool launcherI
          makeDefaultInstallDirectoryRequest(sourceDirectory, launcherInInstallFolder, pikmin1Directory, forPikmin2));
  }
  
@@ -132,7 +132,7 @@ index 5637dc896..6f36df4e9 100644
  // Guarda la carpeta y, si es nueva, pone en el escritorio el acceso directo a
  // su launcher. Solo la primera vez: si el usuario lo borra, no vuelve.
  // Con portable.txt (o NECTAR_PORTABLE=1) no se escribe nada fuera de la
-@@ -1022,7 +1028,7 @@ void rememberInstallDirectory(const fs::path& directory)
+@@ -1014,7 +1021,7 @@ void rememberInstallDirectory(const fs::path& directory)
      const fs::path previous = rememberedInstallDirectory();
      if (!previous.empty() && fs::equivalent(previous, install, ec)) return;
      if (!nectar::paths::writeStoredPath(file, install)) return;
@@ -141,20 +141,24 @@ index 5637dc896..6f36df4e9 100644
  }
  
  // La ruta de dolphin-tool elegida también se recuerda (junto a pikmin2_dir):
-@@ -1308,7 +1314,11 @@ int main(int argc, char** argv)
+@@ -1319,7 +1336,15 @@ int main(int argc, char** argv)
      // Fusion mantiene cada juego en su propio directorio de trabajo. Las
      // variables también hacen que el launcher siga siendo reubicable y que los
      // paquetes normales, que no las definen, conserven el comportamiento previo.
 -    const fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
 +    fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
-+    if (isManagedBundle()) {
++    // A managed app falls back to the remembered install only when its own
++    // folder (NECTAR_PIKMIN1_DIR, from Info.plist) has no game files. A folder
++    // that is ready always wins: a stale remembered folder (say, a test install
++    // under /tmp) must not take over the app's saves and settings.
++    if (isManagedBundle() && !assetsReady(pikmin1Directory)) {
 +        const fs::path remembered = rememberedInstallDirectory();
 +        if (!remembered.empty() && assetsReady(remembered)) pikmin1Directory = remembered;
 +    }
      const fs::path pikmin1Executable = environmentPath(
          "NECTAR_PIKMIN1_EXECUTABLE", gameBinaryFor(pikmin1Directory));
      // Pikmin 2 instalado por el launcher está en pikmin2/; el de una build de
-@@ -1367,7 +1377,9 @@ int main(int argc, char** argv)
+@@ -1378,7 +1403,9 @@ int main(int argc, char** argv)
      // abre el de la instalación, que es el que juega y actualiza. Antes se
      // copia a la instalación lo que trae este paquete: si es una versión
      // nueva, la instalación queda al día (partidas y ajustes no se tocan).
@@ -165,7 +169,7 @@ index 5637dc896..6f36df4e9 100644
          const fs::path installed = rememberedInstallDirectory();
          std::error_code ec;
          if (!installed.empty() && !fs::equivalent(installed, sourceDirectory, ec)
-@@ -1718,7 +1730,7 @@ int main(int argc, char** argv)
+@@ -1755,7 +1782,7 @@ int main(int argc, char** argv)
  
          std::string failure;
          if (installerWindow) installerWindow->updateProgress(100, "Installing the launcher and game", "Finishing");
@@ -174,7 +178,7 @@ index 5637dc896..6f36df4e9 100644
              if (reportError(failure)) continue;
              return 1;
          }
-@@ -1728,14 +1740,14 @@ int main(int argc, char** argv)
+@@ -1765,14 +1792,14 @@ int main(int argc, char** argv)
              // portada de Pikmin ya juegue con lo recién instalado.
              hubState.games[0].installed = true;
              hubState.games[0].directory = dataRoot.string();
