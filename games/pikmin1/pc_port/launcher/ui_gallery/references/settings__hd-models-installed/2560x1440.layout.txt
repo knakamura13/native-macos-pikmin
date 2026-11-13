@@ -1,0 +1,57 @@
+# ui 1463x823 scale 1.750
+logo 381 18 1081 171 ##hub | logo
+button 501 181 645 223 ##hub | Games
+label 501 181 645 223 ##hub | Games
+button 659 181 803 223 ##hub | Settings
+label 659 181 803 223 ##hub | Settings
+button 817 181 961 223 ##hub | Move Install
+label 817 181 961 223 ##hub | Move Install
+button 581 239 725 277 ##hub | Pikmin
+label 581 239 725 277 ##hub | Pikmin
+button 737 239 881 277 ##hub | Pikmin 2
+label 737 239 881 277 ##hub | Pikmin 2
+button 231 301 421 339 ##hub | Display
+label 231 301 421 339 ##hub | Display
+button 231 347 421 384 ##hub | Graphics
+label 231 347 421 384 ##hub | Graphics
+button 231 392 421 430 ##hub | Controls
+label 231 392 421 430 ##hub | Controls
+button 231 438 421 475 ##hub | Camera
+label 231 438 421 475 ##hub | Camera
+button 231 483 421 521 ##hub | Gameplay
+label 231 483 421 521 ##hub | Gameplay
+button 231 529 421 566 ##hub | Cheats
+label 231 529 421 566 ##hub | Cheats
+button 231 574 421 612 ##hub | Texture Packs
+label 231 574 421 612 ##hub | Texture Packs
+button 231 620 421 657 ##hub | HD Models
+label 231 620 421 657 ##hub | HD Models
+button 231 665 421 703 ##hub | Saves
+label 231 665 421 703 ##hub | Saves
+button 231 715 421 759 ##hub | Reset all
+label 231 715 421 759 ##hub | Reset all
+button 459 431 759 475 ##hub | Get HD models
+label 459 431 759 475 ##hub | Get HD models
+button 765 507 909 547 ##hub | On
+label 765 507 909 547 ##hub | On
+button 921 507 1041 547 ##hub | Uninstall
+label 921 507 1041 547 ##hub | Uninstall
+button 1053 507 1197 547 ##hub | Replace
+label 1053 507 1197 547 ##hub | Replace
+button 1053 567 1197 607 ##hub | Install
+label 1053 567 1197 607 ##hub | Install
+button 1053 627 1197 667 ##hub | Install
+label 1053 627 1197 667 ##hub | Install
+button 1053 687 1197 727 ##hub | #af84067a
+label 1053 687 1197 727 ##hub | Install
+button 765 747 909 787 ##hub | #b22f2dcc
+label 765 747 909 787 ##hub | Off
+button 921 747 1041 787 ##hub | #b6de7b89
+label 921 747 1041 787 ##hub | Uninstall
+button 1053 747 1197 787 ##hub | #b3f44858
+label 1053 747 1197 787 ##hub | Replace
+button 1053 807 1197 847 ##hub | #d294adef
+label 1053 807 1197 847 ##hub | Install
+button-disabled 897 1005 1197 1044 ##hub | #415f778b
+button-disabled 897 1056 1197 1095 ##hub | #99522393
+button-disabled 897 1107 1197 1146 ##hub | #554233e5

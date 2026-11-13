@@ -10,6 +10,8 @@
 namespace pikmin {
 namespace launcher {
 
+namespace gallery { class Session; } // UI gallery (ui_gallery/, #215)
+
 // Qué ha pedido el usuario en la pantalla principal del launcher.
 enum class HubAction {
     Quit,    // cerró la ventana
@@ -129,6 +131,7 @@ public:
                                   const std::string& installDirectory, const std::string& legacySaveOverride = {});
 
 private:
+    friend class gallery::Session; // draws the hub and its modals from story fixtures
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };

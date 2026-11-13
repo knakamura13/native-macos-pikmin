@@ -1,0 +1,38 @@
+# ui 800x600 scale 1.000
+logo 208 18 592 102 ##hub | logo
+button 170 112 314 154 ##hub | Games
+label 170 112 314 154 ##hub | Games
+button 328 112 472 154 ##hub | Settings
+label 328 112 472 154 ##hub | Settings
+button 486 112 630 154 ##hub | Move Install
+label 486 112 630 154 ##hub | Move Install
+button 250 170 394 208 ##hub | Pikmin
+label 250 170 394 208 ##hub | Pikmin
+button 406 170 550 208 ##hub | Pikmin 2
+label 406 170 550 208 ##hub | Pikmin 2
+button 40 170 230 200 ##hub | #dc1ac72b
+label 40 170 230 200 ##hub | Display
+button 40 205 230 235 ##hub | Graphics
+label 40 205 230 235 ##hub | Graphics
+button 40 240 230 270 ##hub | Controls
+label 40 240 230 270 ##hub | Controls
+button 40 275 230 305 ##hub | Camera
+label 40 275 230 305 ##hub | Camera
+button 40 310 230 340 ##hub | Gameplay
+label 40 310 230 340 ##hub | Gameplay
+button 40 345 230 375 ##hub | Cheats
+label 40 345 230 375 ##hub | Cheats
+button 40 380 230 410 ##hub | Texture Packs
+label 40 380 230 410 ##hub | Texture Packs
+button 40 415 230 445 ##hub | HD Models
+label 40 415 230 445 ##hub | HD Models
+button 40 450 230 480 ##hub | Saves
+label 40 450 230 480 ##hub | Saves
+button 40 492 230 536 ##hub | Reset all
+label 40 492 230 536 ##hub | Reset all
+button 268 480 508 526 ##hub | #ba8158eb
+label 268 480 508 526 ##hub | Import a save
+button 268 538 508 584 ##hub | #6b24f5e6
+label 268 538 508 584 ##hub | Open save folder
+button 268 742 508 788 ##hub | #f0626ccc
+label 268 742 508 788 ##hub | Open backups folder

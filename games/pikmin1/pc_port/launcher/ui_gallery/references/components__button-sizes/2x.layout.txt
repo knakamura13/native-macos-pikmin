@@ -1,0 +1,17 @@
+# ui 760x220 scale 2.000
+button 24 48 144 92 ##hub | Small##n
+label 24 48 144 92 ##hub | Small
+button 24 112 144 156 ##hub | Small##s
+label 24 112 144 156 ##hub | Small
+button 156 48 300 92 ##hub | Medium##n
+label 156 48 300 92 ##hub | Medium
+button 156 112 300 156 ##hub | Medium##s
+label 156 112 300 156 ##hub | Medium
+button 312 48 502 92 ##hub | Large##n
+label 312 48 502 92 ##hub | Large
+button 312 112 502 156 ##hub | Large##s
+label 312 112 502 156 ##hub | Large
+button 514 48 814 92 ##hub | Extra large##n
+label 514 48 814 92 ##hub | Extra large
+button 514 112 814 156 ##hub | Extra large##s
+label 514 112 814 156 ##hub | Extra large

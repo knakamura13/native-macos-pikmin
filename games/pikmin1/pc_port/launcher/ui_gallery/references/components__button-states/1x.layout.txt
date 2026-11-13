@@ -1,0 +1,13 @@
+# ui 640x220 scale 1.000
+button 24 48 168 98 ##hub | Play##a
+label 24 48 168 98 ##hub | Play
+button 184 48 328 98 ##hub | Install##b
+label 184 48 328 98 ##hub | Install
+button 344 48 488 98 ##hub | Install##c
+label 344 48 488 98 ##hub | Install
+button 24 148 168 186 ##hub | Pikmin##h1
+label 24 148 168 186 ##hub | Pikmin
+button 184 148 304 192 ##hub | Browse##h2
+label 184 148 304 192 ##hub | Browse
+button 320 148 464 198 ##hub | Cancel##h3
+label 320 148 464 198 ##hub | Cancel

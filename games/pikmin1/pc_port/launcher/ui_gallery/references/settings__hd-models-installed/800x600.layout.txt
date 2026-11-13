@@ -1,0 +1,57 @@
+# ui 800x600 scale 1.000
+logo 208 18 592 102 ##hub | logo
+button 170 112 314 154 ##hub | Games
+label 170 112 314 154 ##hub | Games
+button 328 112 472 154 ##hub | Settings
+label 328 112 472 154 ##hub | Settings
+button 486 112 630 154 ##hub | Move Install
+label 486 112 630 154 ##hub | Move Install
+button 250 170 394 208 ##hub | Pikmin
+label 250 170 394 208 ##hub | Pikmin
+button 406 170 550 208 ##hub | Pikmin 2
+label 406 170 550 208 ##hub | Pikmin 2
+button 40 205 230 235 ##hub | Display
+label 40 205 230 235 ##hub | Display
+button 40 240 230 270 ##hub | Graphics
+label 40 240 230 270 ##hub | Graphics
+button 40 275 230 305 ##hub | Controls
+label 40 275 230 305 ##hub | Controls
+button 40 310 230 340 ##hub | Camera
+label 40 310 230 340 ##hub | Camera
+button 40 345 230 375 ##hub | Gameplay
+label 40 345 230 375 ##hub | Gameplay
+button 40 380 230 410 ##hub | Cheats
+label 40 380 230 410 ##hub | Cheats
+button 40 415 230 445 ##hub | Texture Packs
+label 40 415 230 445 ##hub | Texture Packs
+button 40 450 230 480 ##hub | HD Models
+label 40 450 230 480 ##hub | HD Models
+button 40 485 230 515 ##hub | #3f6d1dfa
+label 40 485 230 515 ##hub | Saves
+button 40 492 230 536 ##hub | Reset all
+label 40 492 230 536 ##hub | Reset all
+button 268 362 568 406 ##hub | Get HD models
+label 268 362 568 406 ##hub | Get HD models
+button 294 467 438 507 ##hub | On
+label 294 467 438 507 ##hub | On
+button 450 467 570 507 ##hub | Uninstall
+label 450 467 570 507 ##hub | Uninstall
+button 582 467 726 507 ##hub | Replace
+label 582 467 726 507 ##hub | Replace
+button 582 556 726 596 ##hub | #848b9f09
+label 582 556 726 596 ##hub | Install
+button 582 645 726 685 ##hub | #38f5f1bb
+label 582 645 726 685 ##hub | Install
+button 582 734 726 774 ##hub | #af84067a
+label 582 734 726 774 ##hub | Install
+button 294 823 438 863 ##hub | #b22f2dcc
+label 294 823 438 863 ##hub | Off
+button 450 823 570 863 ##hub | #b6de7b89
+label 450 823 570 863 ##hub | Uninstall
+button 582 823 726 863 ##hub | #b3f44858
+label 582 823 726 863 ##hub | Replace
+button 582 912 726 952 ##hub | #d294adef
+label 582 912 726 952 ##hub | Install
+button-disabled 426 1131 726 1170 ##hub | #415f778b
+button-disabled 426 1182 726 1221 ##hub | #99522393
+button-disabled 426 1233 726 1272 ##hub | #554233e5

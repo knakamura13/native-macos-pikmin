@@ -1,0 +1,8 @@
+# ui 1180x780 scale 2.000
+logo 260 18 920 163 ##hub | logo
+button-disabled 314 197 538 511 ##hub | cover
+button-disabled 331 571 521 615 ##hub | Install
+label 331 571 521 615 ##hub | Install
+button-disabled 642 197 866 511 ##hub | cover
+button-disabled 659 571 849 615 ##hub | Install
+label 659 571 849 615 ##hub | Install

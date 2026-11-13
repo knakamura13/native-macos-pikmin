@@ -140,6 +140,12 @@ jobs:
             ./gradlew assembleRelease -PnectarCompilerLauncher=ccache >"$log" 2>&1
           }
           show_tail() {
+            # One noisy translation unit can push the real error out of the
+            # last 200 lines (Pikmin 2 headers warn for pages). Print the
+            # error lines first, then the tail.
+            echo "::group::assembleRelease errors (exit $1)"
+            grep -aE 'error:|FAILED:|undefined reference|CMake Error|ninja: error|What went wrong|^FAILURE:|clang\+\+: error|ld\.lld: error|ld: error' "$log" | head -n 80 || true
+            echo "::endgroup::"
             echo "::group::Last 200 lines of assembleRelease (exit $1)"
             tail -n 200 "$log" || true
             echo "::endgroup::"

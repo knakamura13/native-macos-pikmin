@@ -1,0 +1,8 @@
+# ui 1280x720 scale 1.000
+logo 290 18 990 171 ##hub | logo
+button 346 205 589 546 ##hub | cover
+button 372 606 562 650 ##hub | Install
+label 372 606 562 650 ##hub | Install
+button 691 205 934 546 ##hub | cover
+button 718 606 908 650 ##hub | Install
+label 718 606 908 650 ##hub | Install

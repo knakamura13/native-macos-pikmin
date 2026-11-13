@@ -1,0 +1,17 @@
+# ui 1180x780 scale 2.000
+logo 260 18 920 163 ##hub | logo
+button 360 173 504 215 ##hub | Games
+label 360 173 504 215 ##hub | Games
+button 518 173 662 215 ##hub | Settings
+label 518 173 662 215 ##hub | Settings
+button 676 173 820 215 ##hub | Move Install
+label 676 173 820 215 ##hub | Move Install
+button 362 231 506 269 ##hub | Pikmin
+label 362 231 506 269 ##hub | Pikmin
+button 518 231 662 269 ##hub | Pikmin 2
+label 518 231 662 269 ##hub | Pikmin 2
+button 674 231 818 269 ##hub | Launcher
+label 674 231 818 269 ##hub | Launcher
+button 90 293 270 333 ##hub | Folders
+label 90 293 270 333 ##hub | Folders
+button 770 366 1070 405 ##hub | #2775879e

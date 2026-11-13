@@ -1314,6 +1314,89 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(settings_row_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME settings_row_layout_test COMMAND settings_row_layout_test)
 
+    # UI gallery (#215): every launcher screen and component as a story, drawn
+    # by the real launcher code (launcher_gui.cpp) on a CPU renderer, so it
+    # needs no GPU or display. `ui_gallery` alone opens the browser window;
+    # the test captures every story at every size, compares with the
+    # references and runs the layout lint. See pc_port/launcher/ui_gallery/README.md.
+    add_library(launcher_imgui_gallery STATIC
+        third_party/imgui/imgui.cpp
+        third_party/imgui/imgui_draw.cpp
+        third_party/imgui/imgui_tables.cpp
+        third_party/imgui/imgui_widgets.cpp
+        third_party/imgui/backends/imgui_impl_sdl2.cpp
+        third_party/imgui/backends/imgui_impl_sdlrenderer2.cpp
+        third_party/imgui/backends/imgui_impl_opengl3.cpp)
+    set_property(TARGET launcher_imgui_gallery PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(launcher_imgui_gallery PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui
+        ${SDL2_INCLUDE_DIRS})
+    # Widget rects and labels for the lint come from ImGui's test-engine hooks.
+    target_compile_definitions(launcher_imgui_gallery PUBLIC IMGUI_ENABLE_TEST_ENGINE)
+    target_link_libraries(launcher_imgui_gallery PUBLIC ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS})
+    if (WIN32)
+        target_link_libraries(launcher_imgui_gallery PUBLIC opengl32)
+    else()
+        target_link_libraries(launcher_imgui_gallery PUBLIC OpenGL::GL)
+    endif()
+
+    set(UI_GALLERY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/ui_gallery")
+    embed_file("${UI_GALLERY_DIR}/fixtures/pikmin1-settings.json" "${LAUNCHER_EMBED_DIR}/pikmin1_settings_fixture.h" kPikmin1Settings)
+    # The window's own font (Noto Sans, Latin subset, OFL): the tool chrome only.
+    embed_file("${UI_GALLERY_DIR}/tool/fonts/NotoSans-Regular.ttf" "${LAUNCHER_EMBED_DIR}/ui_gallery_font_regular.h" kNotoSansRegular)
+    embed_file("${UI_GALLERY_DIR}/tool/fonts/NotoSans-Bold.ttf" "${LAUNCHER_EMBED_DIR}/ui_gallery_font_bold.h" kNotoSansBold)
+    # The launcher's own sources, without its main().
+    get_target_property(UI_GALLERY_LAUNCHER_SOURCES pikmin_launcher SOURCES)
+    list(REMOVE_ITEM UI_GALLERY_LAUNCHER_SOURCES pc_port/launcher/launcher_main.cpp)
+    list(FILTER UI_GALLERY_LAUNCHER_SOURCES EXCLUDE REGEX "\\.rc$")
+    add_executable(ui_gallery
+        ${UI_GALLERY_DIR}/gallery_main.cpp
+        ${UI_GALLERY_DIR}/capture.cpp
+        ${UI_GALLERY_DIR}/stories.cpp
+        ${UI_GALLERY_DIR}/soft_raster.cpp
+        ${UI_GALLERY_DIR}/imgui_test_hooks.cpp
+        # Storybook-style window chrome, kept apart from the stories.
+        ${UI_GALLERY_DIR}/tool/storybook.cpp
+        ${UI_GALLERY_DIR}/tool/theme.cpp
+        ${UI_GALLERY_DIR}/tool/widgets.cpp
+        ${UI_GALLERY_LAUNCHER_SOURCES}
+        "${LAUNCHER_EMBED_DIR}/pikmin1_settings_fixture.h"
+        "${LAUNCHER_EMBED_DIR}/ui_gallery_font_regular.h"
+        "${LAUNCHER_EMBED_DIR}/ui_gallery_font_bold.h")
+    set_property(TARGET ui_gallery PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(ui_gallery PRIVATE
+        ${PC_PORT_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher
+        "${LAUNCHER_EMBED_DIR}"
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
+        ${NECTAR_LIBS_DIR}/nectar_assets/include
+        ${NECTAR_LIBS_DIR}/nectar_assets/third_party
+        ${SDL2_INCLUDE_DIRS})
+    target_compile_definitions(ui_gallery PRIVATE PIKMIN_UI_GALLERY=1 OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}"
+        UI_GALLERY_SOURCE_DIR="${UI_GALLERY_DIR}")
+    target_link_libraries(ui_gallery PRIVATE launcher_imgui_gallery pikmin_disc_image nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
+    if (WIN32)
+        target_link_libraries(ui_gallery PRIVATE comdlg32 ole32 shell32 uuid winhttp)
+    endif()
+    target_compile_options(ui_gallery PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    # The CPU renderer is the slow part of a Debug build.
+    set_source_files_properties(${UI_GALLERY_DIR}/soft_raster.cpp PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+    set_target_properties(ui_gallery PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    add_test(NAME ui_gallery_test
+        COMMAND ui_gallery --capture "${CMAKE_BINARY_DIR}/ui_gallery"
+                --references "${UI_GALLERY_DIR}/references"
+                --known-issues "${UI_GALLERY_DIR}/known_issues.txt")
+    set_tests_properties(ui_gallery_test PROPERTIES TIMEOUT 1200 LABELS ui-gallery)
+    add_executable(ui_gallery_raster_test ${UI_GALLERY_DIR}/soft_raster_test.cpp ${UI_GALLERY_DIR}/soft_raster.cpp)
+    set_property(TARGET ui_gallery_raster_test PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(ui_gallery_raster_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
+        ${NECTAR_LIBS_DIR}/nectar_assets/third_party)
+    target_link_libraries(ui_gallery_raster_test PRIVATE launcher_imgui Threads::Threads)
+    target_compile_options(ui_gallery_raster_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME ui_gallery_raster_test COMMAND ui_gallery_raster_test)
+
     add_executable(launcher_page_layout_test pc_port/launcher/launcher_page_layout_test.cpp)
     target_compile_options(launcher_page_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME launcher_page_layout_test COMMAND launcher_page_layout_test)

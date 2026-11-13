@@ -1,0 +1,32 @@
+# Known launcher layout problems the UI gallery reports but does not fail on.
+#
+# Each line: rule | story glob | viewport glob | detail glob | note
+# Globs use * and ?. A finding that matches a line is listed under "Known
+# problems" in lint.md instead of failing the run. Lines that match nothing
+# are listed under "Known issues that no longer occur": delete them when the
+# fix lands. All of these feed the launcher/menu overhaul, #214.
+
+# The --launch fallback notice (#345) sits on the Update button in the footer.
+covered-by-toast | hub/launch-fallback-* | * | toast '*' covers 'Update*' by * | #214: the fallback notice covers the footer Update button (#345)
+covered-by-toast | hub/update-and-fallback | * | toast '*' covers 'Update*' by * | #214: the fallback notice covers the footer Update button (#345)
+
+# A long toast on the settings page covers the bottom of the side bar and the
+# last row of the page.
+covered-by-toast | hub/toast-long | * | toast '*' covers 'Reset all' by * | #214: long toasts cover the settings side bar's Reset all
+covered-by-toast | hub/toast-long | * | toast '*' covers 'Install a pack from a .zip' by * | #214: long toasts cover the last settings row on short windows
+
+# The update pills (What's new, "Open Nectar x is available") are placed in
+# the top right corner without looking at the logo, so they run into its box
+# (at 800x600 into the lettering itself).
+covers-logo | * | * | 'What's new' covers the logo by * | #214: update pills overlap the logo
+covers-logo | * | 800x600 | '##release' covers the logo by * | #214: update pills overlap the logo at 800x600
+
+# Glass buttons drawn as disabled are still live ImGui items: they take hover
+# and keyboard focus but keep the arrow cursor. They should be real disabled
+# items (ImGui::BeginDisabled) so focus skips them.
+no-hand-cursor | settings/* | * | 'Pikmin 2' shows the arrow cursor | #214: disabled game pill (no Pikmin 2 settings) is still a live item
+no-hand-cursor | hub/toast-long | * | 'Pikmin 2' shows the arrow cursor | #214: disabled game pill (no Pikmin 2 settings) is still a live item
+no-hand-cursor | settings/saves | * | 'Open save folder' shows the arrow cursor | #214: disabled Open save folder (no save folder yet) is still a live item
+no-hand-cursor | move/default | * | 'Move' shows the arrow cursor | #214: disabled Move (no target chosen) is still a live item
+no-hand-cursor | install/paths-empty | * | 'Install' shows the arrow cursor | #214: disabled Install (no disc or folder) is still a live item
+no-hand-cursor | components/button-states | * | 'Install' shows the arrow cursor | #214: disabled glass buttons are still live items

@@ -32,6 +32,8 @@
 #include "launcher_page_layout.h"
 #include "launcher_sidebar_layout.h"
 #include "launcher_scroll.h"
+#include "launcher_texture_hooks.h"
+#include "launcher_ui_probe.h"
 #include "settings_model.h"
 #include "toast_layout.h"
 #include "texture_pack_row.h"
@@ -42,6 +44,9 @@
 
 #include "imgui.h"
 #include "imgui_internal.h" // cola de eventos: escalar la posición del ratón
+#if PIKMIN_UI_GALLERY
+#include "ui_gallery/gallery_host.h"
+#endif
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl2.h"
 
@@ -151,6 +156,15 @@ Texture uploadTexture(std::vector<unsigned char> pixels, int w, int h, int maxHe
     Texture tex;
     if (pixels.empty() || w <= 0 || h <= 0) return tex;
     while (maxHeight > 0 && h > maxHeight * 2 && w > 2 && h > 2) halve(pixels, w, h);
+    tex.width = w;
+    tex.height = h;
+    if (const TextureBackend* backend = textureBackend()) {
+        tex.id = backend->create(pixels.data(), w, h);
+        return tex;
+    }
+#if PIKMIN_UI_GALLERY
+    gallery::noOpenGl(__func__);
+#endif
     glGenTextures(1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -159,8 +173,6 @@ Texture uploadTexture(std::vector<unsigned char> pixels, int w, int h, int maxHe
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-    tex.width = w;
-    tex.height = h;
     return tex;
 }
 
@@ -185,7 +197,15 @@ Texture loadBtiTexture(const fs::path& path)
 
 void freeTexture(Texture& tex)
 {
-    if (tex.id) glDeleteTextures(1, &tex.id);
+    if (tex.id) {
+        if (const TextureBackend* backend = textureBackend()) backend->destroy(tex.id);
+        else {
+#if PIKMIN_UI_GALLERY
+            gallery::noOpenGl(__func__);
+#endif
+            glDeleteTextures(1, &tex.id);
+        }
+    }
     tex = Texture();
 }
 
@@ -473,11 +493,16 @@ void coverUv(const Texture& tex, float u0, float cardAspect, ImVec2& uv0, ImVec2
 std::string fitTail(ImFont* font, float size, const std::string& text, float width)
 {
     if (font->CalcTextSizeA(size, FLT_MAX, 0.0f, text.c_str()).x <= width) return text;
+    std::string shown = "...";
     for (std::size_t cut = 1; cut < text.size(); ++cut) {
         const std::string candidate = "..." + text.substr(cut);
-        if (font->CalcTextSizeA(size, FLT_MAX, 0.0f, candidate.c_str()).x <= width) return candidate;
+        if (font->CalcTextSizeA(size, FLT_MAX, 0.0f, candidate.c_str()).x <= width) {
+            shown = candidate;
+            break;
+        }
     }
-    return "...";
+    probe::report(probe::Kind::Path, 0, 0, 0, 0, text, shown, true);
+    return shown;
 }
 
 void centredText(ImDrawList* dl, ImFont* font, float size, ImVec2 centre, ImU32 colour, const char* text)
@@ -1039,6 +1064,13 @@ struct Hub {
     void uploadBlend(Texture& tex, const dewdrop::Bitmap& bmp)
     {
         if (tex.valid() && tex.width == bmp.width && tex.height == bmp.height) {
+            if (const TextureBackend* backend = textureBackend()) {
+                backend->update(tex.id, bmp.rgba.data(), bmp.width, bmp.height);
+                return;
+            }
+#if PIKMIN_UI_GALLERY
+            gallery::noOpenGl(__func__);
+#endif
             glBindTexture(GL_TEXTURE_2D, tex.id);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, bmp.width, bmp.height, GL_RGBA, GL_UNSIGNED_BYTE, bmp.rgba.data());
@@ -1218,6 +1250,7 @@ struct Hub {
         const std::string text = hidden ? std::string(label, hidden) : std::string(label);
         const buttons::FittedLabel fit = buttons::fitLabel(text, size.x, size.y, measureLabel(), baseSize);
         const buttons::Rect inner = buttons::innerTextRect(size.x, size.y, fit.size);
+        probe::report(probe::Kind::Label, at.x, at.y, at.x + size.x, at.y + size.y, text, fit.text, fit.truncated, fit.shrunk);
         dl->PushClipRect(ImVec2(at.x + inner.x0, at.y + inner.y0 - 1.0f), ImVec2(at.x + inner.x1, at.y + inner.y1 + 1.0f), true);
         dewdropText(dl, fit.size, ImVec2(at.x + size.x * 0.5f, at.y + size.y * 0.5f), fit.text.c_str(), layers.textAlpha,
                     layers.textDrop);
@@ -2870,6 +2903,7 @@ struct Hub {
         // Píldora a la medida del texto, con el mismo margen que los botones.
         const ImVec2 b(size.x - 18.0f, 58.0f);
         const ImVec2 a(b.x - buttons::fitWidth(text, b.y - 18.0f, 19.0f, measureLabel()), 18.0f);
+        probe::report(probe::Kind::Notice, a.x, a.y, b.x, b.y, text, text, false);
         ImGui::SetCursorScreenPos(a);
         const bool clicked = ImGui::InvisibleButton("##release", ImVec2(b.x - a.x, b.y - a.y));
         const ImGuiID id = ImGui::GetItemID();
@@ -3180,6 +3214,14 @@ struct Hub {
             const ImVec2 t = fonts.body->CalcTextSizeA(19.0f, FLT_MAX, 0.0f, shown.c_str());
             const ImVec2 a(std::max(4.0f, (size.x - t.x) * 0.5f - padding), size.y - 58.0f - t.y - 18.0f);
             const ImVec2 b(std::min(size.x - 4.0f, a.x + t.x + padding * 2.0f), a.y + t.y + 18.0f);
+            {
+                std::string flat = toast, drawn = shown;
+                for (char& c : flat) if (c == '\n' || c == '\r' || c == '\t') c = ' ';
+                for (char& c : drawn) if (c == '\n') c = ' ';
+                drawn.erase(std::unique(drawn.begin(), drawn.end(), [](char l, char r) { return l == ' ' && r == ' '; }), drawn.end());
+                flat.erase(std::unique(flat.begin(), flat.end(), [](char l, char r) { return l == ' ' && r == ' '; }), flat.end());
+                probe::report(probe::Kind::Toast, a.x, a.y, b.x, b.y, toast, shown, drawn != flat);
+            }
             dl->AddRectFilled(a, b, col(ImVec4(0.04f, 0.16f, 0.06f, 0.95f), alpha), 16.0f);
             dl->AddRect(a, b, col(kOrange, alpha), 16.0f, 0, 2.0f);
             dl->PushClipRect(a, b, true);
@@ -3214,6 +3256,7 @@ struct Hub {
         const float logoW = logoH * logo.aspect();
         const ImVec2 logoAt((size.x - logoW) * 0.5f, kLogoTop);
         ImGui::GetWindowDrawList()->AddImage(logo.imgui(), logoAt, ImVec2(logoAt.x + logoW, logoAt.y + logoH));
+        probe::report(probe::Kind::Logo, logoAt.x, logoAt.y, logoAt.x + logoW, logoAt.y + logoH, "logo", "logo", false);
 
         // El launcher del paquete (fuera de una instalación) solo instala o
         // actualiza: sin pestañas. Ajustes y mover la instalación son del
@@ -3615,7 +3658,26 @@ struct HubWindow::Impl {
             io.DisplaySize = ImVec2(io.DisplaySize.x / gUiScale, io.DisplaySize.y / gUiScale);
         }
         ImGui::NewFrame();
-        const ImVec2 size = ImGui::GetIO().DisplaySize;
+        drawFrame(ImGui::GetIO().DisplaySize, t, dt);
+        ImGui::Render();
+
+        int fbW = 0, fbH = 0;
+        SDL_GL_GetDrawableSize(window, &fbW, &fbH);
+        glViewport(0, 0, fbW, fbH);
+        glClearColor(0.035f, 0.13f, 0.055f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        SDL_GL_SwapWindow(window);
+        // Between frames: what follows a picked file may open a modal, which
+        // calls frame() itself, so it must not run inside hub->frame().
+        hub->finishFilePick();
+        hub->runBetweenFrames();
+    }
+
+    // The hub and the modal on top, between NewFrame() and Render(). The UI
+    // gallery (#215) calls this too, so it shows exactly what the window does.
+    void drawFrame(ImVec2 size, float t, float dt)
+    {
         // While a file picker is open the hub keeps animating but takes no input.
         const bool waiting = !dialogWaiting.empty();
         hub->frame(size, t, dt, modal == Modal::None && !hub->filePickOpen() && !waiting);
@@ -3630,19 +3692,6 @@ struct HubWindow::Impl {
         }
         ImGui::EndDisabled();
         if (waiting) drawDialogVeil(size);
-        ImGui::Render();
-
-        int fbW = 0, fbH = 0;
-        SDL_GL_GetDrawableSize(window, &fbW, &fbH);
-        glViewport(0, 0, fbW, fbH);
-        glClearColor(0.035f, 0.13f, 0.055f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        SDL_GL_SwapWindow(window);
-        // Between frames: what follows a picked file may open a modal, which
-        // calls frame() itself, so it must not run inside hub->frame().
-        hub->finishFilePick();
-        hub->runBetweenFrames();
     }
 
     void drawDialogVeil(ImVec2 size)
@@ -3685,6 +3734,31 @@ struct HubWindow::Impl {
         worker.join();
         dialogWaiting.clear();
         return quitRequested ? std::string() : result;
+    }
+
+    // The hub with its fonts, logo and game art; nothing started in the
+    // background yet (covers, release check, settings). The UI gallery
+    // (#215) builds its hubs the same way.
+    void createHub()
+    {
+        hub = std::make_unique<Hub>(state, result);
+#ifndef __ANDROID__
+        hub->askModal = [this](const std::string& title, const std::string& text, const std::string& primary,
+                               const std::string& secondary, bool isError, const std::string& cancel) {
+            return message(title, text, primary, secondary, isError, cancel);
+        };
+#endif
+        loadFonts(hub->fonts);
+        hub->logo = loadImageTexture(kLogoOpenNectar, kLogoOpenNectarSize, 160);
+        hub->art.load(state.gameDataDirectory);
+        if (hub->art.worldMap.valid()) {
+            // El paisaje del mapa del mundo entra en el pase de fondo.
+            hub->slideshow.add(hub->art.worldMap);
+            hub->art.worldMap = Texture();
+        }
+        // Las fotos del diario de Olimar también: ahora son fondos, no marcos.
+        for (Texture& photo : hub->art.logs) hub->slideshow.add(photo);
+        hub->art.logs.clear();
     }
 
     // Muestra un mensaje hasta que se pulsa un botón. -1 si se cierra la ventana.
@@ -3784,25 +3858,8 @@ bool HubWindow::open(const HubState& state, std::string& error)
 #endif
     applyTheme();
 
-    m.hub = std::make_unique<Hub>(m.state, m.result);
+    m.createHub();
     Hub& hub = *m.hub;
-#ifndef __ANDROID__
-    hub.askModal = [&m](const std::string& title, const std::string& text, const std::string& primary,
-                        const std::string& secondary, bool isError, const std::string& cancel) {
-        return m.message(title, text, primary, secondary, isError, cancel);
-    };
-#endif
-    loadFonts(hub.fonts);
-    hub.logo = loadImageTexture(kLogoOpenNectar, kLogoOpenNectarSize, 160);
-    hub.art.load(m.state.gameDataDirectory);
-    if (hub.art.worldMap.valid()) {
-        // El paisaje del mapa del mundo entra en el pase de fondo.
-        hub.slideshow.add(hub.art.worldMap);
-        hub.art.worldMap = Texture();
-    }
-    // Las fotos del diario de Olimar también: ahora son fondos, no marcos.
-    for (Texture& photo : hub.art.logs) hub.slideshow.add(photo);
-    hub.art.logs.clear();
     hub.startCoverDownloads();
 #ifdef __ANDROID__
     const bool checkReleases = m.state.games[0].installed || m.state.games[1].installed; // Android: sin pestañas, pero sí Update
@@ -4032,6 +4089,11 @@ bool HubWindow::savePathsModalScreenshot(const std::string& path, int width, int
     m.pathsLegacyOverride.clear();
     return ok;
 }
+
+#if PIKMIN_UI_GALLERY
+// UI gallery (#215): stories drive the hub above without a window or GPU.
+#include "ui_gallery/gallery_host.inl"
+#endif
 
 } // namespace launcher
 } // namespace pikmin

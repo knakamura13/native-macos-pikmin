@@ -1,0 +1,16 @@
+# ui 800x600 scale 1.000
+logo 208 18 592 102 ##hub | logo
+button-disabled 141 136 331 402 ##hub | cover
+button-disabled 141 462 331 506 ##hub | Install
+label 141 462 331 506 ##hub | Install
+button-disabled 469 136 659 402 ##hub | cover
+button-disabled 469 462 659 506 ##hub | Install
+label 469 462 659 506 ##hub | Install
+button 596 209 716 253 ##modal | Browse
+label 596 209 716 253 ##modal | Browse
+button 596 299 716 343 ##modal | Browse
+label 596 299 716 343 ##modal | Browse
+button 414 447 558 497 ##modal | Cancel
+label 414 447 558 497 ##modal | Cancel
+button 572 447 716 497 ##modal | Install
+label 572 447 716 497 ##modal | Install

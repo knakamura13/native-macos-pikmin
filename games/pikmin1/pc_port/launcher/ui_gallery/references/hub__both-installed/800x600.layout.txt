@@ -1,0 +1,22 @@
+# ui 800x600 scale 1.000
+logo 208 18 592 102 ##hub | logo
+button 170 112 314 154 ##hub | Games
+label 170 112 314 154 ##hub | Games
+button 328 112 472 154 ##hub | Settings
+label 328 112 472 154 ##hub | Settings
+button 486 112 630 154 ##hub | Move Install
+label 486 112 630 154 ##hub | Move Install
+button 172 167 300 347 ##hub | cover
+button 86 393 230 437 ##hub | Map editor
+label 86 393 230 437 ##hub | Map editor
+button 242 393 386 437 ##hub | Model maker
+label 242 393 386 437 ##hub | Model maker
+button 86 447 230 491 ##hub | HD textures
+label 86 447 230 491 ##hub | HD textures
+button 242 447 386 491 ##hub | Characters
+label 242 447 386 491 ##hub | Characters
+button 500 167 628 347 ##hub | cover
+button 469 393 659 437 ##hub | HD textures
+label 469 393 659 437 ##hub | HD textures
+button 305 508 495 552 ##hub | Update
+label 305 508 495 552 ##hub | Update
