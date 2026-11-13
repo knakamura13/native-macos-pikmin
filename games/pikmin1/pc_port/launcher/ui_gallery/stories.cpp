@@ -111,40 +111,71 @@ std::vector<Story> makeStories()
 {
     std::vector<Story> s;
     const auto add = [&](std::string name, std::string group, std::string summary, std::function<Fixture()> make) {
-        s.push_back({ std::move(name), std::move(group), std::move(summary), std::move(make), 0, 0 });
+        s.push_back({ std::move(name), std::move(group), std::move(summary), std::move(make), 0, 0, {}, {} });
     };
     const auto addComponent = [&](std::string name, std::string summary, int w, int h,
                                   std::function<void(ComponentCanvas&)> draw) {
-        s.push_back({ std::move(name), "Components", std::move(summary), [draw] { return component(draw); }, w, h });
+        s.push_back({ std::move(name), "Components", std::move(summary), [draw] { return component(draw); }, w, h, {}, {} });
+    };
+    // A story with controls: `make` builds it from the args the window edits;
+    // captures use `defaults`.
+    const auto addArgs = [&](std::string name, std::string group, std::string summary, Args defaults,
+                             std::function<Fixture(const Args&)> make, int w = 0, int h = 0) {
+        Story story { std::move(name), std::move(group), std::move(summary), [make, defaults] { return make(defaults); },
+                      w, h, defaults, make };
+        s.push_back(std::move(story));
     };
 
     // ── Home screen ──
-    add("hub/home", "Screens", "Pikmin installed, Pikmin 2 not yet: tabs, both covers", home);
+    addArgs("hub/home", "Screens", "Pikmin installed, Pikmin 2 not yet: tabs, both covers",
+            { boolArg("Pikmin installed", true), boolArg("Pikmin 2 installed", false), boolArg("Update available", false),
+              textArg("Update version", "1.4"), choiceArg("Tab", { "Games", "Settings", "Move Install" }, 0),
+              textArg("Toast", "") },
+            [](const Args& a) {
+                Fixture f = argFlag(a, "Pikmin 2 installed") ? bothInstalled() : home();
+                if (!argFlag(a, "Pikmin installed")) {
+                    f.state.games[0] = GameInstall();
+                    f.state.mapEditor.clear();
+                    f.state.modelMaker.clear();
+                    f.settingsDump[0].clear();
+                }
+                if (argFlag(a, "Update available")) {
+                    f.releaseNewer = true;
+                    f.releaseVersion = argText(a, "Update version");
+                }
+                f.tab = argChoice(a, "Tab");
+                if (!argText(a, "Toast").empty()) f = withToast(f, argText(a, "Toast"), 8.0f);
+                return f;
+            });
     add("hub/both-installed", "Screens", "Both games installed", bothInstalled);
     add("hub/first-run", "Screens", "Launcher from the download, nothing installed: Install only", [] {
         Fixture f;
         f.state.installerOnly = true;
         return f;
     });
-    add("hub/update-notice", "Screens", "Newer release found: notice pill and What's new", [] { return update(true); });
+    addArgs("hub/update-notice", "Screens", "Newer release found: notice pill and What's new",
+            { textArg("Version", "1.4"), boolArg("Release notes", true) }, [](const Args& a) {
+                Fixture f = update(argFlag(a, "Release notes"));
+                f.releaseVersion = argText(a, "Version");
+                return f;
+            });
     add("hub/update-notice-no-notes", "Screens", "Newer release without notes: the pill alone", [] { return update(false); });
     add("hub/whats-new", "Screens", "What's new panel open over the home screen", [] {
         Fixture f = update(true);
         f.whatsNewOpen = true;
         return f;
     });
-    add("hub/launch-fallback-notice", "Screens", "--launch=pikmin2 without Pikmin 2: home screen says why (#336)", [] {
-        return withToast(home(), "Pikmin 2 is not installed yet. Install it here to play.", 8.0f);
-    });
+    addArgs("hub/launch-fallback-notice", "Screens", "--launch=pikmin2 without Pikmin 2: home screen says why (#336)",
+            { textArg("Notice", "Pikmin 2 is not installed yet. Install it here to play."),
+              numberArg("Seconds left", 8.0f, 0.5f, 10.0f, 0.5f) },
+            [](const Args& a) { return withToast(home(), argText(a, "Notice"), argNumber(a, "Seconds left")); });
     add("hub/launch-fallback-missing-exe", "Screens", "--launch=pikmin1 with the game file gone (#336)", [] {
         return withToast(home(), "Pikmin could not start: its game file is missing. Update to restore it.", 8.0f);
     });
-    add("hub/toast-long", "Screens", "Long toast (texture pack installed), two lines", [] {
-        return withToast(settingsPage(6),
-                         "Installed HD 4K (1.2 GB) to /home/player/Games/Open Nectar/Load/Textures/hd-4k. It applies the "
-                         "next time the game starts.",
-                         8.0f);
-    });
+    addArgs("hub/toast-long", "Screens", "Long toast (texture pack installed), two lines",
+            { textArg("Toast", "Installed HD 4K (1.2 GB) to /home/player/Games/Open Nectar/Load/Textures/hd-4k. It "
+                               "applies the next time the game starts.") },
+            [](const Args& a) { return withToast(settingsPage(6), argText(a, "Toast"), 8.0f); });
     add("hub/update-and-fallback", "Screens", "Update notice and --launch notice at once", [] {
         return withToast(update(true), "Pikmin 2 is not installed yet. Install it here to play.", 8.0f);
     });
@@ -222,10 +253,11 @@ std::vector<Story> makeStories()
     add("install/paths-ready", "Dialogs", "Install modal with disc image and folder", [] {
         return paths("/home/player/Downloads/Pikmin (USA) (Rev 1).iso", "/home/player/Games/Open Nectar");
     });
-    add("install/paths-long", "Dialogs", "Install modal with long paths (shortened from the front)", [] {
-        return paths("/home/player/Documents/Backups/GameCube discs/Nintendo/2001/Pikmin (USA) (Rev 1) [GPIE01].iso",
-                     "/media/player/External drive with a long name/Games/Open Nectar/Pikmin");
-    });
+    addArgs("install/paths-long", "Dialogs", "Install modal with long paths (shortened from the front)",
+            { textArg("Disc image", "/home/player/Documents/Backups/GameCube discs/Nintendo/2001/Pikmin (USA) (Rev 1) "
+                                    "[GPIE01].iso"),
+              textArg("Install folder", "/media/player/External drive with a long name/Games/Open Nectar/Pikmin") },
+            [](const Args& a) { return paths(argText(a, "Disc image"), argText(a, "Install folder")); });
     add("install/paths-save-migration", "Dialogs", "Install modal with the save-migration note", [] {
         Fixture f = paths("/home/player/Downloads/Pikmin (USA) (Rev 1).iso", "/home/player/Games/Open Nectar");
         f.legacySave = "/home/player/.local/share/pikmin-native/card";
@@ -236,14 +268,17 @@ std::vector<Story> makeStories()
         f.dialogWaiting = "disc image picker";
         return f;
     });
-    add("install/progress", "Dialogs", "Extracting the disc", [] {
-        Fixture f = paths("/home/player/Downloads/Pikmin (USA) (Rev 1).iso", kInstall);
-        f.modal = Fixture::Modal::Progress;
-        f.percent = 42;
-        f.phase = "Extracting";
-        f.currentFile = "assets/dataDir/archives/tekis.arc";
-        return f;
-    });
+    addArgs("install/progress", "Dialogs", "Extracting the disc",
+            { numberArg("Percent", 42.0f, 0.0f, 100.0f), textArg("Phase", "Extracting"),
+              textArg("Current file", "assets/dataDir/archives/tekis.arc") },
+            [](const Args& a) {
+                Fixture f = paths("/home/player/Downloads/Pikmin (USA) (Rev 1).iso", kInstall);
+                f.modal = Fixture::Modal::Progress;
+                f.percent = unsigned(argNumber(a, "Percent") + 0.5f);
+                f.phase = argText(a, "Phase");
+                f.currentFile = argText(a, "Current file");
+                return f;
+            });
     add("install/error", "Dialogs", "Installation did not finish (one button)", [] {
         Fixture f = paths("", "");
         return message(f, "Installation did not finish",
@@ -270,14 +305,16 @@ std::vector<Story> makeStories()
                        " your saves, settings and packs stay as they are.",
                        "Update now", "Not now");
     });
-    add("dialog/replace-save", "Dialogs", "Replace your save? (Replace / Cancel)", [] {
-        Fixture f = settingsPage(8);
-        return message(f, "Replace your save?",
-                       "Importing replaces all save slots and options on this install's memory card with the ones in "
-                       "the .gci file.\n\nYour current save is backed up first, and you can bring it back from this "
-                       "page with \"Restore previous save\".",
-                       "Replace", "", false, "Cancel");
-    });
+    addArgs("dialog/replace-save", "Dialogs", "Replace your save? (Replace / Cancel)",
+            { textArg("Title", "Replace your save?"),
+              textArg("Text", "Importing replaces all save slots and options on this install's memory card with the "
+                              "ones in the .gci file.\n\nYour current save is backed up first, and you can bring it "
+                              "back from this page with \"Restore previous save\"."),
+              textArg("Primary", "Replace"), textArg("Cancel", "Cancel"), boolArg("Error", false) },
+            [](const Args& a) {
+                return message(settingsPage(8), argText(a, "Title"), argText(a, "Text"), argText(a, "Primary"), "",
+                               argFlag(a, "Error"), argText(a, "Cancel"));
+            });
 
     // ── Components ──
     addComponent("components/button-sizes", "The four standard widths, normal and selected", 760, 220,
@@ -294,17 +331,37 @@ std::vector<Story> makeStories()
                          x += widths[i] + 12;
                      }
                  });
-    addComponent("components/button-states", "Normal, selected, disabled, pressed-looking heights", 640, 220,
-                 [](ComponentCanvas& c) {
+    addArgs("components/button", "Components", "One glass button: edit its label, size and state",
+            { textArg("Label", "Install"), choiceArg("Width", { "Small", "Medium", "Large", "Extra large" }, 1),
+              numberArg("Height", 44.0f, 30.0f, 70.0f), boolArg("Selected", false), boolArg("Disabled", false) },
+            [](const Args& a) {
+                const std::string label = argText(a, "Label") + "##button";
+                const int width = argChoice(a, "Width");
+                const float height = argNumber(a, "Height");
+                const bool selected = argFlag(a, "Selected"), disabled = argFlag(a, "Disabled");
+                return component([=](ComponentCanvas& c) {
+                    c.at(40, 40);
+                    c.standardButton(label.c_str(), width, height, selected, disabled);
+                });
+            },
+            400, 140);
+    addArgs("components/button-states", "Components", "Normal, selected, disabled, pressed-looking heights",
+            { textArg("Normal label", "Play"), textArg("Selected label", "Install"), textArg("Disabled label", "Install"),
+              numberArg("Height", 50.0f, 30.0f, 70.0f) },
+            [](const Args& a) {
+                const std::string normal = argText(a, "Normal label") + "##a", selected = argText(a, "Selected label") + "##b",
+                                  disabled = argText(a, "Disabled label") + "##c";
+                const float height = argNumber(a, "Height");
+                return component([=](ComponentCanvas& c) {
                      c.caption(24, 20, "Normal");
                      c.at(24, 48);
-                     c.standardButton("Play##a", 1, 50);
+                     c.standardButton(normal.c_str(), 1, height);
                      c.caption(184, 20, "Selected");
                      c.at(184, 48);
-                     c.standardButton("Install##b", 1, 50, true);
+                     c.standardButton(selected.c_str(), 1, height, true);
                      c.caption(344, 20, "Disabled");
                      c.at(344, 48);
-                     c.standardButton("Install##c", 1, 50, true, true);
+                     c.standardButton(disabled.c_str(), 1, height, true, true);
                      c.caption(24, 120, "Heights 38 / 44 / 50");
                      c.at(24, 148);
                      c.standardButton("Pikmin##h1", 1, 38);
@@ -312,7 +369,9 @@ std::vector<Story> makeStories()
                      c.standardButton("Browse##h2", 0, 44);
                      c.at(320, 148);
                      c.standardButton("Cancel##h3", 1, 50);
-                 });
+                });
+            },
+            640, 220);
     addComponent("components/button-fit", "Longest real labels in their real sizes (shrink, never cut)", 720, 260,
                  [](ComponentCanvas& c) {
                      struct Row { const char* label; int size; float h; };
@@ -328,19 +387,25 @@ std::vector<Story> makeStories()
                      }
                  });
     addComponent("components/tabs", "Games / Settings / Move Install", 640, 120, [](ComponentCanvas& c) { c.tabs(36); });
-    s.push_back({ "components/toast", "Components", "Toast alone", [] {
-                      Fixture f = component([](ComponentCanvas&) {});
-                      f.toast = "Pikmin 2 is not installed yet. Install it here to play.";
-                      f.toastTime = 8.0f;
-                      return f;
-                  }, 720, 200 });
-    s.push_back({ "components/release-notice", "Components", "Release notice pill with What's new", [] {
-                      Fixture f = component([](ComponentCanvas&) {});
-                      f.releaseNewer = true;
-                      f.releaseVersion = "1.4";
-                      f.releaseNotes = "- Fixes";
-                      return f;
-                  }, 560, 120 });
+    addArgs("components/toast", "Components", "Toast alone",
+            { textArg("Text", "Pikmin 2 is not installed yet. Install it here to play.") },
+            [](const Args& a) {
+                Fixture f = component([](ComponentCanvas&) {});
+                f.toast = argText(a, "Text");
+                f.toastTime = 8.0f;
+                return f;
+            },
+            720, 200);
+    addArgs("components/release-notice", "Components", "Release notice pill with What's new",
+            { textArg("Version", "1.4"), boolArg("Release notes", true) },
+            [](const Args& a) {
+                Fixture f = component([](ComponentCanvas&) {});
+                f.releaseNewer = true;
+                f.releaseVersion = argText(a, "Version");
+                if (argFlag(a, "Release notes")) f.releaseNotes = "- Fixes";
+                return f;
+            },
+            560, 120);
     return s;
 }
 
@@ -350,6 +415,96 @@ const std::vector<Story>& stories()
 {
     static const std::vector<Story> all = makeStories();
     return all;
+}
+
+Arg boolArg(std::string name, bool value)
+{
+    Arg a;
+    a.name = std::move(name);
+    a.kind = Arg::Kind::Bool;
+    a.flag = value;
+    return a;
+}
+
+Arg textArg(std::string name, std::string value)
+{
+    Arg a;
+    a.name = std::move(name);
+    a.kind = Arg::Kind::Text;
+    a.text = std::move(value);
+    return a;
+}
+
+Arg numberArg(std::string name, float value, float min, float max, float step)
+{
+    Arg a;
+    a.name = std::move(name);
+    a.kind = Arg::Kind::Number;
+    a.number = value;
+    a.min = min;
+    a.max = max;
+    a.step = step;
+    return a;
+}
+
+Arg choiceArg(std::string name, std::vector<std::string> choices, int value)
+{
+    Arg a;
+    a.name = std::move(name);
+    a.kind = Arg::Kind::Choice;
+    a.choices = std::move(choices);
+    a.choice = value;
+    return a;
+}
+
+namespace {
+const Arg* findArg(const Args& args, const std::string& name)
+{
+    for (const Arg& a : args)
+        if (a.name == name) return &a;
+    return nullptr;
+}
+} // namespace
+
+bool argFlag(const Args& args, const std::string& name)
+{
+    const Arg* a = findArg(args, name);
+    return a && a->flag;
+}
+
+const std::string& argText(const Args& args, const std::string& name)
+{
+    static const std::string empty;
+    const Arg* a = findArg(args, name);
+    return a ? a->text : empty;
+}
+
+float argNumber(const Args& args, const std::string& name)
+{
+    const Arg* a = findArg(args, name);
+    return a ? a->number : 0.0f;
+}
+
+int argChoice(const Args& args, const std::string& name)
+{
+    const Arg* a = findArg(args, name);
+    return a ? a->choice : 0;
+}
+
+bool sameArgs(const Args& a, const Args& b)
+{
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i)
+        if (a[i].name != b[i].name || a[i].flag != b[i].flag || a[i].text != b[i].text || a[i].number != b[i].number
+            || a[i].choice != b[i].choice)
+            return false;
+    return true;
+}
+
+Fixture makeFixture(const Story& story, const Args* args)
+{
+    if (args && story.makeWith) return story.makeWith(*args);
+    return story.make ? story.make() : Fixture();
 }
 
 const Story* findStory(const std::string& name)
