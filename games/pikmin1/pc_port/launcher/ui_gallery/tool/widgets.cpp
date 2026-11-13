@@ -136,8 +136,11 @@ bool iconButton(const char* id, Icon icon, const char* tooltip, bool on, bool en
     const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
     if (enabled) handCursor();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    if (on) dl->AddRectFilled(at, ImVec2(at.x + h, at.y + h), color::kAccentSoft, 4.0f);
-    else if (hovered && enabled) dl->AddRectFilled(at, ImVec2(at.x + h, at.y + h), color::rgb(0x029CFD, 14), 4.0f);
+    // FrameRounding already includes --ui-scale, so the corners stay the same
+    // proportion on a HiDPI screen.
+    const float radius = ImGui::GetStyle().FrameRounding;
+    if (on) dl->AddRectFilled(at, ImVec2(at.x + h, at.y + h), color::kAccentSoft, radius);
+    else if (hovered && enabled) dl->AddRectFilled(at, ImVec2(at.x + h, at.y + h), color::rgb(0x029CFD, 14), radius);
     const ImU32 col = !enabled ? color::rgb(0xB8C2CA) : (on || (hovered && enabled)) ? color::kAccent : color::kMuted;
     drawIcon(dl, icon, ImVec2(at.x + h * 0.5f, at.y + h * 0.5f), h * 0.46f, col);
     if (hovered && tooltip) ImGui::SetItemTooltip("%s", tooltip);
@@ -168,8 +171,9 @@ bool textButton(const char* label, bool primary, bool enabled, Icon icon, bool w
         bg = primary ? color::rgb(0xB9DDF5) : color::kContent;
         fg = primary ? IM_COL32_WHITE : color::kFaint;
     }
-    dl->AddRectFilled(at, b, bg, 4.0f);
-    if (!primary) dl->AddRect(at, b, hovered ? color::rgb(0x029CFD, 120) : color::kBorder, 4.0f);
+    const float radius = ImGui::GetStyle().FrameRounding;
+    dl->AddRectFilled(at, b, bg, radius);
+    if (!primary) dl->AddRect(at, b, hovered ? color::rgb(0x029CFD, 120) : color::kBorder, radius);
     float x = at.x + st.FramePadding.x;
     if (withIcon) {
         drawIcon(dl, icon, ImVec2(x + ts.y * 0.5f, at.y + size.y * 0.5f), ts.y * 0.8f, primary ? fg : color::kAccent);
@@ -188,7 +192,10 @@ bool segmented(const char* id, const char* const* labels, int count, int& value)
     const ImVec2 start = ImGui::GetCursorScreenPos();
     float total = 0;
     for (int i = 0; i < count; ++i) total += ImGui::CalcTextSize(labels[i]).x + st.FramePadding.x * 2.0f;
-    dl->AddRectFilled(start, ImVec2(start.x + total, start.y + h), color::rgb(0xEDF1F5), 4.0f);
+    const float radius = st.FrameRounding;
+    // Inset of the selected pill. 2px at 1x, and the same proportion after --ui-scale.
+    const float inset = std::max(1.0f, st.FramePadding.y / 3.0f);
+    dl->AddRectFilled(start, ImVec2(start.x + total, start.y + h), color::rgb(0xEDF1F5), radius);
     bool changed = false;
     float x = start.x;
     for (int i = 0; i < count; ++i) {
@@ -203,8 +210,9 @@ bool segmented(const char* id, const char* const* labels, int count, int& value)
         const bool hovered = ImGui::IsItemHovered();
         ImGui::PopID();
         if (value == i) {
-            dl->AddRectFilled(ImVec2(x + 2, start.y + 2), ImVec2(x + w - 2, start.y + h - 2), color::kContent, 3.0f);
-            dl->AddRect(ImVec2(x + 2, start.y + 2), ImVec2(x + w - 2, start.y + h - 2), color::rgb(0x029CFD, 90), 3.0f);
+            const float inner = std::max(1.0f, radius - 1.0f);
+            dl->AddRectFilled(ImVec2(x + inset, start.y + inset), ImVec2(x + w - inset, start.y + h - inset), color::kContent, inner);
+            dl->AddRect(ImVec2(x + inset, start.y + inset), ImVec2(x + w - inset, start.y + h - inset), color::rgb(0x029CFD, 90), inner);
         }
         const ImU32 fg = value == i ? color::kAccent : hovered ? color::kText : color::kMuted;
         const ImVec2 ts = ImGui::CalcTextSize(labels[i]);
@@ -288,7 +296,10 @@ bool tab(const char* label, int count, bool selected, ImU32 countColour)
         badge(dl, ImVec2(at.x + st.FramePadding.x + ts.x + st.ItemInnerSpacing.x, at.y + (h - size2 * 1.45f) * 0.5f),
               countText, countColour, IM_COL32_WHITE);
     }
-    if (selected) dl->AddRectFilled(ImVec2(at.x + 2, at.y + h - 3), ImVec2(at.x + size.x - 2, at.y + h), color::kAccent, 1.5f);
+    if (selected) {
+        const float bar = std::max(2.0f, st.FramePadding.y * 0.5f);
+        dl->AddRectFilled(ImVec2(at.x + bar, at.y + h - bar), ImVec2(at.x + size.x - bar, at.y + h), color::kAccent, bar * 0.5f);
+    }
     return clicked;
 }
 
