@@ -116,13 +116,20 @@ std::string q(const std::string& s) { return "'" + visibleLabel(s) + "'"; }
 
 std::string sizeText(const Rect& r) { return fmt("%.0fx%.0f", r.w(), r.h()); }
 
+std::vector<ImVec4> toBoxes(const std::vector<Rect>& rects)
+{
+    std::vector<ImVec4> out;
+    for (const Rect& r : rects) out.push_back(ImVec4(r.x0, r.y0, r.x1, r.y1));
+    return out;
+}
+
 } // namespace
 
 std::vector<Finding> lintFrame(const Session& session, const Story& story, const Viewport& viewport)
 {
     std::vector<Finding> out;
-    const auto add = [&](const char* rule, std::string detail, bool error = true) {
-        out.push_back({ rule, story.name, viewport.name, std::move(detail), error, {} });
+    const auto add = [&](const char* rule, std::string detail, bool error = true, std::vector<Rect> rects = {}) {
+        out.push_back({ rule, story.name, viewport.name, std::move(detail), error, {}, toBoxes(rects) });
     };
     const ImVec2 display = session.uiSize();
     const std::vector<Widget>& all = session.widgets();
@@ -145,11 +152,11 @@ std::vector<Finding> lintFrame(const Session& session, const Story& story, const
             const Rect vb = visibleRect(b, display);
             const Rect both = intersect(va, vb);
             if (both.w() > 1.0f && both.h() > 1.0f)
-                add("overlap", q(a.label) + " and " + q(b.label) + " overlap by " + sizeText(both));
+                add("overlap", q(a.label) + " and " + q(b.label) + " overlap by " + sizeText(both), true, { va, vb, both });
         }
         if (logo && a.layer == "##hub") {
             const Rect both = intersect(va, rectOf(*logo));
-            if (both.w() > 1.0f && both.h() > 1.0f) add("covers-logo", q(a.label) + " covers the logo by " + sizeText(both));
+            if (both.w() > 1.0f && both.h() > 1.0f) add("covers-logo", q(a.label) + " covers the logo by " + sizeText(both), true, { va, rectOf(*logo), both });
         }
     }
 
@@ -160,11 +167,12 @@ std::vector<Finding> lintFrame(const Session& session, const Story& story, const
             if (c->disabled) continue;
             const Rect both = intersect(visibleRect(*c, display), rectOf(t));
             if (both.w() > 1.0f && both.h() > 1.0f)
-                add("covered-by-toast", "toast " + q(t.label) + " covers " + q(c->label) + " by " + sizeText(both));
+                add("covered-by-toast", "toast " + q(t.label) + " covers " + q(c->label) + " by " + sizeText(both), true,
+                    { rectOf(t), visibleRect(*c, display), both });
         }
-        if (t.truncated) add("truncated-toast", "toast " + q(t.label) + " is cut to " + q(t.shown));
+        if (t.truncated) add("truncated-toast", "toast " + q(t.label) + " is cut to " + q(t.shown), true, { rectOf(t) });
         if (t.x0 < -0.5f || t.y0 < -0.5f || t.x1 > display.x + 0.5f || t.y1 > display.y + 0.5f)
-            add("off-screen", "toast " + q(t.label) + " goes past the window");
+            add("off-screen", "toast " + q(t.label) + " goes past the window", true, { rectOf(t) });
     }
 
     // On screen and inside the box they are drawn in, unless they scroll there.
@@ -173,23 +181,27 @@ std::vector<Finding> lintFrame(const Session& session, const Story& story, const
         const Rect r = rectOf(*c);
         if (r.x0 < -0.5f || r.y0 < -0.5f || r.x1 > display.x + 0.5f || r.y1 > display.y + 0.5f) {
             add("off-screen", q(c->label) + fmt(" at %.0f,%.0f-%.0f,%.0f is outside the %.0fx%.0f window", r.x0, r.y0,
-                                                  r.x1, r.y1, display.x, display.y));
+                                                  r.x1, r.y1, display.x, display.y),
+                true, { r });
             continue;
         }
         const Rect clip = clipOf(*c);
         if (r.x0 < clip.x0 - 1 || r.y0 < clip.y0 - 1 || r.x1 > clip.x1 + 1 || r.y1 > clip.y1 + 1)
             add("clipped", q(c->label) + " is cut off by its panel (" + sizeText(visibleRect(*c, display)) + " of "
-                               + sizeText(r) + " visible)");
+                               + sizeText(r) + " visible)",
+                true, { r, clip });
     }
 
     // Text fitted into a box.
     for (const Widget& w : all) {
         if (w.kind == Widget::Kind::Label && w.truncated)
-            add("truncated-label", q(w.label) + " is cut to " + q(w.shown) + " in a " + sizeText(rectOf(w)) + " button");
+            add("truncated-label", q(w.label) + " is cut to " + q(w.shown) + " in a " + sizeText(rectOf(w)) + " button", true,
+                { rectOf(w) });
         if (w.kind == Widget::Kind::Label && w.shrunk && !w.truncated)
-            add("shrunk-label", q(w.label) + " is drawn smaller to fit a " + sizeText(rectOf(w)) + " button", false);
+            add("shrunk-label", q(w.label) + " is drawn smaller to fit a " + sizeText(rectOf(w)) + " button", false,
+                { rectOf(w) });
         if (w.kind == Widget::Kind::Path)
-            add("shortened-path", q(w.label) + " is shown as " + q(w.shown), false);
+            add("shortened-path", q(w.label) + " is shown as " + q(w.shown), false, { rectOf(w) });
     }
 
     // Phones: fingers need about 48 dp (Android) / 44 pt (iOS).
@@ -197,6 +209,7 @@ std::vector<Finding> lintFrame(const Session& session, const Story& story, const
         int small = 0, total = 0;
         float smallest = 1e9f;
         std::string smallestLabel;
+        std::vector<Rect> smallRects;
         const float dpPerPoint = session.framebufferScale() / viewport.pixelsPerDp;
         for (const Widget* c : clickables) {
             if (c->disabled || visibleRect(*c, display).empty()) continue;
@@ -205,6 +218,7 @@ std::vector<Finding> lintFrame(const Session& session, const Story& story, const
             const float dp = std::min(r.w(), r.h()) * dpPerPoint;
             if (dp >= 48.0f) continue;
             ++small;
+            smallRects.push_back(r);
             if (dp < smallest) {
                 smallest = dp;
                 smallestLabel = c->label;
@@ -213,7 +227,7 @@ std::vector<Finding> lintFrame(const Session& session, const Story& story, const
         if (small > 0)
             add("small-touch-target", fmt("%d of %d controls are under 48 dp; smallest ", small, total) + q(smallestLabel)
                                           + fmt(" is %.0f dp", smallest),
-                false);
+                false, smallRects);
     }
     return out;
 }
@@ -221,8 +235,8 @@ std::vector<Finding> lintFrame(const Session& session, const Story& story, const
 std::vector<Finding> lintInput(const Story& story, const Viewport& viewport)
 {
     std::vector<Finding> out;
-    const auto add = [&](const char* rule, std::string detail, bool error = true) {
-        out.push_back({ rule, story.name, viewport.name, std::move(detail), error, {} });
+    const auto add = [&](const char* rule, std::string detail, bool error = true, std::vector<Rect> rects = {}) {
+        out.push_back({ rule, story.name, viewport.name, std::move(detail), error, {}, toBoxes(rects) });
     };
     {
         Session session(story, viewport);
@@ -232,13 +246,13 @@ std::vector<Finding> lintInput(const Story& story, const Viewport& viewport)
         if (!top) return out;
         const std::string layer = top->layer;
         const ImVec2 display = session.uiSize();
-        struct Probe { unsigned id; std::string label; float x, y; };
+        struct Probe { unsigned id; std::string label; float x, y; Rect r; };
         std::vector<Probe> probes;
         for (const Widget& w : session.widgets()) {
             if (w.kind != Widget::Kind::Clickable || w.disabled || w.layer != layer) continue;
             const Rect v = visibleRect(w, display);
             if (v.w() < 2 || v.h() < 2) continue;
-            probes.push_back({ w.id, w.label, (v.x0 + v.x1) * 0.5f, (v.y0 + v.y1) * 0.5f });
+            probes.push_back({ w.id, w.label, (v.x0 + v.x1) * 0.5f, (v.y0 + v.y1) * 0.5f, v });
         }
         std::map<unsigned, std::string> labels;
         for (const Widget& w : session.widgets())
@@ -249,10 +263,11 @@ std::vector<Finding> lintInput(const Story& story, const Viewport& viewport)
             if (session.hovered() != p.id) {
                 const auto other = labels.find(session.hovered());
                 add("hover-blocked", q(p.label) + " cannot be pointed at: "
-                                         + (other != labels.end() ? q(other->second) + " is on top" : std::string("nothing reacts")));
+                                         + (other != labels.end() ? q(other->second) + " is on top" : std::string("nothing reacts")),
+                    true, { p.r });
                 continue;
             }
-            if (session.cursor() != ImGuiMouseCursor_Hand) add("no-hand-cursor", q(p.label) + " shows the arrow cursor");
+            if (session.cursor() != ImGuiMouseCursor_Hand) add("no-hand-cursor", q(p.label) + " shows the arrow cursor", true, { p.r });
         }
     }
     {
@@ -279,9 +294,10 @@ std::vector<Finding> lintInput(const Story& story, const Viewport& viewport)
                         if (std::abs(int(before.rgba[i]) - int(after.rgba[i])) > 24) { ++changed; c = 3; }
                     }
         if (session.focused() != focusOn.id)
-            add("focus-unreachable", q(focusOn.label) + " cannot take controller/keyboard focus", false);
+            add("focus-unreachable", q(focusOn.label) + " cannot take controller/keyboard focus", false, { rectOf(focusOn) });
         else if (changed < 20)
-            add("no-focus-indicator", q(focusOn.label) + " looks the same with controller/keyboard focus", false);
+            add("no-focus-indicator", q(focusOn.label) + " looks the same with controller/keyboard focus", false,
+                { rectOf(focusOn) });
     }
     return out;
 }
@@ -330,8 +346,6 @@ void matchKnown(Finding& f, std::vector<KnownIssue>& known)
     }
 }
 
-namespace {
-
 std::string layoutText(const Session& session)
 {
     std::ostringstream out;
@@ -354,6 +368,8 @@ std::string layoutText(const Session& session)
     }
     return out.str();
 }
+
+namespace {
 
 std::vector<std::string> lines(const std::string& text)
 {
@@ -447,6 +463,72 @@ std::string htmlEscape(const std::string& s)
 
 } // namespace
 
+bool sameLayout(const std::string& reference, const std::string& now)
+{
+    const std::vector<std::string> a = lines(reference), b = lines(now);
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i)
+        if (!sameLayoutLine(a[i], b[i])) return false;
+    return true;
+}
+
+namespace {
+fs::path referencePath(const std::string& dir, const Story& story, const Viewport& viewport, const char* extension)
+{
+    return fs::u8path(dir) / storyFileName(story.name) / (viewport.name + extension);
+}
+} // namespace
+
+ReferenceCheck checkReference(const std::string& referenceDir, const Story& story, const Viewport& viewport,
+                              const Image& shot, const std::string& layout, const CaptureOptions& options)
+{
+    ReferenceCheck r;
+    r.current = downscale(shot, options.thumbnailWidth);
+    r.hasReference = loadPng(referencePath(referenceDir, story, viewport, ".png").string(), r.reference);
+    if (!r.hasReference) {
+        r.why = "no reference yet";
+        return r;
+    }
+    const CompareResult c = compareImages(r.reference, r.current, options, r.diff);
+    r.imageOk = c.ok;
+    r.layoutOk = sameLayout(readText(referencePath(referenceDir, story, viewport, ".layout.txt")), layout);
+    if (!r.imageOk) r.why = c.why;
+    if (!r.layoutOk) r.why += std::string(r.why.empty() ? "" : "; ") + "layout changed";
+    return r;
+}
+
+bool acceptReference(const std::string& referenceDir, const Story& story, const Viewport& viewport, const Image& shot,
+                     const std::string& layout, const CaptureOptions& options, std::string& error)
+{
+    std::error_code ec;
+    const fs::path png = referencePath(referenceDir, story, viewport, ".png");
+    fs::create_directories(png.parent_path(), ec);
+    if (ec) {
+        error = "cannot create " + png.parent_path().string() + ": " + ec.message();
+        return false;
+    }
+    if (!savePng(png.string(), downscale(shot, options.thumbnailWidth), 9)) {
+        error = "cannot write " + png.string();
+        return false;
+    }
+    if (!writeText(referencePath(referenceDir, story, viewport, ".layout.txt"), layout)) {
+        error = "cannot write the layout next to " + png.string();
+        return false;
+    }
+    return true;
+}
+
+std::vector<Finding> lowResFindings(const std::vector<LowRes>& lowRes, const Story& story, const Viewport& viewport)
+{
+    std::vector<Finding> out;
+    for (const LowRes& l : lowRes)
+        out.push_back({ "low-res", story.name, viewport.name,
+                        fmt("%s (%dx%d texture) drawn at %.2f texels per pixel", l.what.c_str(), l.texW, l.texH,
+                            l.texelsPerPixel),
+                        false, {}, {} });
+    return out;
+}
+
 namespace {
 char gCurrent[256] = "";
 } // namespace
@@ -506,12 +588,7 @@ int runCapture(const CaptureOptions& o)
 
             if (o.lint) {
                 for (Finding& f : lintFrame(session, story, vp)) findings.push_back(std::move(f));
-                for (const LowRes& l : lowRes) {
-                    findings.push_back({ "low-res", story.name, vp.name,
-                                         fmt("%s (%dx%d texture) drawn at %.2f texels per pixel", l.what.c_str(), l.texW,
-                                             l.texH, l.texelsPerPixel),
-                                         false, {} });
-                }
+                for (Finding& f : lowResFindings(lowRes, story, vp)) findings.push_back(std::move(f));
                 if (o.inputLint && (vp.name == "1180x780" || vp.name == "1x"))
                     for (Finding& f : lintInput(story, vp)) findings.push_back(std::move(f));
             }

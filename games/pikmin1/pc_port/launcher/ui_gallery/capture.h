@@ -20,6 +20,7 @@ struct Finding {
     std::string detail;
     bool error = true;    // false: reported for #214, never fails the run
     std::string known;    // matching known_issues.txt note, if any
+    std::vector<ImVec4> rects; // the boxes involved, in UI points (x0, y0, x1, y1)
 };
 
 // Rules on one settled frame: overlaps, covered controls, off-screen or
@@ -57,6 +58,26 @@ int runCapture(const CaptureOptions& options);
 
 // What runCapture is drawing right now ("story @ viewport"), for crash reports.
 const char* currentCapture();
+
+// Layout snapshot as stored next to each reference (.layout.txt).
+std::string layoutText(const Session& session);
+// Same widgets, each coordinate within one point (the comparison the test uses).
+bool sameLayout(const std::string& reference, const std::string& now);
+
+// One story at one viewport against the stored reference.
+struct ReferenceCheck {
+    bool hasReference = false;
+    bool imageOk = false, layoutOk = false;
+    std::string why;               // empty when both match
+    Image reference, current, diff; // thumbnails (diff: changed pixels in red)
+};
+ReferenceCheck checkReference(const std::string& referenceDir, const Story& story, const Viewport& viewport,
+                              const Image& shot, const std::string& layout, const CaptureOptions& options);
+// Writes `shot` (as a thumbnail) and `layout` as the new reference.
+bool acceptReference(const std::string& referenceDir, const Story& story, const Viewport& viewport, const Image& shot,
+                     const std::string& layout, const CaptureOptions& options, std::string& error);
+// Low-res texture notes, as runCapture lists them.
+std::vector<Finding> lowResFindings(const std::vector<LowRes>& lowRes, const Story& story, const Viewport& viewport);
 
 bool globMatch(const std::string& pattern, const std::string& text);
 std::string storyFileName(const std::string& story); // "hub/home" -> "hub__home"
