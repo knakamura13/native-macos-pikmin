@@ -324,6 +324,7 @@ void SoftRenderer::render(const ImDrawData* data, Image& out, const float clear[
 }
 
 ScopedTextureBackend::ScopedTextureBackend(SoftRenderer& renderer)
+    : mPreviousRenderer(gBackendRenderer), mPreviousBackend(textureBackend())
 {
     gBackendRenderer = &renderer;
     textureBackend() = &kBackend;
@@ -331,8 +332,8 @@ ScopedTextureBackend::ScopedTextureBackend(SoftRenderer& renderer)
 
 ScopedTextureBackend::~ScopedTextureBackend()
 {
-    textureBackend() = nullptr;
-    gBackendRenderer = nullptr;
+    textureBackend() = mPreviousBackend;
+    gBackendRenderer = mPreviousRenderer;
 }
 
 bool savePng(const std::string& path, const Image& image, int compression)

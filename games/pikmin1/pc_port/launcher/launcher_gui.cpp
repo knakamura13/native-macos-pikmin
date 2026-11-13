@@ -162,6 +162,9 @@ Texture uploadTexture(std::vector<unsigned char> pixels, int w, int h, int maxHe
         tex.id = backend->create(pixels.data(), w, h);
         return tex;
     }
+#if PIKMIN_UI_GALLERY
+    gallery::noOpenGl(__func__);
+#endif
     glGenTextures(1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -196,7 +199,12 @@ void freeTexture(Texture& tex)
 {
     if (tex.id) {
         if (const TextureBackend* backend = textureBackend()) backend->destroy(tex.id);
-        else glDeleteTextures(1, &tex.id);
+        else {
+#if PIKMIN_UI_GALLERY
+            gallery::noOpenGl(__func__);
+#endif
+            glDeleteTextures(1, &tex.id);
+        }
     }
     tex = Texture();
 }
@@ -1060,6 +1068,9 @@ struct Hub {
                 backend->update(tex.id, bmp.rgba.data(), bmp.width, bmp.height);
                 return;
             }
+#if PIKMIN_UI_GALLERY
+            gallery::noOpenGl(__func__);
+#endif
             glBindTexture(GL_TEXTURE_2D, tex.id);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, bmp.width, bmp.height, GL_RGBA, GL_UNSIGNED_BYTE, bmp.rgba.data());
