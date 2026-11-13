@@ -221,6 +221,7 @@ private:
     std::string mStatus;
     double mStatusUntil = 0.0;
     int mFrame = 0;
+    int mToolbarRows = 1;
 
     const Story& story() const { return stories()[std::size_t(mStory)]; }
     bool isComponent() const { return story().canvasW > 0; }
@@ -519,7 +520,7 @@ void App::drawSidebar(float h)
         }
         if (mSearch != before) mScrollToSelected = true;
     }
-    ImGui::Dummy(ImVec2(0, 2 * mUiScale));
+    ImGui::Dummy(ImVec2(0, 6 * mUiScale));
 
     const float testsH = ImGui::GetFrameHeight() + ImGui::GetTextLineHeightWithSpacing() * 3.0f + 28 * mUiScale;
     ImGui::BeginChild("##tree", ImVec2(0, std::max(80.0f, ImGui::GetContentRegionAvail().y - testsH - st.ItemSpacing.y)), 0,
@@ -724,7 +725,10 @@ void App::drawTests()
 // Toolbar.
 void App::drawToolbar()
 {
-    const float h = ImGui::GetFrameHeight() + 12 * mUiScale;
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float fh = ImGui::GetFrameHeight();
+    const float rowGap = 6 * mUiScale;
+    const float h = float(mToolbarRows) * fh + float(mToolbarRows - 1) * rowGap + 12 * mUiScale;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8 * mUiScale, 6 * mUiScale));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, color::kContent);
     ImGui::BeginChild("##toolbar", ImVec2(0, h), ImGuiChildFlags_AlwaysUseWindowPadding,
@@ -732,19 +736,47 @@ void App::drawToolbar()
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const auto sep = [&]() {
-        ImGui::SameLine(0, 8 * mUiScale);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2 * mUiScale, rowGap));
+    const float maxX = ImGui::GetWindowContentRegionMax().x;
+    const float gap = 8 * mUiScale;
+    int rows = 1;
+    bool first = true;
+    // Groups flow left to right, with a divider between them, and wrap onto
+    // another row rather than run past the window's edge.
+    const auto group = [&](float w) {
+        if (first) {
+            first = false;
+            return;
+        }
+        ImGui::SameLine(0, gap);
+        if (ImGui::GetCursorPosX() + 1 + gap + w > maxX) {
+            ImGui::NewLine();
+            ++rows;
+            return;
+        }
         const ImVec2 p = ImGui::GetCursorScreenPos();
-        dl->AddLine(ImVec2(p.x, p.y + 6 * mUiScale), ImVec2(p.x, p.y + ImGui::GetFrameHeight() - 6 * mUiScale), color::kBorder);
-        ImGui::Dummy(ImVec2(1, ImGui::GetFrameHeight()));
-        ImGui::SameLine(0, 8 * mUiScale);
+        dl->AddLine(ImVec2(p.x, p.y + 6 * mUiScale), ImVec2(p.x, p.y + fh - 6 * mUiScale), color::kBorder);
+        ImGui::Dummy(ImVec2(1, fh));
+        ImGui::SameLine(0, gap);
     };
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2 * mUiScale, 0));
+    const auto segW = [&](const char* const* labels, int n) {
+        float w = 0;
+        for (int i = 0; i < n; ++i) w += ImGui::CalcTextSize(labels[i]).x + st.FramePadding.x * 2.0f;
+        return w;
+    };
+
+    group(fh);
     if (iconButton("##reload", Icon::Reload, "Reload the story (re-render with the current controls)")) {
         mRebuild = true;
         log("story", "reloaded");
     }
-    sep();
+
+    char zoomText[32];
+    std::snprintf(zoomText, sizeof zoomText, "%s%d%%", mFit ? "Fit " : "", int(std::lround(mZoom * 100.0f)));
+    ImGui::PushFont(mFonts.small);
+    const float zoomTextW = ImGui::CalcTextSize("Fit 100%").x;
+    ImGui::PopFont();
+    group(fh * 3 + 4 * mUiScale + 6 * mUiScale + zoomTextW);
     if (iconButton("##zin", Icon::ZoomIn, "Zoom in (Ctrl + wheel)")) {
         mZoom = std::min(8.0f, mZoom * 1.25f);
         mFit = false;
@@ -764,24 +796,28 @@ void App::drawToolbar()
         }
     }
     ImGui::SameLine(0, 6 * mUiScale);
-    {
-        char z[32];
-        std::snprintf(z, sizeof z, "%s%d%%", mFit ? "Fit " : "", int(std::lround(mZoom * 100.0f)));
-        ImGui::AlignTextToFramePadding();
-        text(mFonts.small, color::kMuted, z);
-    }
-    sep();
+    ImGui::AlignTextToFramePadding();
+    text(mFonts.small, color::kMuted, zoomText);
 
-    // Size: the dropdown (screens) or the canvas size (components).
+    // Size: the dropdown (screens) or the canvas size (components); then the scale.
+    static const char* const dpi[] = { "1x", "2x" };
+    char canvasText[64], ppdText[48];
+    std::snprintf(canvasText, sizeof canvasText, "Canvas %d × %d", story().canvasW, story().canvasH);
+    std::snprintf(ppdText, sizeof ppdText, "%.4g px per dp", double(kSizes[mSize].pixelsPerDp));
+    const bool phone = !isComponent() && kSizes[mSize].phone;
+    float comboW = 0;
+    for (const SizeOption& o : kSizes) comboW = std::max(comboW, ImGui::CalcTextSize(o.label).x);
+    comboW += fh + st.FramePadding.x * 2.0f;
+    ImGui::PushFont(mFonts.small);
+    const float ppdW = ImGui::CalcTextSize(ppdText).x;
+    ImGui::PopFont();
+    const float sizeW = isComponent() ? ImGui::CalcTextSize(canvasText).x : comboW;
+    group(sizeW + gap + (phone ? ppdW : segW(dpi, 2)));
     if (isComponent()) {
         ImGui::AlignTextToFramePadding();
-        char c[64];
-        std::snprintf(c, sizeof c, "Canvas %d × %d", story().canvasW, story().canvasH);
-        text(mFonts.body, color::kMuted, c);
+        text(mFonts.body, color::kMuted, canvasText);
     } else {
-        float w = 0;
-        for (const SizeOption& o : kSizes) w = std::max(w, ImGui::CalcTextSize(o.label).x);
-        ImGui::SetNextItemWidth(w + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2.0f);
+        ImGui::SetNextItemWidth(comboW);
         if (ImGui::BeginCombo("##size", kSizes[mSize].label)) {
             handCursor();
             for (int i = 0; i < kSizeCount; ++i) {
@@ -799,14 +835,11 @@ void App::drawToolbar()
         }
         if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("Window size in points, or a phone screen in pixels (Android scaling)");
     }
-    ImGui::SameLine(0, 8 * mUiScale);
-    if (!isComponent() && kSizes[mSize].phone) {
+    ImGui::SameLine(0, gap);
+    if (phone) {
         ImGui::AlignTextToFramePadding();
-        char d[48];
-        std::snprintf(d, sizeof d, "%.4g px per dp", double(kSizes[mSize].pixelsPerDp));
-        text(mFonts.small, color::kMuted, d);
+        text(mFonts.small, color::kMuted, ppdText);
     } else {
-        static const char* const dpi[] = { "1x", "2x" };
         int v = mHiDpi ? 1 : 0;
         if (segmented("##dpi", dpi, 2, v)) {
             mHiDpi = v == 1;
@@ -815,9 +848,10 @@ void App::drawToolbar()
         }
         if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("Display scale (2x = Retina / 200%%)");
     }
-    sep();
+
+    static const char* const modes[] = { "Mouse", "Pad / keys", "Touch" };
+    group(segW(modes, 3));
     {
-        static const char* const modes[] = { "Mouse", "Pad / keys", "Touch" };
         int m = mInput == InputMode::Focus ? 1 : mInput == InputMode::Touch ? 2 : 0;
         if (segmented("##input", modes, 3, m)) {
             mInput = m == 1 ? InputMode::Focus : m == 2 ? InputMode::Touch : InputMode::Hover;
@@ -831,7 +865,8 @@ void App::drawToolbar()
         if (ImGui::IsItemHovered())
             ImGui::SetItemTooltip("Input the story gets. Pad / keys: click the canvas, then the arrows and Tab move focus");
     }
-    sep();
+
+    group(fh * 2 + 2 * mUiScale);
     if (iconButton("##bg", Icon::Background, "Background", mBackground != 0)) ImGui::OpenPopup("##bgmenu");
     if (ImGui::BeginPopup("##bgmenu")) {
         static const char* const names[] = { "Light", "Dark", "Transparent (checkerboard)" };
@@ -845,18 +880,22 @@ void App::drawToolbar()
     if (iconButton("##outline", Icon::Outline, "Outline and measure: widget boxes from the layout data, overlaps in red", mOutline))
         mOutline = !mOutline;
 
-    // Right: full screen, Save PNG.
-    const ImGuiStyle& st = ImGui::GetStyle();
+    // Right: full screen, Save PNG (right-aligned; on a new row when there is no room).
     const float saveW = ImGui::CalcTextSize("Save PNG").x + st.FramePadding.x * 2.0f + ImGui::GetTextLineHeight() + st.ItemInnerSpacing.x;
-    const float rightW = ImGui::GetFrameHeight() + 8 * mUiScale + saveW;
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX() + 8 * mUiScale, ImGui::GetWindowContentRegionMax().x - rightW));
+    const float rightW = fh + gap + saveW;
+    ImGui::SameLine(0, gap);
+    if (ImGui::GetCursorPosX() + rightW > maxX) {
+        ImGui::NewLine();
+        ++rows;
+    }
+    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), maxX - rightW));
     if (iconButton("##full", Icon::Fullscreen, mFullscreen ? "Exit full screen (Esc)" : "Full screen canvas", mFullscreen))
         mFullscreen = !mFullscreen;
-    ImGui::SameLine(0, 8 * mUiScale);
+    ImGui::SameLine(0, gap);
     if (textButton("Save PNG", false, mSession != nullptr, Icon::Save, true)) savePngNow();
     if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("Save the story at full resolution to the current folder");
     ImGui::PopStyleVar();
+    mToolbarRows = rows;
     const ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
     dl->AddLine(ImVec2(wp.x, wp.y + ws.y - 1), ImVec2(wp.x + ws.x, wp.y + ws.y - 1), color::kBorder);
     ImGui::EndChild();
