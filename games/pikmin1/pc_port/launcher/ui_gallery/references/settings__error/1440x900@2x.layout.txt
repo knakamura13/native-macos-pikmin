@@ -1,0 +1,14 @@
+# ui 1248x780 scale 2.308
+logo 275 18 973 171 ##hub | logo
+button 394 181 538 223 ##hub | Games
+label 394 181 538 223 ##hub | Games
+button 552 181 696 223 ##hub | Settings
+label 552 181 696 223 ##hub | Settings
+button 710 181 854 223 ##hub | Move Install
+label 710 181 854 223 ##hub | Move Install
+button 474 239 618 277 ##hub | Pikmin
+label 474 239 618 277 ##hub | Pikmin
+button 630 239 774 277 ##hub | Pikmin 2
+label 630 239 774 277 ##hub | Pikmin 2
+button 564 397 684 441 ##hub | Retry
+label 564 397 684 441 ##hub | Retry

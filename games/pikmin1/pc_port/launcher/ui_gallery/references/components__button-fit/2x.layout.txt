@@ -1,0 +1,13 @@
+# ui 720x260 scale 2.000
+button 24 24 168 66 ##hub | Move Install
+label 24 24 168 66 ##hub | Move Install
+button 24 80 324 124 ##hub | Install a pack from a .zip
+label 24 80 324 124 ##hub | Install a pack from a .zip
+button 24 138 324 182 ##hub | Get HD models
+label 24 138 324 182 ##hub | Get HD models
+button 24 196 324 240 ##hub | Restore previous save
+label 24 196 324 240 ##hub | Restore previous save
+button 384 24 528 64 ##hub | Change folder
+label-shrunk 384 24 528 64 ##hub | Change folder
+button 384 78 528 128 ##hub | Back to setup
+label 384 78 528 128 ##hub | Back to setup

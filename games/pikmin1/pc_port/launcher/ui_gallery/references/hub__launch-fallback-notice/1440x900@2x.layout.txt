@@ -1,0 +1,23 @@
+# ui 1248x780 scale 2.308
+logo 275 18 973 171 ##hub | logo
+button 394 181 538 223 ##hub | Games
+label 394 181 538 223 ##hub | Games
+button 552 181 696 223 ##hub | Settings
+label 552 181 696 223 ##hub | Settings
+button 710 181 854 223 ##hub | Move Install
+label 710 181 854 223 ##hub | Move Install
+button 366 247 545 498 ##hub | cover
+button 306 558 450 602 ##hub | Map editor
+label 306 558 450 602 ##hub | Map editor
+button 462 558 606 602 ##hub | Model maker
+label 462 558 606 602 ##hub | Model maker
+button 306 612 450 656 ##hub | HD textures
+label 306 612 450 656 ##hub | HD textures
+button 462 612 606 656 ##hub | Characters
+label 462 612 606 656 ##hub | Characters
+button 703 247 882 498 ##hub | cover
+button 697 558 887 602 ##hub | Install
+label 697 558 887 602 ##hub | Install
+button 529 688 719 732 ##hub | Update
+label 529 688 719 732 ##hub | Update
+toast 431 685 817 722 foreground | Pikmin 2 is not installed yet. Install it here to play.

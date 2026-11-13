@@ -1,0 +1,8 @@
+# ui 1463x823 scale 1.750
+logo 381 18 1081 171 ##hub | logo
+button-disabled 395 205 673 595 ##hub | cover
+button-disabled 439 655 629 699 ##hub | Install
+label 439 655 629 699 ##hub | Install
+button-disabled 790 205 1068 595 ##hub | cover
+button-disabled 834 655 1024 699 ##hub | Install
+label 834 655 1024 699 ##hub | Install

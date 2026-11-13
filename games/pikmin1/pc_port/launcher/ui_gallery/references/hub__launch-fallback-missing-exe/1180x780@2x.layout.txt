@@ -1,0 +1,23 @@
+# ui 1180x780 scale 2.000
+logo 260 18 920 163 ##hub | logo
+button 360 173 504 215 ##hub | Games
+label 360 173 504 215 ##hub | Games
+button 518 173 662 215 ##hub | Settings
+label 518 173 662 215 ##hub | Settings
+button 676 173 820 215 ##hub | Move Install
+label 676 173 820 215 ##hub | Move Install
+button 333 239 519 498 ##hub | cover
+button 276 558 420 602 ##hub | Map editor
+label 276 558 420 602 ##hub | Map editor
+button 432 558 576 602 ##hub | Model maker
+label 432 558 576 602 ##hub | Model maker
+button 276 612 420 656 ##hub | HD textures
+label 276 612 420 656 ##hub | HD textures
+button 432 612 576 656 ##hub | Characters
+label 432 612 576 656 ##hub | Characters
+button 661 239 847 498 ##hub | cover
+button 659 558 849 602 ##hub | Install
+label 659 558 849 602 ##hub | Install
+button 495 688 685 732 ##hub | Update
+label 495 688 685 732 ##hub | Update
+toast 336 685 844 722 foreground | Pikmin could not start: its game file is missing. Update to restore it.

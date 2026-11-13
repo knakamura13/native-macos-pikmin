@@ -1,0 +1,12 @@
+# ui 1463x823 scale 1.750
+logo 381 18 1081 171 ##hub | logo
+button 501 181 645 223 ##hub | Games
+label 501 181 645 223 ##hub | Games
+button 659 181 803 223 ##hub | Settings
+label 659 181 803 223 ##hub | Settings
+button 817 181 961 223 ##hub | Move Install
+label 817 181 961 223 ##hub | Move Install
+button 961 471 1081 515 ##hub | Browse
+label 961 471 1081 515 ##hub | Browse
+button 891 539 1081 583 ##hub | Move
+label 891 539 1081 583 ##hub | Move

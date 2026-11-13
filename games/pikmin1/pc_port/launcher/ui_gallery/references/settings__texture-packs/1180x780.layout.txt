@@ -1,0 +1,41 @@
+# ui 1180x780 scale 1.000
+logo 260 18 920 163 ##hub | logo
+button 360 173 504 215 ##hub | Games
+label 360 173 504 215 ##hub | Games
+button 518 173 662 215 ##hub | Settings
+label 518 173 662 215 ##hub | Settings
+button 676 173 820 215 ##hub | Move Install
+label 676 173 820 215 ##hub | Move Install
+button 440 231 584 269 ##hub | Pikmin
+label 440 231 584 269 ##hub | Pikmin
+button 596 231 740 269 ##hub | Pikmin 2
+label 596 231 740 269 ##hub | Pikmin 2
+button 90 293 280 327 ##hub | Display
+label 90 293 280 327 ##hub | Display
+button 90 335 280 368 ##hub | Graphics
+label 90 335 280 368 ##hub | Graphics
+button 90 376 280 410 ##hub | Controls
+label 90 376 280 410 ##hub | Controls
+button 90 418 280 452 ##hub | Camera
+label 90 418 280 452 ##hub | Camera
+button 90 460 280 493 ##hub | Gameplay
+label 90 460 280 493 ##hub | Gameplay
+button 90 501 280 535 ##hub | Cheats
+label 90 501 280 535 ##hub | Cheats
+button 90 543 280 577 ##hub | Texture Packs
+label 90 543 280 577 ##hub | Texture Packs
+button 90 585 280 618 ##hub | HD Models
+label 90 585 280 618 ##hub | HD Models
+button 90 626 280 660 ##hub | Saves
+label 90 626 280 660 ##hub | Saves
+button 90 672 280 716 ##hub | Reset all
+label 90 672 280 716 ##hub | Reset all
+button 318 401 531 440 ##hub | Off (original textures)
+button-disabled 318 452 438 491 ##hub | HD 1080p
+button 950 455 1070 489 ##hub | Install
+label 950 455 1070 489 ##hub | Install
+button-disabled 318 503 410 542 ##hub | HD 4K
+button 950 506 1070 540 ##hub | Install
+label 950 506 1070 540 ##hub | Install
+button 318 609 618 655 ##hub | Install a pack from a .zip
+label 318 609 618 655 ##hub | Install a pack from a .zip

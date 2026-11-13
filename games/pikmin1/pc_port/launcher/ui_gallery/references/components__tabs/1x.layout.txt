@@ -1,0 +1,7 @@
+# ui 640x120 scale 1.000
+button 90 36 234 78 ##hub | Games
+label 90 36 234 78 ##hub | Games
+button 248 36 392 78 ##hub | Settings
+label 248 36 392 78 ##hub | Settings
+button 406 36 550 78 ##hub | Move Install
+label 406 36 550 78 ##hub | Move Install
