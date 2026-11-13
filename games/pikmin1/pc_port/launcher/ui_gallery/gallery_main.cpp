@@ -18,6 +18,13 @@
 
 #include <SDL2/SDL.h>
 
+#include <csignal>
+#if defined(__APPLE__) || defined(__GLIBC__)
+#include <execinfo.h>
+#include <unistd.h>
+#define UI_GALLERY_BACKTRACE 1
+#endif
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -53,6 +60,21 @@ void sandboxHome(const fs::path& base)
     setenv("XDG_CACHE_HOME", (base / "cache").string().c_str(), 1);
     setenv("XDG_DOWNLOAD_DIR", (base / "Downloads").string().c_str(), 1);
 #endif
+}
+
+// A crash in CI says which story it was drawing, and where.
+extern "C" void onCrash(int sig)
+{
+    const char* what = currentCapture();
+    std::fprintf(stderr, "ui_gallery: crashed (signal %d) while drawing %s\n", sig, what && *what ? what : "(no story)");
+    std::fflush(stderr);
+#ifdef UI_GALLERY_BACKTRACE
+    void* frames[64];
+    const int n = backtrace(frames, 64);
+    backtrace_symbols_fd(frames, n, STDERR_FILENO);
+#endif
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);
 }
 
 int usage()
@@ -333,6 +355,10 @@ struct Gallery {
 
 int main(int argc, char** argv)
 {
+    for (int sig : { SIGSEGV, SIGABRT, SIGFPE, SIGILL }) std::signal(sig, onCrash);
+#ifdef SIGBUS
+    std::signal(SIGBUS, onCrash);
+#endif
     CaptureOptions options;
     bool capture = false;
     for (int i = 1; i < argc; ++i) {

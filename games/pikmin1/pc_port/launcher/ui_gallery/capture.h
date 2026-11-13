@@ -55,6 +55,9 @@ struct CaptureOptions {
 // Returns the process exit code: 0 when every comparison and lint rule passes.
 int runCapture(const CaptureOptions& options);
 
+// What runCapture is drawing right now ("story @ viewport"), for crash reports.
+const char* currentCapture();
+
 bool globMatch(const std::string& pattern, const std::string& text);
 std::string storyFileName(const std::string& story); // "hub/home" -> "hub__home"
 

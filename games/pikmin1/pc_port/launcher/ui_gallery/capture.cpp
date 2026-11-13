@@ -447,6 +447,12 @@ std::string htmlEscape(const std::string& s)
 
 } // namespace
 
+namespace {
+char gCurrent[256] = "";
+} // namespace
+
+const char* currentCapture() { return gCurrent; }
+
 int runCapture(const CaptureOptions& o)
 {
     std::error_code ec;
@@ -483,6 +489,7 @@ int runCapture(const CaptureOptions& o)
         const auto storyStart = std::chrono::steady_clock::now();
         for (const Viewport& vp : viewportsFor(story)) {
             if (!globMatch(o.viewportFilter, vp.name)) continue;
+            std::snprintf(gCurrent, sizeof gCurrent, "%s @ %s", story.name.c_str(), vp.name.c_str());
             Session session(story, vp);
             session.settle(90);
             std::vector<LowRes> lowRes;
