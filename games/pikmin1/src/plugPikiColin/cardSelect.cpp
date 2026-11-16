@@ -1,3 +1,5 @@
+#include <cstdlib>
+#include <cstdio>
 #include "CardSelectSection.h"
 
 #include "BaseInf.h"
@@ -684,6 +686,13 @@ struct CardSelectSetupSection : public Node {
 					if (playerState->isTutorial()) {
 						// we're in day 1, do things a bit differently
 						StageInfo* stage       = (StageInfo*)flowCont.mStageList.mChild;
+						// SCRATCH (fork #207 sweep): pick another stage for day 1.
+						if (const char* wbs = getenv("WALL_BOMB_SWEEP_STAGE")) {
+							for (int k = atoi(wbs); k > 0 && stage && stage->mNext; k--) {
+								stage = (StageInfo*)stage->mNext;
+							}
+							fprintf(stderr, "[WBS] forcing stage %s (%s)\n", stage->mStageName, stage->mFileName);
+						}
 						flowCont.mCurrentStage = stage;
 						sprintf(flowCont.mCurrStageFilePath, "%s", stage->mFileName);
 						sprintf(flowCont.mDoorStageFilePath, "%s", stage->mFileName);

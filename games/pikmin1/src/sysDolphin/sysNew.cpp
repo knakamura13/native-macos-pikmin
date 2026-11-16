@@ -139,6 +139,36 @@ void piki_pc_dump_alloc_stats(void)
 	        sTotalAllocations, sTotalFrees, sUnknownFrees);
 }
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define PIKI_NEW_ASAN 1
+#endif
+#endif
+#ifdef PIKI_NEW_ASAN
+// #329 harness: under AddressSanitizer every block is a plain calloc so the
+// sanitizer's interposed operator delete (used by system frameworks) and its
+// redzones line up. Frees of pointers it does not own are ignored, like the
+// unknown-free path below.
+#include <sanitizer/allocator_interface.h>
+void* piki_pc_alloc(size_t size)
+{
+	if (size == 0) size = 1;
+	size = (size + 3) & ~static_cast<size_t>(0x3);
+	void* p = std::calloc(1, size);
+	if (!p) throw std::bad_alloc();
+	return p;
+}
+void piki_pc_free(void* ptr)
+{
+	if (!ptr) return;
+	if (__sanitizer_get_ownership(ptr)) {
+		std::free(ptr);
+	} else {
+		std::lock_guard<std::mutex> lock(allocMutex());
+		sUnknownFrees++;
+	}
+}
+#else
 void* piki_pc_alloc(size_t size)
 {
 	if (size == 0) {
@@ -244,6 +274,7 @@ void piki_pc_free(void* ptr)
 	}
 	sUnknownFrees++;
 }
+#endif
 
 void* operator new(size_t size)
 {

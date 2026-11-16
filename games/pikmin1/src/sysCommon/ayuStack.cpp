@@ -5,6 +5,26 @@
 
 #define AYU_STACK_GUARD_WORD 0x12345678
 
+// #329 harness: under AddressSanitizer, poison arena memory that is not
+// currently handed out, so a stale pointer into a popped/reset heap block
+// faults on first touch instead of silently reading or writing reused bytes.
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define AYU_ASAN 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+#define AYU_ASAN 1
+#endif
+#ifdef AYU_ASAN
+#include <sanitizer/asan_interface.h>
+#define AYU_POISON(p, n)   ASAN_POISON_MEMORY_REGION((void*)(p), (size_t)(n))
+#define AYU_UNPOISON(p, n) ASAN_UNPOISON_MEMORY_REGION((void*)(p), (size_t)(n))
+#else
+#define AYU_POISON(p, n)   ((void)0)
+#define AYU_UNPOISON(p, n) ((void)0)
+#endif
+
 #define AYU_CACHE_GUARD_WORD 0x87654321
 #define AYU_CACHE_FREE_FLAG  0xFF000000
 
@@ -55,6 +75,12 @@ void AyuStack::reset()
 	mStackTop   = mInitialStackTop;
 	mStackLimit = mInitialStackLimit;
 	mTotalSize  = 0;
+	if (mInitialStackLimit > mInitialStackTop) {
+		AYU_POISON(mInitialStackTop, mInitialStackLimit - mInitialStackTop);
+		if (mProtectOverflow) {
+			AYU_UNPOISON(mInitialStackTop, 8);
+		}
+	}
 }
 
 /**
@@ -136,6 +162,7 @@ void* AyuStack::push(int requestedSizeBytes)
 			stackStart   = mStackTop;
 		}
 
+		AYU_UNPOISON(mStackTop, requestedSizeBytes + 8);
 		mTotalSize += (requestedSizeBytes + 8);
 		mStackTop += (requestedSizeBytes + 8);
 		*(u32*)(mStackTop - 8) = previousSize + (requestedSizeBytes + 8);
@@ -150,6 +177,7 @@ void* AyuStack::push(int requestedSizeBytes)
 
 		mTotalSize += (requestedSizeBytes + 8);
 		mStackLimit -= (requestedSizeBytes + 8);
+		AYU_UNPOISON(mStackLimit, requestedSizeBytes + 8);
 		*(u32*)mStackLimit = (requestedSizeBytes + 8);
 		return (void*)(mStackLimit + 8);
 	}
@@ -164,11 +192,13 @@ void AyuStack::pop()
 		u32 subVal = *(u32*)(mStackTop - 8);
 		mTotalSize -= subVal;
 		mStackTop -= subVal;
+		AYU_POISON(mStackTop, subVal);
 		return;
 	}
 
 	u32 diffVal = *(u32*)mStackLimit;
 	mTotalSize -= diffVal;
+	AYU_POISON(mStackLimit, diffVal);
 	mStackLimit += diffVal;
 }
 

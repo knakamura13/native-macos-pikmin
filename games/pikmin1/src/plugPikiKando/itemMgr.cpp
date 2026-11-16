@@ -13,6 +13,7 @@
 #include "BaseInf.h"
 #include "BombItem.h"
 #include "BuildingItem.h"
+#include "pc_wall_bomb_sweep.h"
 #include "DebugLog.h"
 #include "Dolphin/os.h"
 #include "DoorItem.h"
@@ -930,12 +931,14 @@ bool InteractBomb::actItem(ItemCreature* item) immut
 		}
 
 		item->mHealth -= mDamage;
+		if (gPcWbsActive && item == gPcWbs.target) { gPcWbs.actCalls++; gPcWbs.damage += mDamage; }
 		PRINT("BOMB : damage=%.1f life=%.1f currStage=%d\n", mDamage, item->mHealth, wall->mCurrStage);
 		f32 healthThreshold = item->mMaxHealth - (wall->mCurrStage + 1) * (item->mMaxHealth / wall->mNumStages);
 		if (healthThreshold >= item->mHealth) {
 			bool check = false;
 			while (healthThreshold >= item->mHealth && !check) {
 				MsgUser msg(0);
+				if (gPcWbsActive && item == gPcWbs.target) gPcWbs.stageMsgs++;
 				PRINT("currStage = %d threshold=%.1f currLife=%.1f\n", wall->mCurrStage, healthThreshold, item->mHealth);
 				C_SAI(item)->procMsg(item, &msg);
 				wall->mCurrStage++;
@@ -949,6 +952,7 @@ bool InteractBomb::actItem(ItemCreature* item) immut
 			}
 		} else {
 			MsgUser msg(1);
+			if (gPcWbsActive && item == gPcWbs.target) gPcWbs.shakeMsgs++;
 			C_SAI(item)->procMsg(item, &msg);
 		}
 		return true;
