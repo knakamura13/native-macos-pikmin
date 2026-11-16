@@ -43,6 +43,7 @@
 #include <mutex>
 
 #include "pc_window.h"
+#include "pc_pause_key.h"
 #include "pc_gyro.h"
 #if !PIKI_P2_HOST
 #include "pc_permadeath.h"
@@ -1645,6 +1646,10 @@ void loadConfig() {
         }
     }
     in.close();
+    // Old settings files stored no second Pause key. Left Option fills that
+    // gap when Pause itself is still Enter. A chosen second key stays.
+    sConfig.keyboardBindings2[PC_KEY_ACT_START] = pc_pause_second_binding(
+        sConfig.keyboardBindings[PC_KEY_ACT_START], sConfig.keyboardBindings2[PC_KEY_ACT_START]);
 #if PIKI_P2_HOST
     pc_p2_captain_set_choice(0, sConfig.p2Captain1);
     pc_p2_captain_set_choice(1, sConfig.p2Captain2);
