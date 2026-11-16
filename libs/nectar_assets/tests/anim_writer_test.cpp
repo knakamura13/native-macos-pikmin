@@ -483,13 +483,6 @@ void testAnimMgrTable()
 	}
 }
 
-// ThrowWait calibration: #61's throw_release measured, on the disc install,
-// K = 13 ticks at 30 Hz and 14 at 60 Hz between pressing A and the grab
-// completing. The animation contributes ceil(K_frame / (30 * dt)) ticks and the
-// rest is the same at both rates (the Pikmin reaching the hand): 1 + 12 and 2 + 12.
-constexpr int kMeasuredTicks30 = 13;
-constexpr int kMeasuredTicks60 = 14;
-
 void testStandInSet()
 {
 	const nectar::StandInAnimSet& set = nectar::standInPikiAnims();
@@ -535,7 +528,7 @@ void testStandInSet()
 	breaks("duplicate names", [](nectar::StandInAnimSet& s) { s.anims[8].info.name = s.anims[9].info.name; });
 	breaks("a missing info", [](nectar::StandInAnimSet& s) { s.anims.pop_back(); });
 	breaks("joint count differs from the rig", [](nectar::StandInAnimSet& s) { s.parents.pop_back(); });
-	breaks("a parent differs from the rig", [](nectar::StandInAnimSet& s) { s.parents[5] = 1; });
+	breaks("a parent differs from the rig", [](nectar::StandInAnimSet& s) { s.parents[5] = -1; });
 
 	// Write and read back.
 	std::vector<nectar::StandInAnimFile> files;
@@ -646,12 +639,11 @@ void testStandInSet()
 	            t60.actionTick, t30.finishedTick, t60.finishedTick);
 	check(w30.actionTick == nectar::kThrowWaitGrabFrame, "ThrowWait KEY_Action0 lands K ticks after the motion starts at 30 Hz");
 	check(w60.actionTick == 2 * nectar::kThrowWaitGrabFrame || w60.actionTick == 2 * nectar::kThrowWaitGrabFrame + 1, "ThrowWait KEY_Action0 lands about 2K ticks after at 60 Hz (a float edge can add one)");
-	check(t30.actionTick > 0 && t60.actionTick > 0, "Throw's KEY_Action0 fires (the Pikmin leaves the hand)");
+	check(t30.actionTick == nectar::kThrowReleaseFrame, "Throw KEY_Action0 lands on the authored release tick at 30 Hz");
+	check(t60.actionTick == 2 * nectar::kThrowReleaseFrame || t60.actionTick == 2 * nectar::kThrowReleaseFrame + 1,
+	      "Throw KEY_Action0 lands about twice as many ticks after the motion starts at 60 Hz");
 	check(t30.finishedTick > t30.actionTick && t60.finishedTick > t60.actionTick, "Throw finishes after it (KEY_Finished ends the state)");
 	check(w30.finishedTick > w30.actionTick, "ThrowWait is longer than K");
-	// The measured calibration: the same fixed part (kMeasuredTicks30 - ticks) at both rates.
-	const int fixed30 = kMeasuredTicks30 - w30.actionTick, fixed60 = kMeasuredTicks60 - w60.actionTick;
-	check(fixed30 == fixed60, "the disc's 13 and 14 ticks (calibration K) differ by the animation's own ticks at 30 and 60 Hz: the same " + std::to_string(fixed30) + " fixed ticks both times");
 }
 
 void testManifest(const std::string& path)

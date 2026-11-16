@@ -17,12 +17,12 @@
 //          PikiHeadItem::doKill counts it as a working Pikmin, which the
 //          runner's GameStat check reports (an original-code quirk; totals
 //          are unchanged; see coverage/milestones.md).
-//   DF14   Nine free Pikmin at the push box (the disc's: 10 Pikmin, speed 50,
-//          pushed 270 units) are not enough: for 3 s it stays put and
+//   DF14   Nine free Pikmin at the push box (10 Pikmin, speed 30,
+//          pushed 240 units) are not enough: for 3 s it stays put and
 //          DEMOFLAG_StartBoxPush stays clear. A tenth: HinderRock::update sets
 //          the flag (stage Practice) when the pushers reach mAmountPushersToStart
 //          and the box starts to move.
-//   DF15   The box arrives at its destination, 270 units on (mState 2):
+//   DF15   The box arrives at its destination, 240 units on (mState 2):
 //          DEMOFLAG_FinishBoxPush (HinderRock::update; not stage-gated).
 //   DF10   One free Pikmin at the red 1-pellet carries it to the red Onion:
 //          DEMOFLAG_CollectFirstPellet when the pellet enters PelletGoalState
@@ -113,14 +113,13 @@ public:
 		}
 		std::printf("[scenario] tutorial_day1: box at (%.0f, %.0f) to (%.0f, %.0f), %d pushers, speed %.0f\n", mBox->mSRT.t.x, mBox->mSRT.t.z,
 		            mBox->mDestinationPosition.x, mBox->mDestinationPosition.z, mBox->mAmountPushersToStart, mBox->mPushSpeed);
-		if (mBox->mAmountPushersToStart != 10 || mBox->mPushSpeed != 50.0f) {
-			fail(0, "the push box takes the disc's 10 Pikmin and speed 50 from init.gen", "%d, %.1f", mBox->mAmountPushersToStart, mBox->mPushSpeed);
+		if (mBox->mAmountPushersToStart != 10 || mBox->mPushSpeed != 30.0f) {
+			fail(0, "the practice fixture's push box requires 10 Pikmin and has speed 30", "%d, %.1f", mBox->mAmountPushersToStart, mBox->mPushSpeed);
 			return;
 		}
 		mBoxStart = mBox->mSRT.t;
 		mFlags    = demoFlags();
-		// Only the face away from the destination can be pushed (HinderRock::workable); the stand-in box (the disc's
-		// cube10 collision) reaches about 70 units from its centre.
+		// HinderRock::workable only accepts the face away from the destination.
 		if (!mBox->workable(mBoxStart + Vector3f(0.0f, 0.0f, kBoxSide)) || mBox->workable(mBoxStart + Vector3f(0.0f, 0.0f, -kBoxSide))) {
 			fail(0, "the box is pushed from its +z face only (it moves to -z)", "workable +z %d, -z %d", (int)mBox->workable(mBoxStart + Vector3f(0.0f, 0.0f, kBoxSide)),
 			     (int)mBox->workable(mBoxStart + Vector3f(0.0f, 0.0f, -kBoxSide)));
@@ -221,8 +220,8 @@ public:
 				std::printf("[scenario] tutorial_day1: DF15 FinishBoxPush at t=%u (%.2f s of pushing), moved %.1f, state %d\n", t, span / float(rate), moved,
 				            (int)mBox->mState);
 				if (!milestone(t, "DF15 FinishBoxPush", { DEMOFLAG_FinishBoxPush })) return;
-				if (mBox->mState != 2 || flatDistance(mBox->mSRT.t, mBox->mDestinationPosition) > 0.01f || moved < 269.0f || moved > 271.0f) {
-					fail(t, "DF15: the box at its destination, 270 units on", "state %d, moved %.2f", (int)mBox->mState, moved);
+				if (mBox->mState != 2 || flatDistance(mBox->mSRT.t, mBox->mDestinationPosition) > 0.01f || moved < 239.0f || moved > 241.0f) {
+					fail(t, "DF15: the box at its destination, 240 units on", "state %d, moved %.2f", (int)mBox->mState, moved);
 					return;
 				}
 				spawnAt(1, mPellet->mSRT.t.x + 25.0f, mPellet->mSRT.t.z);

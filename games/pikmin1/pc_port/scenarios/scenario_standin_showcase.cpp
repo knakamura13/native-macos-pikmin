@@ -68,11 +68,6 @@ void spawnShowcasePiki(Navi* navi, int colour, PikiHappa happa, int slot)
 	{
 		Piki* p = static_cast<Piki*>(*it);
 		if (!p || p->mColor != colour) continue;
-		Vector3f want = navi->mSRT.t;
-		want.x += 12.0f * float(slot) + 20.0f;
-		want.z += 5.0f;
-		want.y = p->mSRT.t.y;
-		p->mSRT.t = want;
 		p->setFlower(happa); // also swaps the leaf, bud or flower model
 		break;
 	}
@@ -94,7 +89,15 @@ public:
 			Iterator it(pikiMgr);
 			CI_LOOP(it)
 			{
-				if (Piki* p = static_cast<Piki*>(*it)) p->mFaceDirection = 0.0f;
+				Piki* p = static_cast<Piki*>(*it);
+				if (!p) continue;
+				const int slot = p->mColor == scenario_progress::kRed ? 0 : p->mColor == scenario_progress::kYellow ? 1 : 2;
+				// Hold the lineup on its marks for the capture, above the HUD.
+				const float x = navi->mSRT.t.x + 20.0f + 12.0f * float(slot);
+				const float z = navi->mSRT.t.z - 5.0f;
+				p->mSRT.t.set(x, mapMgr->getMinY(x, z, true), z);
+				p->mVelocity.set(0.0f, 0.0f, 0.0f);
+				p->mFaceDirection = 0.0f;
 			}
 			updateShowcaseCamera(navi);
 		}

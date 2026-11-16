@@ -555,14 +555,10 @@ jobs:
         if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, matrix.runner_os) }}
         run: bash games/pikmin1/tools/scenarios/ci_k_summary.sh merged "${{ matrix.name }}, native JAudio off"
 
-      # The throw itself on the stand-in tree, held to the disc: every throw of
-      # throw_flight_{leaf,bud,flower,yellow} at 30 and 60 Hz must have the disc's grab,
-      # release and flight ticks exactly, its peak height within 0.05 and its launch
-      # speed within 0.1 (check_throw_flight.py has the values and where they come
-      # from). The 2.6 s hold and throw_cadence are not asserted yet.
-      - name: Throw flight against the disc (leaf, bud, flower, yellow)
+      # Each throw must match the authored fixture's timing and flight contract.
+      - name: Throw flight on synthetic fixtures (leaf, bud, flower, yellow)
         if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, matrix.runner_os) }}
-        run: python3 games/pikmin1/tools/scenarios/check_throw_flight.py merged/scenario-logs --label "(${{ matrix.name }})"
+        run: python3 games/pikmin1/tools/scenarios/check_throw_flight.py merged/scenario-logs --profile synthetic --label "(${{ matrix.name }})"
 
       # Every stand-in scenario's per-tick state-hash log, on every run, for the
       # scenario-hash-compare job (cross-OS determinism). Same name and layout as an

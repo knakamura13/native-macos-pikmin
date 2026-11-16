@@ -41,6 +41,7 @@
 #include <cstdarg>
 #include <cstdio>
 
+#include "AIConstant.h"
 #include "Dolphin/pad.h"
 #include "ItemMgr.h"
 #include "MapMgr.h"
@@ -61,6 +62,9 @@
 
 namespace {
 
+// The setup can retain small contact velocity on the synthetic floor.
+constexpr float kSetupSpeed = 5.0f;
+
 constexpr float kAhead   = 60.0f;
 constexpr int kSprouts   = 5; // a, b, c, d, e
 constexpr int kOnSprouts = 4;
@@ -72,6 +76,10 @@ public:
 	void onStageReady() override
 	{
 		tutorial::applyDiscKeys();
+		// The source defaults also enable the original cursor-pluck path in
+		// Navi::callPikis. Isolate the PC option for both rounds.
+		mOriginalCursorPluck = AICONST.mDoPluckWithCursor();
+		AICONST.mDoPluckWithCursor() = 0;
 		pc_settings_scenario_set_whistle_pluck(0);
 		Navi* navi = naviMgr->getNavi();
 		if (!navi || pikiMgr->getSize() != 0 || pc_settings_get_whistle_radius_pct() != 100) {
@@ -117,7 +125,7 @@ public:
 			if (s >= 2) enter(Settle, t);
 			return;
 		case Settle:
-			if (id == NAVISTATE_Walk && speed(navi) < 1.0f) {
+			if (id == NAVISTATE_Walk && speed(navi) < kSetupSpeed) {
 				const Vector3f c = navi->mSRT.t;
 				mWalkDir         = std::atan2(c.z - mAwayFrom.z, c.x - mAwayFrom.x);
 				mP.set(c.x + kAhead * std::cos(mWalkDir), 0.0f, c.z + kAhead * std::sin(mWalkDir));
@@ -137,7 +145,7 @@ public:
 			// The On round's first red and yellow Pikmin play their colour's demo (cinemas
 			// demo10/demo11) and the captain goes Idle; wait for him to stand in Walk with no movie
 			// for 1 s.
-			const bool calm = id == NAVISTATE_Walk && speed(navi) < 1.0f && !(gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive);
+			const bool calm = id == NAVISTATE_Walk && speed(navi) < kSetupSpeed && !(gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive);
 			if (!calm) mCalmTick = 0;
 			else if (!mCalmTick) mCalmTick = t;
 			if (!mCalmTick || t - mCalmTick < mRate) {
@@ -191,6 +199,7 @@ private:
 		std::vsnprintf(buf, sizeof(buf), fmt, ap);
 		va_end(ap);
 		mPhase = Done;
+		AICONST.mDoPluckWithCursor() = mOriginalCursorPluck;
 		pc_settings_scenario_set_whistle_pluck(0);
 		scenarioFailf(t, expected, "%s", buf);
 	}
@@ -364,6 +373,7 @@ private:
 			}
 			std::printf("[scenario] whistle_pluck_held: off: nothing plucked; PASS at tick %u\n", t);
 			mPhase = Done;
+			AICONST.mDoPluckWithCursor() = mOriginalCursorPluck;
 			pc_settings_scenario_set_whistle_pluck(0);
 			scenarioPass();
 			return;
@@ -396,6 +406,7 @@ private:
 	}
 
 	Phase mPhase        = Away;
+	int mOriginalCursorPluck = 0;
 	bool mOn            = true;
 	unsigned mCalmTick = 0, mPhaseTick = 0, mRate = 30, mGatherTick = 0, mPhase1Tick = 0, mWalkTick = 0, mPluckCount0 = 0;
 	int mPikis0 = 0, mPlanted = 0, mNPlucked = 0;

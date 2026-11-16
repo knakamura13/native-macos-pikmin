@@ -42,13 +42,11 @@ StandInAnimSet buildPikiSet()
 			// Anim keys [0, K, N-1] and one info key pointing at the middle one.
 			// The first tick the counter reaches K, NaviThrowWaitState hangs the Pikmin.
 			a.frameCount     = kThrowWaitFrames;
-			a.measured       = true;
 			a.info.animKeys  = { 0, kThrowWaitGrabFrame, kThrowWaitFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
 		} else if (i == kAnimInfoThrow) {
 			// NaviThrowState calls throwPiki on this key; KEY_Finished ends the state.
 			a.frameCount     = kThrowFrames;
-			a.measured       = true;
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
 		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari || i == kAnimInfoPickLoop || i == kAnimInfoKizuku || i == kAnimInfoFlick

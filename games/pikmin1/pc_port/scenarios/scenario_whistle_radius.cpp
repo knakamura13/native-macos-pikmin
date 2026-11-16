@@ -52,6 +52,9 @@
 
 namespace {
 
+// The setup can retain small contact velocity on the synthetic floor.
+constexpr float kSetupSpeed = 5.0f;
+
 constexpr int kMaxPikis     = 4;
 constexpr float kStay       = 20.0f;
 constexpr float kClear      = 30.0f;
@@ -111,7 +114,7 @@ public:
 			if (s >= 2) enter(Settle, t);
 			return;
 		case Settle:
-			if (navi->getCurrState()->getID() == NAVISTATE_Walk && speed(navi) < 1.0f) {
+			if (navi->getCurrState()->getID() == NAVISTATE_Walk && speed(navi) < kSetupSpeed) {
 				pc_settings_scenario_set_whistle_radius_pct(kPct[mRound]);
 				mR = NAVI_WHISTLE_MAX_RADIUS(navi);
 				if (std::fabs(mR - mFull * kPct[mRound] / 100.0f) > 0.01f) {

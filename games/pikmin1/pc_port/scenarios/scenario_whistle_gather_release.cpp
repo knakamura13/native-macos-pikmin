@@ -66,6 +66,9 @@
 
 namespace {
 
+// The setup can retain small contact velocity on the synthetic floor.
+constexpr float kSetupSpeed = 5.0f;
+
 constexpr float kStay    = 20.0f;
 constexpr float kLate    = 40.0f;
 constexpr int kMaxPikis  = 4;
@@ -119,7 +122,7 @@ public:
 			if (s >= 2) enter(Settle, t);
 			return;
 		case Settle:
-			if (id == NAVISTATE_Walk && speed(navi) < 1.0f) {
+			if (id == NAVISTATE_Walk && speed(navi) < kSetupSpeed) {
 				mCentre  = navi->mSRT.t;
 				mWalkDir = std::atan2(mCentre.z - mAwayFrom.z, mCentre.x - mAwayFrom.x);
 				startRound(t, navi);

@@ -104,10 +104,8 @@ std::vector<StandInModelSpec> worldModelSpecs()
 		s.halfSize = halfFor(m);
 		if (!m.parts.empty()) s.collInfo = worldCollInfo(m.parts);
 		if (s.path == "dataDir/objects/hinderrock/cube10.mod") {
-			// The push box is solid: a 120-unit block whose side faces are the planes its four vtx parts (the disc's,
-			// at x and z +-60) define (HinderRock::updatePlanes), so pushing Pikmin stop on the face and stay on its
-			// side (HinderRock::getPlaneFlag, ActPush::exeGo). Without the collision they walk into the box.
-			s.halfSize = 60.0f;
+            // Match the authored corner fixture, not retail dimensions.
+            s.halfSize = 32.0f;
 			s.platform = true;
 		}
 		out.push_back(std::move(s));
@@ -130,7 +128,7 @@ bool writeStandInWorldFiles(std::vector<StandInAnimFile>& out, std::string& erro
 	// gt_soft.anm. The soft gate shares objects/gate/gate.bin with the sandbox's
 	// bomb gate (standin_sandbox.cpp), whose table has six infos named gate0 to
 	// gate5 under the base directory "gate", 30 frames each. The soft gate's model
-	// has four joints (the disc's), so its bundle carries those entries for four
+	// uses the authored profile's joint budget, so its bundle carries matching
 	// joints. The names and length are read back from the sandbox's table so the
 	// two cannot drift apart.
 	{
@@ -174,7 +172,7 @@ bool writeStandInWorldFiles(std::vector<StandInAnimFile>& out, std::string& erro
 		out.push_back(std::move(bundle));
 	}
 
-	// tekipara/*.bin: the words of the disc's files.
+	// Optional independently authored positional parameter fixtures (currently none).
 	for (const TekiParaProfile& t : tekiParaProfiles()) {
 		BeWriter w;
 		for (std::uint32_t v : t.words) w.u32(v);

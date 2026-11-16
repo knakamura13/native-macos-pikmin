@@ -1499,7 +1499,6 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
-        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -1519,7 +1518,6 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_textures.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
-        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -1589,7 +1587,6 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
-        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -1663,7 +1660,6 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
-        ${NECTAR_ASSETS_DIR}/src/standin_art_meshes.cpp
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -2199,6 +2195,17 @@ if(PIKMIN_BUILD_SCENARIOS)
                 TIMEOUT 600)
         endforeach()
     endforeach()
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME scenario_throw_fidelity_disc
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_disc_throw_fidelity.py
+            $<TARGET_FILE:${NECTAR_GAME}>)
+    set_tests_properties(scenario_throw_fidelity_disc PROPERTIES
+        LABELS "game-assets" SKIP_RETURN_CODE 77 TIMEOUT 1500)
+
+    add_test(NAME scenario_synthetic_parameter_contract
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_synthetic_parameters.py ${PIKMIN_STANDIN_DATA})
+    set_tests_properties(scenario_synthetic_parameter_contract PROPERTIES FIXTURES_REQUIRED scenario_standin_tree)
+
 
     foreach(scenario title_boot)
         foreach(rate 30 60)
@@ -2438,10 +2445,8 @@ if(PIKMIN_BUILD_SCENARIOS)
         endforeach()
     endforeach()
 
-    # throw_flight (scenario_throw_flight.cpp) for leaf, bud, flower and yellow Pikmin on the stand-in
-    # stage1 (the Onion layout), from a spot clear of the Onions and the cliff. CI's
-    # tools/scenarios/check_throw_flight.py asserts every throw of these logs against the
-    # disc-verified grab, release and flight ticks, peak height and launch speed.
+    # The synthetic throw checks use a flat part of the authored Onion stage.
+    # Local retail calibration is a separate game-assets test.
     foreach(scenario throw_flight_leaf throw_flight_bud throw_flight_flower throw_flight_yellow)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
@@ -2454,7 +2459,7 @@ if(PIKMIN_BUILD_SCENARIOS)
             set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
                 FIXTURES_REQUIRED scenario_standin_tree
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
-                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/stage1.ini;PIKMIN_TF_SPOT=-350,350"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/stage1.ini;PIKMIN_TF_SPOT=-350,270"
                 TIMEOUT 600)
         endforeach()
     endforeach()

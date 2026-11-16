@@ -1,11 +1,11 @@
 // ufo_part_discovery: the ship-part discovery text of all 30 parts (coverage/milestones.md
 // DF32-61, SP14). Navi::demoCheck sets DEMOFLAG_UfoPartDiscoveryOffset + the part's index
-// when the captain comes within demoParms mDemoTriggerRadius (40 here, the disc's) of a part
+// when the captain comes within demoParms mDemoTriggerRadius (150 by default) of a part
 // lying on the ground, and sets gameflow.mShipTextType SHIPTEXT_PartDiscovery and
 // mShipTextPartID to the index. The check is not stage-gated, so it runs on the sandbox.
 //
 // One part at a time, in index order: a ground pellet with the part's model id is born at a
-// fixed spot, the captain is put 150 units south of it, and the scenario checks
+// fixed spot, the captain starts 30 units beyond the trigger radius, and the scenario checks
 //   - for the first part only, a captain held 30 units beyond the trigger radius (standing in
 //     NaviWalkState, which is where demoCheck runs) does not set the flag in 2 s;
 //   - the captain walking up sets exactly flag 32 + index (no other new flag), with the ship
@@ -46,7 +46,6 @@ namespace {
 using namespace carry;
 
 constexpr float kPartX = 0.0f, kPartZ = 450.0f; // south of the sandbox gate (x -31, z -207), open floor
-constexpr float kStartGap = 150.0f;             // the captain starts this far short of the part
 constexpr unsigned kEngineIndex = 4;
 
 class UfoPartDiscovery : public PcScenario {
@@ -58,8 +57,8 @@ public:
 		mRadius = demoParms->mParms.mDemoTriggerRadius();
 		mShape  = pelletMgr->getConfig(id("uf01"));
 		std::printf("[scenario] ufo_part_discovery: trigger radius %.1f, %d parts, uf01 config %d\n", mRadius, MAX_UFO_PARTS, (int)(mShape != nullptr));
-		if (!mShape || !pelletMgr->getConfig(id("ust5")) || mRadius != 40.0f) {
-			fail(0, "the stand-in tree's uf01 and ust5 configs and the disc's 40-unit trigger radius", "uf01 %d ust5 %d radius %.1f", (int)(mShape != nullptr),
+		if (!mShape || !pelletMgr->getConfig(id("ust5")) || mRadius != 150.0f) {
+			fail(0, "the stand-in tree's uf01 and ust5 configs and the source-default 150-unit trigger radius", "uf01 %d ust5 %d radius %.1f", (int)(mShape != nullptr),
 			     (int)(pelletMgr->getConfig(id("ust5")) != nullptr), mRadius);
 			return;
 		}
@@ -246,7 +245,7 @@ private:
 			fail(t, "the part's model id is index i in the ship-part table", "part %d: index %d", mIndex, PelletMgr::getUfoIndexFromID(part->mConfig->mModelId.mId));
 			return false;
 		}
-		const float start = mIndex == 0 ? mRadius + part->getBottomRadius() + 30.0f : kStartGap;
+		const float start = mRadius + part->getBottomRadius() + 30.0f;
 		navi->resetPosition(Vector3f(kPartX, mapMgr->getMinY(kPartX, kPartZ - start, true), kPartZ - start));
 		navi->mVelocity.set(0.0f, 0.0f, 0.0f);
 		return true;

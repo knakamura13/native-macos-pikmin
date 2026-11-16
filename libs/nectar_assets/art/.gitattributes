@@ -1,3 +1,0 @@
-# Blender sources and their generated exports (#115).
-*.blend binary
-/export/*.inc linguist-generated=true text eol=lf

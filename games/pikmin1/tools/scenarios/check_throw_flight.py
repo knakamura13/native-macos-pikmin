@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""Assert the stand-in throw_flight logs against the disc-verified throw.
+"""Assert throw flight against the selected fixture contract.
 
-Every THROW line of scenario_throw_flight_<case>_<rate>.log (leaf, bud, flower and yellow
-Pikmin, 30 and 60 Hz, the ctests of the same name) must show the throw the disc gives:
+Each profile checks throw count, grab/release/flight ticks, peak height, launch
+velocity and ground contact. The synthetic profile uses independently authored
+animation timing and the source constructor parameters. The disc profile uses
+measurements from the retail disc.
 
-  grab     ticks from the A press to the grab keyframe
-  release  ticks from the grab to the release (the Pikmin is Flying)
-  flight   ticks from the release to the landing bounce
-  peak     peak height above the release height (world units)
-  vS       launch speed up (world units/s), Navi::throwPiki
-
-The expected values were measured on 2026-11-03 three ways, with the same throws: the PC
+The disc profile values were measured on 2026-11-03 three ways, with the same throws: the PC
 port on Kyle's GPIE01 rev 1 disc assets, the port on the stand-in tree, and the real disc in
 Dolphin (headless, game logic at 30 Hz; 60 Hz exists only in the port, so its values are
 the port's on disc assets). All three agree on the ticks; Dolphin's peak is 61.26 and its
@@ -35,6 +31,16 @@ EXPECTED = {
     'flower': (18, {30: (1, 2, 33, 61.29, 290.0), 60: (2, 3, 71, 68.00, 290.0)}),
     'yellow': (18, {30: (1, 2, 37, 104.40, 370.0), 60: (2, 3, 77, 113.16, 370.0)}),
 }
+# The authored motions emit Action0 at frame 10 at 30 fps. The synthetic
+# parameter files retain source defaults. These flight measurements use the
+# authored flat throw area. Flower glide can differ by one landing tick with
+# direction while the other cases have a fixed flight length.
+SYNTHETIC_EXPECTED = {
+    'leaf':   (36, {30: (10, 11, 30, 66.25, 297.50), 60: (20, 21, 63, 73.19, 297.50)}),
+    'bud':    (18, {30: (10, 11, 30, 66.25, 297.50), 60: (20, 21, 63, 73.19, 297.50)}),
+    'flower': (18, {30: (10, 11, (51, 52), 66.25, 297.50), 60: (20, 21, (130, 131), 73.19, 297.50)}),
+    'yellow': (18, {30: (10, 11, 56, 236.44, 537.50), 60: (20, 21, 115, 249.38, 537.50)}),
+}
 PEAK_TOL   = 0.05  # units; the disc in Dolphin is 0.03 under the port
 VS_TOL     = 0.10  # units/s; Dolphin 289.91
 GROUND_TOL = 0.50  # units over the map at the landing point
@@ -45,10 +51,11 @@ THROW = re.compile(
     r'vS (?P<vs>[-\d.]+) .*?y-ground (?P<yg>[-\d.]+)', re.M)
 
 
-def check_log(path, case, rate):
-    """Returns a list of problems (empty: the log matches the disc)."""
-    count, by_rate = EXPECTED[case]
+def check_log(path, case, rate, expected=EXPECTED, profile="disc"):
+    """Return a list of deviations from the selected fixture contract."""
+    count, by_rate = expected[case]
     grab, rel, flight, peak, vs = by_rate[rate]
+    flight_ticks = flight if isinstance(flight, tuple) else (flight,)
     text = pathlib.Path(path).read_text(errors='replace')
     problems = []
     if not re.search(rf'^\[scenario\] PASS throw_flight_{case}\b', text, re.M) or re.search(r'^\[scenario\] FAIL\b', text, re.M):
@@ -59,12 +66,12 @@ def check_log(path, case, rate):
     for m in throws:
         where = f"throw {m['i']} (dist {m['dist']}, yaw {m['yaw']})"
         got = (int(m['grab']), int(m['rel']), int(m['flight']))
-        if got != (grab, rel, flight):
-            problems.append(f'{where}: grab/release/flight {got}, disc {(grab, rel, flight)}')
+        if got[:2] != (grab, rel) or got[2] not in flight_ticks:
+            problems.append(f'{where}: grab/release/flight {got}, {profile} {(grab, rel, flight)}')
         if abs(float(m['peak']) - peak) > PEAK_TOL:
-            problems.append(f"{where}: peak {m['peak']}, disc {peak:.2f} (+-{PEAK_TOL})")
+            problems.append(f"{where}: peak {m['peak']}, {profile} {peak:.2f} (+-{PEAK_TOL})")
         if abs(float(m['vs']) - vs) > VS_TOL:
-            problems.append(f"{where}: launch vy {m['vs']}, disc {vs:.2f} (+-{VS_TOL})")
+            problems.append(f"{where}: launch vy {m['vs']}, {profile} {vs:.2f} (+-{VS_TOL})")
         if abs(float(m['yg'])) > GROUND_TOL:
             problems.append(f"{where}: landed {m['yg']} over the ground (on an object, not the map)")
     return problems
@@ -74,13 +81,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('log_dir', help='the scenario-logs directory of a build')
     parser.add_argument('--label', default='')
+    parser.add_argument('--profile', choices=('disc', 'synthetic'), default='disc')
     args = parser.parse_args()
+    expected = SYNTHETIC_EXPECTED if args.profile == 'synthetic' else EXPECTED
     failed = 0
-    for case in EXPECTED:
+    for case in expected:
         for rate in (30, 60):
             path = pathlib.Path(args.log_dir) / f'scenario_throw_flight_{case}_{rate}.log'
             try:
-                problems = check_log(path, case, rate)
+                problems = check_log(path, case, rate, expected, args.profile)
             except OSError as error:
                 problems = [f'cannot read: {error}']
             name = f'throw_flight_{case} @ {rate} Hz'
@@ -90,12 +99,12 @@ def main():
                 for p in problems[:20]:
                     print(f'  {p}')
             else:
-                g, r, f, pk, v = EXPECTED[case][1][rate]
-                print(f'ok   {name}: {EXPECTED[case][0]} throws, grab {g} release {r} flight {f} peak {pk:.2f} vy {v:.2f}')
+                g, r, f, pk, v = expected[case][1][rate]
+                print(f'ok   {name}: {expected[case][0]} throws, grab {g} release {r} flight {f} peak {pk:.2f} vy {v:.2f}')
     if failed:
-        print(f'{failed} throw_flight run(s) differ from the disc {args.label}'.rstrip())
+        print(f'{failed} throw_flight run(s) differ from the {args.profile} contract {args.label}'.rstrip())
         return 1
-    print(f'throw_flight leaf/bud/flower/yellow match the disc {args.label}'.rstrip())
+    print(f'throw_flight leaf/bud/flower/yellow match the {args.profile} contract {args.label}'.rstrip())
     return 0
 
 
