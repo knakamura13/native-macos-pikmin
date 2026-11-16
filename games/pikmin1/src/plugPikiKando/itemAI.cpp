@@ -1,4 +1,9 @@
 #include "ItemAI.h"
+#include "pc_wall_bomb_sweep.h"
+
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #if defined(PIKI_PC_PORT)
 #include "pc_coop.h"
 #include "pc_seed_landing.h"
@@ -618,6 +623,34 @@ void BombAI::BombInit::act(AICreature* item)
 			minDist = circleDist(item, obj) - obj->getCentreSize();
 		}
 		InteractBomb bomb(item, pikiMgr->mPikiParms->mPikiParms.mBombDamageNavi(), nullptr);
+		if (gPcWbsActive && obj == gPcWbs.target && obj->isSluice()) {
+			PcWbsTrace& t = gPcWbs;
+			t.meltVisited++;
+			CollPart* fp   = obj->mCollInfo->getSphere('flag');
+			t.meltChildCount = fp ? fp->getChildCount() : 0;
+			f32 best = 128000.0f;
+			for (int i = 0; fp && i < fp->getChildCount(); i++) {
+				CollPart* child = fp->getChildAt(i);
+				Vector3f dir    = child->mCentre - item->mSRT.t;
+				f32 d           = dir.length() - child->mRadius - item->getCentreSize();
+				if (d < best) {
+					best             = d;
+					t.meltBestChild  = i;
+					t.meltBestLen3   = dir.length();
+					t.meltBestLenXZ  = std::sqrt(dir.x * dir.x + dir.z * dir.z);
+					t.meltBestDy     = dir.y;
+					t.meltBestChildR = child->mRadius;
+					t.meltBestCx = child->mCentre.x; t.meltBestCy = child->mCentre.y; t.meltBestCz = child->mCentre.z;
+				}
+			}
+			t.meltMinDist        = minDist;
+			t.meltBombCentreSize = item->getCentreSize();
+			t.meltDamageParam    = pikiMgr->mPikiParms->mPikiParms.mBombDamageNavi();
+			t.meltAlive          = obj->isAlive();
+			t.meltVisible        = obj->isVisible();
+			t.meltCheck          = (obj->isAlive() && obj->isVisible() && minDist <= maxRange);
+			t.range              = maxRange;
+		}
 		if (obj->isAlive() && obj->isVisible() && minDist <= maxRange) {
 			obj->stimulate(bomb);
 		}
@@ -641,6 +674,26 @@ void BombAI::BombInit::act(AICreature* item)
 			}
 		} else if (c->isAlive() && c->isVisible() && dist <= maxRange) {
 			check = true;
+		}
+
+		if (gPcWbsActive && c == gPcWbs.target) {
+			gPcWbs.itemVisited++;
+			gPcWbs.itemCentreDist = qdist2(item->getCentre().x, item->getCentre().z, c->getCentre().x, c->getCentre().z);
+			gPcWbs.itemBombR      = item->getCentreSize();
+			gPcWbs.itemWallR      = c->getCentreSize();
+			gPcWbs.itemCircleDist = circleDist(item, c);
+			gPcWbs.itemDist       = dist;
+			gPcWbs.itemCheck      = check;
+		}
+		if (c->isSluice() && getenv("WALL_BOMB_PROBE")) {
+			BuildingItem* w = static_cast<BuildingItem*>(c);
+			fprintf(stderr,
+			        "[WALLPROBE] bomb(%.1f,%.1f) wall type=%d pos(%.1f,%.1f) rotY=%.2f centreDist=%.1f bombR=%.1f wallR=%.1f circleDist=%.1f "
+			        "dist=%.1f range=%.1f inRange=%d alive=%d visible=%d stage=%d/%d hp=%.1f/%.1f\n",
+			        item->mSRT.t.x, item->mSRT.t.z, c->mObjType, c->mSRT.t.x, c->mSRT.t.z, c->mSRT.r.y,
+			        qdist2(item->getCentre().x, item->getCentre().z, c->getCentre().x, c->getCentre().z), item->getCentreSize(),
+			        c->getCentreSize(), circleDist(item, c), dist, maxRange, (int)check, (int)c->isAlive(), (int)c->isVisible(),
+			        w->mCurrStage, w->mNumStages, c->mHealth, c->mMaxHealth);
 		}
 
 		if (check) {

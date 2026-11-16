@@ -3356,10 +3356,387 @@ static void pcDebugKeys()
 }
 #endif
 
+// ---------------------------------------------------------------------------
+// SCRATCH ONLY (fork #207 wall-bomb sweep, WALL_BOMB_SWEEP=1). Never commit.
+// Places one bomb at a time on a grid around every stone wall in the stage,
+// detonates it, records what the bomb code decided and what the wall took.
+// ---------------------------------------------------------------------------
+#include "pc_wall_bomb_sweep.h"
+#include "OnePlayerSection.h"
+#include "ItemAI.h"
+#include "SimpleAI.h"
+#include "Msg.h"
+#include "NaviMgr.h"
+#include <string>
+#include <unistd.h>
+
+namespace {
+struct WbsChild {
+	float wx, wy, wz, r, along, across;
+};
+struct WbsWall {
+	BuildingItem* w = nullptr;
+	int id = 0, type = 0, numStages = 0;
+	float px = 0, py = 0, pz = 0, ry = 0, maxHp = 0;
+	float minX = 0, maxX = 0, minY = 0, maxY = 0, minZ = 0, maxZ = 0;
+	bool alongIsX = true;
+	float cAlong = 0, cAcross = 0, halfL = 0, halfW = 0;
+	float rotErr = 0;
+	float centWx = 0, centWy = 0, centWz = 0, centR = 0, centreSize = 0;
+	std::vector<WbsChild> kids;
+	std::vector<std::pair<float, float>> verts; // along, across (bbox-centred)
+	std::vector<std::pair<float, float>> pts;   // grid, along/across (bbox-centred)
+	float bombCentreSize = -1.0f;
+	int bombs = 0;
+};
+
+int sWbsFrame = 0, sWbsState = 0, sWbsWall = 0, sWbsPt = 0, sWbsWait = 0, sWbsBombId = 0, sWbsResets = 0;
+std::vector<WbsWall> sWbsWalls;
+FILE* sWbsCsv = nullptr;
+std::string sWbsDir, sWbsStage;
+BombItem* sWbsBomb = nullptr;
+bool sWbsResetBefore = false;
+
+void wbsAAtoModel(const WbsWall& W, float along, float across, float& lx, float& lz)
+{
+	float a = along + W.cAlong, c = across + W.cAcross;
+	if (W.alongIsX) {
+		lx = a; lz = c;
+	} else {
+		lx = c; lz = a;
+	}
+}
+void wbsModelToWorld(const WbsWall& W, float lx, float lz, float& wx, float& wz)
+{
+	float c = cosf(W.ry), s = sinf(W.ry);
+	wx = W.px + lx * c + lz * s;
+	wz = W.pz - lx * s + lz * c;
+}
+void wbsWorldToAA(const WbsWall& W, float wx, float wz, float& along, float& across)
+{
+	float c = cosf(W.ry), s = sinf(W.ry);
+	float dx = wx - W.px, dz = wz - W.pz;
+	float lx = dx * c - dz * s, lz = dx * s + dz * c;
+	if (W.alongIsX) {
+		along = lx - W.cAlong; across = lz - W.cAcross;
+	} else {
+		along = lz - W.cAlong; across = lx - W.cAcross;
+	}
+}
+
+void wbsMeasureWall(WbsWall& W)
+{
+	BuildingItem* w = W.w;
+	W.type = w->mObjType; W.numStages = w->mNumStages; W.maxHp = w->mMaxHealth;
+	W.px = w->mSRT.t.x; W.py = w->mSRT.t.y; W.pz = w->mSRT.t.z; W.ry = w->mSRT.r.y;
+	W.minX = W.minY = W.minZ = 1e9f; W.maxX = W.maxY = W.maxZ = -1e9f;
+	Shape* sh = w->mItemShapeObject ? w->mItemShapeObject->mShape : nullptr;
+	std::vector<Vector3f> vs;
+	if (sh) {
+		for (int i = 0; i < sh->mVertexCount; i++) vs.push_back(sh->mVertexList[i]);
+	}
+	for (Vector3f& v : vs) {
+		W.minX = std::min(W.minX, v.x); W.maxX = std::max(W.maxX, v.x);
+		W.minY = std::min(W.minY, v.y); W.maxY = std::max(W.maxY, v.y);
+		W.minZ = std::min(W.minZ, v.z); W.maxZ = std::max(W.maxZ, v.z);
+	}
+	float ex = W.maxX - W.minX, ez = W.maxZ - W.minZ;
+	W.alongIsX = ex >= ez;
+	float cx = 0.5f * (W.minX + W.maxX), cz = 0.5f * (W.minZ + W.maxZ);
+	W.cAlong  = W.alongIsX ? cx : cz;
+	W.cAcross = W.alongIsX ? cz : cx;
+	W.halfL   = 0.5f * (W.alongIsX ? ex : ez);
+	W.halfW   = 0.5f * (W.alongIsX ? ez : ex);
+	// rotation-convention check against the real world matrix
+	W.rotErr = 0;
+	size_t step = vs.size() > 4000 ? vs.size() / 4000 + 1 : 1;
+	for (size_t i = 0; i < vs.size(); i += step) {
+		Vector3f a = vs[i];
+		a.multMatrix(w->mWorldMtx);
+		float wx, wz;
+		wbsModelToWorld(W, vs[i].x, vs[i].z, wx, wz);
+		W.rotErr = std::max(W.rotErr, std::sqrt((a.x - wx) * (a.x - wx) + (a.z - wz) * (a.z - wz)));
+		float al, ac;
+		wbsWorldToAA(W, a.x, a.z, al, ac);
+		W.verts.push_back({ al, ac });
+	}
+	CollPart* fp = w->mCollInfo ? w->mCollInfo->getSphere('flag') : nullptr;
+	for (int i = 0; fp && i < fp->getChildCount(); i++) {
+		CollPart* ch = fp->getChildAt(i);
+		WbsChild k { ch->mCentre.x, ch->mCentre.y, ch->mCentre.z, ch->mRadius, 0, 0 };
+		wbsWorldToAA(W, k.wx, k.wz, k.along, k.across);
+		W.kids.push_back(k);
+	}
+	CollPart* cp = w->mCollInfo ? w->mCollInfo->getSphere('cent') : nullptr;
+	if (cp) {
+		W.centWx = cp->mCentre.x; W.centWy = cp->mCentre.y; W.centWz = cp->mCentre.z; W.centR = cp->mRadius;
+	}
+	W.centreSize = w->getCentreSize();
+
+	// grid: well past the farthest reach of any damage sphere
+	const float range = pikiMgr->mPikiParms->mPikiParms.mBombExplodeRadius();
+	float alongExt = W.halfL + 120.0f, frontExt = W.halfW + 120.0f, backExt = W.halfW + 120.0f;
+	for (WbsChild& k : W.kids) {
+		float reach = k.r + range + 15.0f;
+		alongExt = std::max(alongExt, std::fabs(k.along) + reach + 70.0f);
+		frontExt = std::max(frontExt, k.across + reach + 70.0f);
+		backExt  = std::max(backExt, -k.across + reach + 70.0f);
+	}
+	const char* nA = getenv("WALL_BOMB_SWEEP_NALONG");
+	const int NA   = nA ? atoi(nA) : 25;
+	std::vector<float> rows;
+	const int NF = 10, NB = 4;
+	for (int r = 0; r < NF; r++) rows.push_back(W.halfW + 5.0f + (frontExt - W.halfW - 5.0f) * r / (NF - 1));
+	for (int r = 0; r < NB; r++) rows.push_back(-(W.halfW + 5.0f + (backExt - W.halfW - 5.0f) * r / (NB - 1)));
+	for (float ac : rows) {
+		for (int i = 0; i < NA; i++) W.pts.push_back({ -alongExt + 2.0f * alongExt * i / (NA - 1), ac });
+	}
+	// end columns through the wall's own depth (around the posts)
+	for (int r = 0; r < 5; r++) {
+		float ac = -W.halfW + 2.0f * W.halfW * r / 4.0f;
+		for (float al : { W.halfL + 10.0f, W.halfL + 40.0f, W.halfL + 80.0f, W.halfL + 130.0f }) {
+			W.pts.push_back({ al, ac });
+			W.pts.push_back({ -al, ac });
+		}
+	}
+}
+
+void wbsResetWall(WbsWall& W)
+{
+	BuildingItem* w = W.w;
+	sWbsResetBefore = false;
+	if (w->mCurrStage != 0 || w->mSAICtx.mCurrAnimId != 0 || w->mSAICtx.mCounter != 0) {
+		w->mCurrStage            = 0;
+		w->mSAICtx.mCurrAnimId   = 0;
+		w->mSAICtx.mCounter      = 0;
+		w->startMotion(0);
+		w->stopMotion();
+		w->stopBreakEffect();
+		C_SAI(w)->start(w, SluiceAI::Sluice_WaitInit);
+		if (w->mWayPoint) w->mWayPoint->setFlag(false);
+		sWbsResets++;
+		sWbsResetBefore = true;
+	}
+	w->mHealth = w->mMaxHealth;
+}
+
+void wbsHealNavis()
+{
+	Iterator it(naviMgr);
+	CI_LOOP(it)
+	{
+		Creature* n = *it;
+		if (n && n->mHealth < n->mMaxHealth) n->mHealth = n->mMaxHealth;
+	}
+}
+
+void wbsWriteJson(const WbsWall& W)
+{
+	char path[1024];
+	snprintf(path, sizeof(path), "%s/wall_%s_%d.json", sWbsDir.c_str(), sWbsStage.c_str(), W.id);
+	FILE* f = fopen(path, "w");
+	if (!f) return;
+	const float range  = pikiMgr->mPikiParms->mPikiParms.mBombExplodeRadius();
+	const float dmgN   = pikiMgr->mPikiParms->mPikiParms.mBombDamageNavi();
+	const float dmgB   = pikiMgr->mPikiParms->mPikiParms.mBombDamageBomb();
+	const float bombR  = W.bombCentreSize;
+	fprintf(f, "{\n  \"stage\": \"%s\", \"wall_id\": %d, \"wall_type\": %d,\n", sWbsStage.c_str(), W.id, W.type);
+	fprintf(f, "  \"pos\": [%.3f, %.3f, %.3f], \"rot_y\": %.5f, \"along_is_model_x\": %s, \"rot_check_err\": %.4f,\n", W.px, W.py, W.pz, W.ry,
+	        W.alongIsX ? "true" : "false", W.rotErr);
+	fprintf(f, "  \"max_hp\": %.1f, \"num_stages\": %d, \"hp_per_stage\": %.3f,\n", W.maxHp, W.numStages, W.numStages ? W.maxHp / W.numStages : 0.0f);
+	fprintf(f, "  \"param_bomb_damage_navi_p75\": %.2f, \"param_bomb_damage_bomb_p59\": %.2f, \"range_p58\": %.2f,\n", dmgN, dmgB, range);
+	fprintf(f, "  \"bomb_centre_size\": %.3f, \"wall_centre_size\": %.3f,\n", bombR, W.centreSize);
+	fprintf(f, "  \"cent_sphere\": {\"world\": [%.3f, %.3f, %.3f], \"r\": %.3f},\n", W.centWx, W.centWy, W.centWz, W.centR);
+	float ca, cc;
+	wbsWorldToAA(W, W.centWx, W.centWz, ca, cc);
+	fprintf(f, "  \"cent_local\": [%.3f, %.3f],\n", ca, cc);
+	fprintf(f, "  \"item_loop_effective_radius\": %.3f, \"item_loop_intended_radius\": %.3f,\n", range + bombR + 2.0f * W.centreSize,
+	        range + bombR + W.centreSize);
+	fprintf(f, "  \"footprint_bbox_local\": {\"along\": [%.3f, %.3f], \"across\": [%.3f, %.3f], \"y\": [%.3f, %.3f]},\n", -W.halfL, W.halfL, -W.halfW,
+	        W.halfW, W.minY, W.maxY);
+	fprintf(f, "  \"footprint_corners_world\": [");
+	const float cs[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+	for (int i = 0; i < 4; i++) {
+		float lx, lz, wx, wz;
+		wbsAAtoModel(W, cs[i][0] * W.halfL, cs[i][1] * W.halfW, lx, lz);
+		wbsModelToWorld(W, lx, lz, wx, wz);
+		fprintf(f, "%s[%.3f, %.3f]", i ? ", " : "", wx, wz);
+	}
+	fprintf(f, "],\n  \"flag_spheres\": [");
+	for (size_t i = 0; i < W.kids.size(); i++) {
+		const WbsChild& k = W.kids[i];
+		fprintf(f, "%s\n    {\"i\": %d, \"world\": [%.3f, %.3f, %.3f], \"r\": %.3f, \"local\": [%.3f, %.3f], \"reach_3d\": %.3f}", i ? "," : "", (int)i,
+		        k.wx, k.wy, k.wz, k.r, k.along, k.across, k.r + range + bombR);
+	}
+	fprintf(f, "\n  ],\n  \"model_vertices_local\": [");
+	for (size_t i = 0; i < W.verts.size(); i++) fprintf(f, "%s[%.2f, %.2f]", i ? "," : "", W.verts[i].first, W.verts[i].second);
+	fprintf(f, "],\n  \"bombs\": %d\n}\n", W.bombs);
+	fclose(f);
+}
+
+void wbsFinish()
+{
+	if (sWbsCsv) fclose(sWbsCsv);
+	fprintf(stderr, "[WBS] done: %d walls, %d bombs, %d wall resets\n", (int)sWbsWalls.size(), sWbsBombId, sWbsResets);
+	fflush(stderr);
+	fflush(stdout);
+	_exit(0);
+}
+
+void wbsDetonateAndRecord(WbsWall& W, float along, float across)
+{
+	BuildingItem* w = W.w;
+	BombItem* bomb  = sWbsBomb;
+	sWbsBomb        = nullptr;
+	const float range = pikiMgr->mPikiParms->mPikiParms.mBombExplodeRadius();
+	float bx = bomb->mSRT.t.x, by = bomb->mSRT.t.y, bz = bomb->mSRT.t.z;
+	float bAlong, bAcross;
+	wbsWorldToAA(W, bx, bz, bAlong, bAcross);
+	float bombR = bomb->getCentreSize();
+	Vector3f bc = bomb->getCentre(), wc = w->getCentre();
+	float centreDistXZ = std::sqrt((bc.x - wc.x) * (bc.x - wc.x) + (bc.z - wc.z) * (bc.z - wc.z));
+	if (W.bombCentreSize < 0) W.bombCentreSize = bombR;
+	wbsHealNavis();
+	float hpBefore = w->mHealth;
+	int stBefore   = w->mCurrStage;
+	gPcWbs         = PcWbsTrace();
+	gPcWbs.target  = w;
+	gPcWbsActive   = true;
+	MsgUser msg(1);
+	C_SAI(bomb)->procMsg(bomb, &msg);
+	gPcWbsActive = false;
+	float hpAfter = w->mHealth;
+	int stAfter   = w->mCurrStage;
+	const PcWbsTrace& t = gPcWbs;
+	bool inRange  = t.meltVisited ? t.meltCheck != 0 : t.itemCheck != 0;
+	bool damaged  = hpAfter < hpBefore - 0.001f;
+	const char* cls = inRange ? (damaged ? "in_range_damaged" : "in_range_NO_damage") : (damaged ? "out_of_range_damaged" : "out_of_range_no_damage");
+	float dA = std::max(std::fabs(bAlong) - W.halfL, 0.0f), dC = std::max(std::fabs(bAcross) - W.halfW, 0.0f);
+	float footDist   = std::sqrt(dA * dA + dC * dC);
+	bool looksLikeHit = footDist <= range && !inRange;
+	float bestAlong = 0, bestAcross = 0;
+	if (t.meltBestChild >= 0) wbsWorldToAA(W, t.meltBestCx, t.meltBestCz, bestAlong, bestAcross);
+	fprintf(sWbsCsv,
+	        "%d,%s,%d,%d,%.3f,%.3f,%.3f,%.5f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,"
+	        "%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%d,"
+	        "%d,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%.3f,%.3f,%.3f,"
+	        "%d,%.2f,%.2f,%.2f,%d,%d,%d,%d,%d,%.3f,%d,%d,%s\n",
+	        sWbsBombId, sWbsStage.c_str(), W.id, W.type, W.px, W.py, W.pz, W.ry, bx, by, bz, along, across, bAlong, bAcross, centreDistXZ, bombR,
+	        // melting pot (real path)
+	        t.meltVisited, t.meltChildCount, t.meltMinDist, range, t.meltBestLen3, t.meltBestLenXZ, t.meltBestDy, t.meltBestChildR, bestAlong, bestAcross,
+	        t.meltBombCentreSize, t.meltAlive, t.meltVisible, t.meltCheck,
+	        // item loop (#207 suspected path)
+	        t.itemVisited, t.itemCentreDist, t.itemBombR, t.itemWallR, t.itemCircleDist, t.itemDist, t.itemCheck, range + bombR + 2.0f * W.centreSize,
+	        range + bombR + W.centreSize, footDist,
+	        // outcome
+	        (int)inRange, hpBefore, hpAfter, t.damage, t.actCalls, t.shakeMsgs, t.stageMsgs, stBefore, stAfter, hpBefore - hpAfter,
+	        (int)looksLikeHit, (int)sWbsResetBefore, cls);
+	fflush(sWbsCsv);
+	W.bombs++;
+	sWbsBombId++;
+}
+
+void pcWallBombSweepUpdate(MapMgr* map)
+{
+	static int enabled = -1;
+	if (enabled < 0) enabled = getenv("WALL_BOMB_SWEEP") ? 1 : 0;
+	if (!enabled || !map || !itemMgr || !itemMgr->getMeltingPotMgr()) return;
+	sWbsFrame++;
+	if (sWbsWait > 0) {
+		sWbsWait--;
+		return;
+	}
+	if (sWbsState == 0) {
+		const char* sf = getenv("WALL_BOMB_SWEEP_START_FRAME");
+		if (sWbsFrame < (sf ? atoi(sf) : 900)) return;
+		sWbsStage = flowCont.mCurrentStage ? flowCont.mCurrentStage->mFileName : "unknown";
+		for (char& ch : sWbsStage) if (ch == '/' || ch == '.' || ch == ' ') ch = '_';
+		const char* od = getenv("WALL_BOMB_SWEEP_OUT");
+		sWbsDir        = od ? od : ".";
+		const char* mw = getenv("WALL_BOMB_SWEEP_MAXWALLS");
+		const int maxWalls = mw ? atoi(mw) : 8;
+		Iterator it(itemMgr->getMeltingPotMgr());
+		int idx = 0;
+		CI_LOOP(it)
+		{
+			Creature* c = *it;
+			if (!c || !c->isSluice()) continue;
+			BuildingItem* b = static_cast<BuildingItem*>(c);
+			fprintf(stderr, "[WBS] wall #%d type=%d pos(%.1f,%.1f,%.1f) rotY=%.3f hp=%.1f/%.1f stage=%d/%d alive=%d\n", idx, c->mObjType, c->mSRT.t.x,
+			        c->mSRT.t.y, c->mSRT.t.z, c->mSRT.r.y, c->mHealth, c->mMaxHealth, b->mCurrStage, b->mNumStages, (int)c->isAlive());
+			const char* fw = getenv("WALL_BOMB_SWEEP_FIRSTWALL");
+			const char* mp = getenv("WALL_BOMB_SWEEP_MAXPTS");
+			if ((int)sWbsWalls.size() < maxWalls && c->isAlive() && idx >= (fw ? atoi(fw) : 0)) {
+				WbsWall W;
+				W.w  = b;
+				W.id = idx;
+				wbsMeasureWall(W);
+				if (mp && (int)W.pts.size() > atoi(mp)) W.pts.resize(atoi(mp));
+				fprintf(stderr, "[WBS]   halfL=%.1f halfW=%.1f alongIsX=%d flagKids=%d centSize=%.1f rotErr=%.3f grid=%d\n", W.halfL, W.halfW,
+				        (int)W.alongIsX, (int)W.kids.size(), W.centreSize, W.rotErr, (int)W.pts.size());
+				sWbsWalls.push_back(W);
+			}
+			idx++;
+		}
+		fprintf(stderr, "[WBS] stage=%s walls=%d (testing %d)\n", sWbsStage.c_str(), idx, (int)sWbsWalls.size());
+		fflush(stderr);
+		const char* tag = getenv("WALL_BOMB_SWEEP_TAG");
+		std::string csv = sWbsDir + "/bombs_" + sWbsStage + (tag ? std::string("_") + tag : std::string()) + ".csv";
+		sWbsCsv         = fopen(csv.c_str(), "w");
+		if (!sWbsCsv || sWbsWalls.empty()) wbsFinish();
+		fprintf(sWbsCsv, "bomb_id,stage,wall_id,wall_type,wall_x,wall_y,wall_z,wall_rot_y,bomb_x,bomb_y,bomb_z,grid_along,grid_across,bomb_along,"
+		                 "bomb_across,centre_dist_xz,bomb_centre_r,"
+		                 "melt_visited,melt_flag_spheres,melt_dist_compared,range,melt_best_len3d,melt_best_len_xz,melt_best_dy,melt_best_sphere_r,"
+		                 "melt_best_sphere_along,melt_best_sphere_across,melt_bomb_centre_r,wall_alive,wall_visible,melt_in_range,"
+		                 "item_visited,item_centre_dist,item_bomb_r,item_wall_r,item_circle_dist,item_dist_compared,item_in_range,"
+		                 "item_effective_radius,item_intended_radius,dist_to_footprint,"
+		                 "in_range,hp_before,hp_after,damage_applied,actitem_calls,shake_msgs,stage_msgs,stage_before,stage_after,hp_delta,"
+		                 "looks_like_hit_out_of_range,wall_reset_before,class\n");
+		sWbsState = 1;
+		return;
+	}
+	if (sWbsWall >= (int)sWbsWalls.size()) wbsFinish();
+	WbsWall& W = sWbsWalls[sWbsWall];
+	if (sWbsPt >= (int)W.pts.size()) {
+		wbsWriteJson(W); // per wall, so a crash later keeps finished walls
+		sWbsWall++;
+		sWbsPt = 0;
+		return;
+	}
+	const std::pair<float, float> p = W.pts[sWbsPt];
+	if (sWbsState == 1) {
+		// reset the wall, place the bomb, let it render twice so its spheres update
+		wbsResetWall(W);
+		float lx, lz, wx, wz;
+		wbsAAtoModel(W, p.first, p.second, lx, lz);
+		wbsModelToWorld(W, lx, lz, wx, wz);
+		Vector3f pos(wx, map->getMinY(wx, wz, true), wz);
+		sWbsBomb = static_cast<BombItem*>(itemMgr->birth(OBJTYPE_Bomb));
+		if (!sWbsBomb) {
+			fprintf(stderr, "[WBS] no bomb slot at point %d\n", sWbsPt);
+			sWbsWait = 10;
+			return;
+		}
+		sWbsBomb->init(pos);
+		sWbsBomb->startAI(0);
+		sWbsState = 2;
+		sWbsWait  = 2;
+		return;
+	}
+	if (sWbsState == 2) {
+		if (sWbsBomb) wbsDetonateAndRecord(W, p.first, p.second);
+		sWbsPt++;
+		sWbsState = 1;
+		sWbsWait  = W.w->mCurrStage != 0 ? 20 : 4;
+	}
+}
+} // namespace
+
 void GameCoreSection::update()
 {
 	STACK_PAD_VAR(2);
 #if defined(PIKI_PC_PORT)
+	pcWallBombSweepUpdate(mMapMgr);
 	pcApplyPendingTutorialSkip();
 	if (pc_vs_active()) {
 		pcVsUpdate(mMapMgr);
