@@ -1,4 +1,6 @@
 #include "CardSelectSection.h"
+#include <cstdlib>
+#include <cstdio>
 
 #include "BaseInf.h"
 #include "DebugLog.h"
@@ -128,6 +130,10 @@ struct CardSelectSetupSection : public Node {
 			// the controller assignment were armed by the co-op switch; the
 			// run takes no Permadeath, Hard mode, Randomizer or tutorial skip.
 			pc_coop_take_chosen_at_title();
+			if (std::getenv("PIKMIN_QA")) { // LOCAL QA HOOK: solo run, optional slot
+				pc_coop_set_pending(false);
+				if (const char* s = std::getenv("PIKMIN_QA_SLOT")) pc_coop_direct_set_slot(std::atoi(s));
+			}
 			pc_permadeath_set_pending(false);
 			pc_hardmode_set_pending(false);
 			pc_randomizer_set_menu_pending(false);
@@ -617,6 +623,22 @@ struct CardSelectSetupSection : public Node {
 
 						// next subsection will be map select
 						gameflow.mNextOnePlayerSectionID = ONEPLAYER_MapSelect;
+						if (const char* qs = std::getenv("PIKMIN_QA_STAGE")) { // LOCAL QA HOOK
+							const int want = std::atoi(qs);
+							FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, stage)
+							{
+								if (stage->mStageID == want) {
+									flowCont.mCurrentStage = stage;
+									sprintf(flowCont.mCurrStageFilePath, "%s", stage->mFileName);
+									sprintf(flowCont.mDoorStageFilePath, "%s", stage->mFileName);
+									gameflow.mWorldClock.setTime(gameflow.mParameters->mStartHour());
+									gameflow.mNextOnePlayerSectionID = ONEPLAYER_NewPikiGame;
+									fprintf(stderr, "[qa] direct to stage %d (%s) day %d\n", want, stage->mFileName,
+									        (int)gameflow.mWorldClock.mCurrentDay);
+									break;
+								}
+							}
+						}
 
 					} else {
 						PRINT("NO SAVE GAMES!\n");

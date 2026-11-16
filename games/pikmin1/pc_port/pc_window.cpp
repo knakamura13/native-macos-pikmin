@@ -564,6 +564,14 @@ int pc_window_get_gamepad_binding_p2(int action) {
     return kDefaultGamepadBindings[action];
 }
 
+static int sQaScan = 0;
+static Uint32 sQaUntil = 0;
+void pc_qa_inject(int scancode, int ms)
+{
+    sQaScan  = scancode;
+    sQaUntil = SDL_GetTicks() + (Uint32)ms;
+}
+
 void pc_window_note_text_window_input(void)
 {
     sTextWindowNoted = true;
@@ -1440,6 +1448,26 @@ void pc_window_poll_events(PADStatus* pad) {
     }
 
     const Uint8* state = SDL_GetKeyboardState(NULL);
+    // LOCAL QA HOOK: synthetic key / left click through the real keyboard-state path.
+    {
+        static Uint8 sQaKeys[SDL_NUM_SCANCODES];
+        static bool sQaMouseOn = false;
+        const bool live = sQaScan != 0 && SDL_GetTicks() < sQaUntil;
+        if (live && sQaScan > 0) {
+            std::memcpy(sQaKeys, state, SDL_NUM_SCANCODES);
+            sQaKeys[sQaScan] = 1;
+            state = sQaKeys;
+        }
+        if (live && sQaScan < 0) {
+            if (!sQaMouseOn) sMousePressedMask |= SDL_BUTTON_LMASK;
+            sRealMouseButtons |= SDL_BUTTON_LMASK;
+            sQaMouseOn = true;
+        } else if (sQaMouseOn) {
+            sRealMouseButtons &= ~SDL_BUTTON_LMASK;
+            sQaMouseOn = false;
+        }
+        if (!live) sQaScan = 0;
+    }
     // Bindings may name a mouse button (issue #42). SDL_GetMouseState also
     // reports a finger, so mouse-button bindings use the real-mouse mask.
     Uint32 boundMouse = sRealMouseButtons;

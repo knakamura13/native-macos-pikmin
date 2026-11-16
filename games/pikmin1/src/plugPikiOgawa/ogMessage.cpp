@@ -570,6 +570,57 @@ void zen::ogScrMessageMgr::setScreenAlpha(u8 alpha)
 /**
  * @todo: Documentation
  */
+// ---- LOCAL QA HOOK for #206 (scratch worktree, never pushed) ----
+#include <cstdlib>
+#include <cstdio>
+void pc_qa_inject(int scancode, int ms);
+static void pcQaTextTick(int state, int msg, bool revealed, int pane, int segs)
+{
+	static int on = std::getenv("PIKMIN_QA_TEXT") ? 1 : 0;
+	if (!on) return;
+	static int tick = 0, lastMsg = -99, lastRev = -1, lastState = -1, pageTicks = 0, wait = 0, cycle = 0;
+	static int checkAt = -1, checkMsg = 0, pendingTurn = 0, holdChecks = 0, curKey = 0;
+	static const int keys[]        = { 44, -1, 225, 40, 1044 };
+	static const char* names[]     = { "Space", "LeftClick", "LShift(B)", "Enter", "HOLD Space 1.5s" };
+	tick++;
+	if (msg != lastMsg || (int)revealed != lastRev || state != lastState) {
+		std::fprintf(stderr, "[qa-text] t=%d state=%d msg=%d/%d revealed=%d pane=%d\n", tick, state, msg, segs, revealed ? 1 : 0, pane);
+		if (msg != lastMsg) pageTicks = 0;
+		lastMsg = msg; lastRev = revealed ? 1 : 0; lastState = state;
+	}
+	pageTicks++;
+	if (checkAt > 0 && tick >= checkAt) {
+		std::fprintf(stderr, "[qa-text] RESULT after %s: msg %d->%d revealed=%d %s\n", names[curKey], checkMsg, msg,
+		             revealed ? 1 : 0, pendingTurn ? "(expected page turn)" : "(expected same page, revealed=1)");
+		checkAt = -1;
+	}
+	if (holdChecks > 0) {
+		holdChecks--;
+		if (holdChecks % 10 == 0)
+			std::fprintf(stderr, "[qa-text] during hold: msg=%d revealed=%d\n", msg, revealed ? 1 : 0);
+	}
+	if (wait > 0) { wait--; return; }
+	if (!revealed && pageTicks >= 6) {
+		curKey      = cycle % 5;
+		cycle++;
+		const bool hold = keys[curKey] == 1044;
+		std::fprintf(stderr, "[qa-text] press %s while typing msg=%d pane=%d\n", names[curKey], msg, pane);
+		pc_qa_inject(hold ? 44 : keys[curKey], hold ? 1500 : 100);
+		checkMsg = msg; pendingTurn = 0;
+		checkAt  = tick + (hold ? 50 : 10);
+		holdChecks = hold ? 45 : 0;
+		wait     = hold ? 75 : 25;
+		return;
+	}
+	if (revealed && checkAt < 0) {
+		const int k = curKey == 4 ? 0 : curKey;
+		std::fprintf(stderr, "[qa-text] press %s on shown page msg=%d\n", names[k], msg);
+		pc_qa_inject(keys[k], 100);
+		checkMsg = msg; pendingTurn = 1; checkAt = tick + 10; wait = 25; curKey = k;
+	}
+}
+// ---- end local QA hook ----
+
 void zen::ogScrMessageMgr::dispAll()
 {
 	mActivePaneId = -1;
@@ -698,6 +749,7 @@ zen::ogScrMessageMgr::MessageStatus zen::ogScrMessageMgr::update(Controller* inp
 		mCursorPane->move(mCursorTargetX, mCursorTargetY);
 	}
 
+	pcQaTextTick(mState, mCurrentMessageId, mIsPageFullyRevealed, mNextPaneId, info->mMsgSegmentCount);
 	if (mIsPageFullyRevealed) {
 		if (info->mMsgSegmentCount > 1 || mAlwaysShowNextPrompt) {
 			mButtonPromptPane->show();

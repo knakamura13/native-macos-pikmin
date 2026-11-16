@@ -1,3 +1,5 @@
+#include <cstdlib>
+#include <cstdio>
 #include "DebugLog.h"
 #include "FlowController.h"
 #include "GoalItem.h"
@@ -29,6 +31,7 @@ DEFINE_PRINT("demoInvoker");
 bool Navi::demoCheck()
 {
 	int stage = flowCont.mCurrentStage->mStageID;
+	{ static int qaN = 0; if (std::getenv("PIKMIN_QA") && (qaN++ % 120) == 0) { GoalItem* y = itemMgr->getContainer(Yellow); std::fprintf(stderr, "[qa-demo] demoCheck call %d stage=%d yellow=%p d=%.0f r=%.0f\n", qaN, stage, (void*)y, y ? qdist2(y, this) : -1.0f, demoParms->mParms.mOnionBootTriggerRadius()); } }
 	if (!playerState->isTutorial() && !playerState->mDemoFlags.isFlag(DEMOFLAG_OnyonMenuInfo) && stage <= STAGE_Forest) {
 		naviMgr->setMovieNavi(this);
 		playerState->mDemoFlags.setFlag(DEMOFLAG_OnyonMenuInfo, nullptr);

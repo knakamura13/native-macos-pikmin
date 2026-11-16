@@ -1,3 +1,6 @@
+#include <cstdlib>
+#include <cstdio>
+#include "GoalItem.h"
 #include "SimpleAI.h"
 #include "DebugLog.h"
 #include "SAIEvent.h" // NB: this has to be after SimpleAI.h for weak function ordering
@@ -58,6 +61,9 @@ void AICreature::animationKeyUpdated(immut PaniAnimKeyEvent& event)
 	(mObjType == OBJTYPE_Goal); // this isn't even in the DLL lol, but it's necessary
 
 	MsgAnim msg(&event);
+	if (mObjType == OBJTYPE_Goal && std::getenv("PIKMIN_QA")) {
+		std::fprintf(stderr, "[qa-key] goal colour=%d key type=%d value=%d state=%d\n", ((GoalItem*)this)->mOnionColour, (int)event.mEventType, (int)event.mValue, getCurrState() ? getCurrState()->getID() : -1);
+	}
 
 	if (mSAICtx.mStateMachine) {
 		C_SAI(this)->procMsg(this, &msg);

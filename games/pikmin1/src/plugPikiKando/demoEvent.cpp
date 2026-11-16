@@ -1,3 +1,5 @@
+#include <cstdlib>
+#include <cstdio>
 #include "DebugLog.h"
 #include "Demo.h"
 #include "GameStat.h"
@@ -179,6 +181,9 @@ DemoEventMgr::DemoEventMgr()
  */
 void DemoEventMgr::act(int sender, int event)
 {
+	if (std::getenv("PIKMIN_QA")) {
+		std::fprintf(stderr, "[qa-evt] sender=%d event=%d skipping=%d\n", sender, event, mPcSkipping ? 1 : 0);
+	}
 	switch (sender) {
 	case DemoEventSender::Game:
 	{

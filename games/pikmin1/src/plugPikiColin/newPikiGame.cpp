@@ -884,6 +884,161 @@ static void pcUpdateHiddenTextSkip()
 	sPcHiddenTextSkipTimer -= gsys->getFrameTime();
 }
 
+// ---- LOCAL QA HOOK for #205/#206 (scratch worktree, never pushed) ----
+#include "ItemMgr.h"
+#include "GoalItem.h"
+#include "PikiHeadItem.h"
+#include "Navi.h"
+#include "MapMgr.h"
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+void pc_qa_inject(int scancode, int ms);
+static int qaEnvInt(const char* n, int d)
+{
+	const char* v = std::getenv(n);
+	return (v && *v) ? std::atoi(v) : d;
+}
+static bool qaOn()
+{
+	static int on = std::getenv("PIKMIN_QA") ? 1 : 0;
+	return on != 0;
+}
+static int sQaTick = 0;
+static void pcQaLog(const char* where, int extraState)
+{
+	const int colour = qaEnvInt("PIKMIN_QA_ONION", -1);
+	GoalItem* onion  = (itemMgr && colour >= 0) ? itemMgr->getContainer(colour) : nullptr;
+	const int ost    = (onion && onion->getCurrState()) ? onion->getCurrState()->getID() : -1;
+	int seeds        = 0;
+	if (itemMgr && itemMgr->getPikiHeadMgr()) {
+		Iterator it(itemMgr->getPikiHeadMgr());
+		CI_LOOP(it) { seeds++; }
+	}
+	MoviePlayer* mp = gameflow.mMoviePlayer;
+	char now[320];
+	std::snprintf(now, sizeof now,
+	              "%s st=%d movie=%d onionState=%d born(B/R/Y)=%d/%d/%d seedsAlive=%d tut=%d overlay=%d menu=%d dayEnd=%d/%d day=%d fade=%.2f",
+	              where, extraState, mp->mIsActive ? 1 : 0, ost, GameStat::bornPikis[Blue], GameStat::bornPikis[Red],
+	              GameStat::bornPikis[Yellow], seeds, tutorialWindow ? 1 : 0, gameflow.mIsUIOverlayActive ? 1 : 0, menuOn ? 1 : 0,
+	              gameflow.mIsDayEndTriggered ? 1 : 0, gameflow.mIsDayEndActive ? 1 : 0, (int)gameflow.mWorldClock.mCurrentDay,
+	              gsys->getFade());
+	static char last[320] = "";
+	if (std::strcmp(now, last) != 0 || sQaTick % 30 == 0) {
+		Navi* nv = naviMgr ? naviMgr->getNavi() : nullptr;
+		const int ns = (nv && nv->getCurrState()) ? nv->getCurrState()->getID() : -1;
+		const float dist = (nv && onion) ? qdist2(nv, onion) : -1.0f;
+		std::fprintf(stderr, "[qa] t=%d frame=%d %s navi=%d distOnion=%.0f flags(menuInfo/Y/R/B)=%d/%d/%d/%d isTut=%d\n", sQaTick, mp->mIsActive ? mp->mCurrentFrame : -1, now, ns, dist, playerState->mDemoFlags.isFlag(DEMOFLAG_OnyonMenuInfo)?1:0, playerState->mDemoFlags.isFlag(DEMOFLAG_DiscoverYellowOnyon)?1:0, playerState->mDemoFlags.isFlag(DEMOFLAG_DiscoverRedOnyon)?1:0, playerState->mDemoFlags.isFlag(DEMOFLAG_DiscoverBlueOnyon)?1:0, playerState->isTutorial()?1:0);
+		std::strcpy(last, now);
+	}
+	const int maxTicks = qaEnvInt("PIKMIN_QA_TICKS", 0);
+	if (maxTicks && sQaTick >= maxTicks) {
+		std::fprintf(stderr, "[qa] done at t=%d\n", sQaTick);
+		std::fflush(stderr);
+		std::fflush(stdout);
+		std::_Exit(0);
+	}
+}
+static void pcQaMenuTest()
+{
+	const int t0 = qaEnvInt("PIKMIN_QA_MENU_TICK", -1);
+	if (t0 < 0) return;
+	const int d = sQaTick - t0;
+	if (d == 0) { std::fprintf(stderr, "[qa-menu] press Enter (Start) to open pause\n"); pc_qa_inject(40, 100); }
+	if (d == 45) std::fprintf(stderr, "[qa-menu] pause open before Shift: %d\n", pauseWindow ? 1 : 0);
+	if (d == 50) { std::fprintf(stderr, "[qa-menu] press LShift (B binding) in pause\n"); pc_qa_inject(225, 150); }
+	if (d == 60) { std::fprintf(stderr, "[qa-menu] hold LShift 1s in pause\n"); pc_qa_inject(225, 1000); }
+	if (d == 110) std::fprintf(stderr, "[qa-menu] pause open after Shift: %d\n", pauseWindow ? 1 : 0);
+	if (d == 115) { std::fprintf(stderr, "[qa-menu] press Escape (control)\n"); pc_qa_inject(41, 100); }
+	if (d == 160) std::fprintf(stderr, "[qa-menu] pause open after Escape: %d\n", pauseWindow ? 1 : 0);
+	if (d == 200) { std::fprintf(stderr, "[qa-menu] press Y to open map menu\n"); pc_qa_inject(28, 100); }
+	if (d == 250) std::fprintf(stderr, "[qa-menu] map menu open before Shift: %d\n", menuOn ? 1 : 0);
+	if (d == 255) { std::fprintf(stderr, "[qa-menu] press LShift in map menu\n"); pc_qa_inject(225, 150); }
+	if (d == 265) { std::fprintf(stderr, "[qa-menu] hold LShift 1s in map menu\n"); pc_qa_inject(225, 1000); }
+	if (d == 315) std::fprintf(stderr, "[qa-menu] map menu open after Shift: %d\n", menuOn ? 1 : 0);
+	if (d == 320) { std::fprintf(stderr, "[qa-menu] press Escape (control)\n"); pc_qa_inject(41, 100); }
+	if (d == 370) std::fprintf(stderr, "[qa-menu] map menu open after Escape: %d\n", menuOn ? 1 : 0);
+}
+static void pcQaTick(const char* where)
+{
+	if (!qaOn()) return;
+	sQaTick++;
+	MoviePlayer* mp       = gameflow.mMoviePlayer;
+	static bool teleported = false, skipped = false;
+	static int calm        = 0;
+	const int colour       = qaEnvInt("PIKMIN_QA_ONION", -1);
+	if (!teleported && mp->mIsActive && !tutorialWindow && qaEnvInt("PIKMIN_QA_SKIP_ARRIVAL", 1) && mp->mCurrentFrame >= 5) {
+		std::fprintf(stderr, "[qa] skip pre-test movie at frame %d\n", mp->mCurrentFrame);
+		mp->skipScene(SCENESKIP_Skip);
+	}
+	if (colour >= 0 && !teleported) {
+		if (!mp->mIsActive && !tutorialWindow) {
+			if (++calm >= qaEnvInt("PIKMIN_QA_CALM", 45)) {
+				Navi* navi     = naviMgr ? naviMgr->getNavi() : nullptr;
+				GoalItem* onion = itemMgr ? itemMgr->getContainer(colour) : nullptr;
+				if (navi && onion) {
+					Vector3f p = onion->mSRT.t;
+					p.x += (float)qaEnvInt("PIKMIN_QA_OFF", 30);
+					p.z += (float)qaEnvInt("PIKMIN_QA_OFF", 30);
+					p.y = mapMgr->getMinY(p.x, p.z, true);
+					navi->resetPosition(p);
+					std::fprintf(stderr, "[qa] teleport navi next to onion %d at (%.0f,%.0f,%.0f)\n", colour, p.x, p.y, p.z);
+				} else {
+					std::fprintf(stderr, "[qa] teleport failed navi=%p onion=%p\n", (void*)navi, (void*)onion);
+				}
+				teleported = true;
+			}
+		} else {
+			calm = 0;
+		}
+	}
+	if (tutorialWindow && !qaEnvInt("PIKMIN_QA_TEXT", 0) && qaEnvInt("PIKMIN_QA_AUTOTEXT", 1) && sQaTick % 40 == 0) {
+		std::fprintf(stderr, "[qa] auto-press Space for text window\n");
+		pc_qa_inject(44, 80);
+	}
+	const int skipAt = qaEnvInt("PIKMIN_QA_SKIP_FRAME", -1);
+	if (teleported && !skipped && skipAt >= 0 && mp->mIsActive && mp->mCurrentFrame >= skipAt) {
+		if (tutorialWindow) {
+			static bool said = false;
+			if (!said) std::fprintf(stderr, "[qa] skip wanted at frame %d but a text window is open\n", mp->mCurrentFrame);
+			said = true;
+		} else {
+			std::fprintf(stderr, "[qa] SKIP onion movie at frame %d (asked %d)\n", mp->mCurrentFrame, skipAt);
+			mp->skipScene(SCENESKIP_Skip);
+			skipped = true;
+		}
+	}
+	const int dayEndTick = qaEnvInt("PIKMIN_QA_DAYEND_TICK", -1);
+	if (dayEndTick >= 0 && sQaTick == dayEndTick) {
+		std::fprintf(stderr, "[qa] trigger day end\n");
+		gameflow.mIsDayEndTriggered = TRUE;
+	}
+	pcQaMenuTest();
+	pcQaLog(where, 0);
+}
+static void pcQaDayOverTick(int state)
+{
+	if (!qaOn()) return;
+	sQaTick++;
+	MoviePlayer* mp   = gameflow.mMoviePlayer;
+	static int skippedState = -1;
+	const int skipAt  = qaEnvInt("PIKMIN_QA_DAYEND_SKIP_FRAME", -1);
+	if (skipAt >= 0 && mp->mIsActive && mp->mCurrentFrame >= skipAt && skippedState != state && !tutorialWindow) {
+		std::fprintf(stderr, "[qa] SKIP day-over movie (state %d) at frame %d\n", state, mp->mCurrentFrame);
+		mp->skipScene(SCENESKIP_Skip);
+		skippedState = state;
+	}
+	// Results / save screens: press A every 2 s so the day finishes.
+	if (qaEnvInt("PIKMIN_QA_DAYEND_PRESS", 0) && !mp->mIsActive && sQaTick % 60 == 0) {
+		std::fprintf(stderr, "[qa] day-over: press Space\n");
+		pc_qa_inject(44, 100);
+	}
+	char where[64];
+	std::snprintf(where, sizeof where, "dayover res=%d total=%d", resultWindow ? 1 : 0, totalWindow ? 1 : 0);
+	pcQaLog(where, state);
+}
+// ---- end local QA hook ----
+
 /**
  * @brief Port: Start salta la cinemática en curso (llegada al nivel, cebollas,
  * extinción...). Mientras hay un texto de Olimar, ese texto manda: al cerrarlo
@@ -1005,6 +1160,7 @@ ModeState* IntroGameModeState::update(u32& result)
 	handleTutorialWindow(result, mParentSection->mController);
 #if defined(PIKI_PC_PORT)
 	pcUpdateHiddenTextSkip();
+	pcQaTick("intro");
 	pcSkipCutsceneOnStart(mParentSection->mController);
 #endif
 
@@ -1120,6 +1276,7 @@ ModeState* RunningModeState::update(u32& result)
 	bool pcSkipped = false;
 #if defined(PIKI_PC_PORT)
 	pcUpdateHiddenTextSkip();
+	pcQaTick("run");
 	// El Start que salta la escena no abre además la pausa en el mismo frame.
 	pcSkipped = pcSkipCutsceneOnStart(mController);
 #endif
@@ -1587,6 +1744,9 @@ ModeState* DayOverModeState::update(u32& result)
 	STACK_PAD_VAR(1);
 
 	result = UPDATE_AI; // we need animations to play, but we don't need in-game time to pass
+#if defined(PIKI_PC_PORT)
+	pcQaDayOverTick((int)mState);
+#endif
 
 #if defined(PIKI_PC_PORT)
 	if (mState == STATE_PcTutorialSkip) {
@@ -1976,7 +2136,8 @@ ModeState* DayOverModeState::initialisePhaseTwo()
 	// use teki heap for end of day results
 	int old = gsys->setHeap(SYSHEAP_Teki);
 
-	if (playerState->getCurrParts() == MAX_UFO_PARTS) {
+	if (playerState->getCurrParts() == MAX_UFO_PARTS || std::getenv("PIKMIN_QA_GOODEND")) {
+		if (std::getenv("PIKMIN_QA_GOODEND")) std::fprintf(stderr, "[qa] forcing GoodEndingTakeOff (demo113)\n");
 		// we collected all the parts! play the good ending take off :)
 		gameflow.mMoviePlayer->startMovie(DEMOID_GoodEndingTakeOff, 0, nullptr, nullptr, nullptr, CAF_AllVisibleMask, true);
 
