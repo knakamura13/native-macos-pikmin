@@ -1526,6 +1526,16 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_formation_arbiter_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_formation_arbiter_test COMMAND pc_formation_arbiter_test)
 
+    # Formation table sized for the port's Pikmin Limit, and the guard that
+    # refuses a store when the table is full.
+    add_executable(pc_formation_slots_test pc_port/pc_formation_slots_test.cpp)
+    target_include_directories(pc_formation_slots_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${PC_PORT_DIR})
+    target_compile_definitions(pc_formation_slots_test PRIVATE PIKI_PC_PORT)
+    target_compile_options(pc_formation_slots_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_formation_slots_test COMMAND pc_formation_slots_test)
+
     # Host-backed ARAM test (not linked into main game)
     add_executable(pc_aram_test pc_port/audio/pc_aram_test.cpp pc_port/audio/pc_aram.cpp)
     target_compile_options(pc_aram_test PRIVATE ${NATIVE_COMPILE_OPTIONS})

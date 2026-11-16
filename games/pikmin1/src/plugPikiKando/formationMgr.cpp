@@ -3,6 +3,9 @@
 #include "GlobalShape.h"
 #include "Graphics.h"
 #include "system.h"
+#if defined(PIKI_PC_PORT)
+#include "pc_formation_slots.h"
+#endif
 
 /**
  * @todo: Documentation
@@ -82,7 +85,13 @@ Vector3f FormationMgr::getLastCentre()
  */
 FormationMgr::FormationMgr()
 {
+#if defined(PIKI_PC_PORT)
+	// The disc table is 300. The port's Pikmin Limit reaches
+	// pc_formation_slot_count, and one whistle puts that many into this table.
+	mMax = pc_formation_slot_count;
+#else
 	mMax            = 300;
+#endif
 	mFormPointCount = 0;
 	mRotationAngle  = 0.0f;
 	mFormPoints     = new FormPoint[mMax];
@@ -152,9 +161,21 @@ FormPoint* FormationMgr::getFormPoint(Creature* target)
 		ERROR("no empty index for formation : numClients=%d\n", mCount);
 	}
 
+#if defined(PIKI_PC_PORT)
+	// ERROR aborts, so this is the store that must not run with a missing slot
+	// if halt is ever not fatal. slide() has the same hole with no ERROR at all.
+	const int slot = pc_formation_claim(freeIdx, mCount, mMax);
+	if (slot < 0) {
+		return nullptr;
+	}
+	mFormPoints[slot].setOwner(target);
+	mFormMembers[mCount++] = target;
+	return &mFormPoints[slot];
+#else
 	mFormPoints[freeIdx].setOwner(target);
 	mFormMembers[mCount++] = target;
 	return &mFormPoints[freeIdx];
+#endif
 }
 
 /**
@@ -197,9 +218,22 @@ void FormationMgr::slide(Creature* target, int idx)
 		}
 	}
 
+#if defined(PIKI_PC_PORT)
+	// No ERROR on this path. A full table leaves freeIdx at -1 and the store
+	// below wrote mFormPoints[-1] and grew mFormMembers past mMax.
+	const int slot = pc_formation_claim(freeIdx, mCount, mMax);
+	if (slot < 0) {
+		target->mFormPoint = nullptr;
+		return;
+	}
+	mFormPoints[slot].setOwner(target);
+	mFormMembers[mCount++] = target;
+	target->mFormPoint     = &mFormPoints[slot];
+#else
 	mFormPoints[freeIdx].setOwner(target);
 	mFormMembers[mCount++] = target;
 	target->mFormPoint     = &mFormPoints[freeIdx];
+#endif
 }
 
 /**
@@ -210,6 +244,13 @@ void FormationMgr::add(immut Vector3f& localPos, immut Vector3f& color)
 {
 	Colour col;
 	col.set(int(255.0f * color.x), int(255.0f * color.y), int(255.0f * color.z), 255);
+#if defined(PIKI_PC_PORT)
+	// Circle arrange adds four points per ring, so the last ring can ask for
+	// one past mMax. Drop it instead of writing off the end of mFormPoints.
+	if (!pc_formation_can_add(mFormPointCount, mMax)) {
+		return;
+	}
+#endif
 	mFormPoints[mFormPointCount].reset();
 	mFormPoints[mFormPointCount].mLocalPosition = localPos;
 	mFormPoints[mFormPointCount].mDebugColor    = col;
@@ -337,7 +378,13 @@ void CircleArranger::arrange(FormationMgr* mgr)
 	f32 val2 = 40.0f;
 	f32 val3 = HALF_PI;
 	int i    = 0;
-	while (i < 300) {
+	while (i <
+#if defined(PIKI_PC_PORT)
+	       pc_formation_slot_count
+#else
+	       300
+#endif
+	) {
 		f32 angle = val3;
 		int j     = 0;
 		while (j < 4) {
@@ -375,7 +422,14 @@ void PyramidArranger::arrange(FormationMgr* mgr)
 	Vector3f vec3(-val2, 0.0f, 0.0f);
 	int k   = 1;
 	f32 dir = -1.0f;
-	for (int i = 0; i < 300; i++) {
+	for (int i = 0; i <
+#if defined(PIKI_PC_PORT)
+	                    pc_formation_slot_count
+#else
+	                    300
+#endif
+	     ;
+	     i++) {
 		Vector3f vec4 = (1.0f - val1) * vec + val1 * vec2;
 		mgr->add(vec3, vec4);
 		if (k >= j) {
@@ -416,7 +470,14 @@ void LineArranger::arrange(FormationMgr* mgr)
 	f32 val3 = 2 * val2;
 	int j    = 0;
 	Vector3f vec3(0.0f, 0.0f, val2);
-	for (int i = 0; i < 300; i++) {
+	for (int i = 0; i <
+#if defined(PIKI_PC_PORT)
+	                    pc_formation_slot_count
+#else
+	                    300
+#endif
+	     ;
+	     i++) {
 		vec3.z        = val3;
 		Vector3f vec4 = (1.0f - val1) * vec + val1 * vec2;
 		mgr->add(vec3, vec4);
@@ -446,7 +507,14 @@ void WingArranger::arrange(FormationMgr* mgr)
 	f32 val1 = 30.0f;
 	f32 val2 = 80.0f;
 	f32 val3 = -80.0f;
-	for (int i = 0; i < 300; i++) {
+	for (int i = 0; i <
+#if defined(PIKI_PC_PORT)
+	                    pc_formation_slot_count
+#else
+	                    300
+#endif
+	     ;
+	     i++) {
 		if (i % 2 == 0) {
 			Vector3f vec(val2 / c * a, 0.0f, val2 - val2 * a / c);
 			mgr->add(vec, Vector3f(1.0f, 0.0f, 1.0f));
