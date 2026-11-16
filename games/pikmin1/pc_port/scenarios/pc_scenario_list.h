@@ -64,6 +64,8 @@ PcScenario* pc_scenario_make_tutorial_day1(void);
 PcScenario* pc_scenario_make_pellet_table(void);
 PcScenario* pc_scenario_make_ufo_part_discovery(void);
 PcScenario* pc_scenario_make_pellet_carry(void);
+PcScenario* pc_scenario_make_blue_onion_boot(void);
+PcScenario* pc_scenario_make_red_onion_boot(void);
 PcScenario* pc_scenario_make_ship_part_carry(void);
 PcScenario* pc_scenario_make_nectar_growth(void);
 PcScenario* pc_scenario_make_bomb_firsts(void);

@@ -491,6 +491,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_ufo_part_discovery.cpp
         pc_port/scenarios/scenario_pellet_table.cpp
         pc_port/scenarios/scenario_pellet_carry.cpp
+        pc_port/scenarios/scenario_blue_onion_boot.cpp
         pc_port/scenarios/scenario_title_boot.cpp
         pc_port/scenarios/scenario_world_map.cpp
         pc_port/scenarios/scenario_piki_hazard_deaths.cpp
@@ -2343,7 +2344,8 @@ if(PIKMIN_BUILD_SCENARIOS)
         ship_part_carry:practice:30,60
         nectar_growth:sandbox:30,60
         bomb_firsts:sandbox:30,60
-        carry_blocked:sandbox_objects:30,60)
+        carry_blocked:sandbox_objects:30,60
+        blue_onion_boot:sandbox_objects:30,60 red_onion_boot:sandbox_onions:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
