@@ -5,6 +5,7 @@
 namespace {
 
 PcTextAccept sAccept;
+bool sLatchedEnter = false;
 
 bool portAcceptDown()
 {
@@ -15,7 +16,7 @@ bool portAcceptDown()
 	};
 	// Return, a Mac portable's Return key, Return2, and Space. Left click too,
 	// including Classic mode, where the mouse is not the A binding.
-	if (bit(SDL_SCANCODE_RETURN) || bit(SDL_SCANCODE_KP_ENTER) || bit(SDL_SCANCODE_RETURN2)
+	if (sLatchedEnter || bit(SDL_SCANCODE_RETURN) || bit(SDL_SCANCODE_KP_ENTER) || bit(SDL_SCANCODE_RETURN2)
 	    || bit(SDL_SCANCODE_SPACE))
 		return true;
 	int x = 0, y = 0;
@@ -23,6 +24,13 @@ bool portAcceptDown()
 }
 
 } // namespace
+
+void pc_text_update_input(bool latchedEnter)
+{
+	sLatchedEnter = latchedEnter;
+	if (!portAcceptDown())
+		pc_text_take_accept(sAccept, false);
+}
 
 bool pc_text_port_accept_pressed(void)
 {

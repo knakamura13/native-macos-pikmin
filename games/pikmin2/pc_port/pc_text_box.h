@@ -59,3 +59,6 @@ inline bool pc_cutscene_port_skip(bool speedrun, bool textBoxOpen, bool acceptEd
 // One press of Enter, Space or left click. Further calls in the same hold
 // return false, so a text box and a cutscene cannot both spend it.
 bool pc_text_port_accept_pressed(void);
+
+// Observe releases even when neither a text box nor a cutscene is active.
+void pc_text_update_input(bool latchedEnter);
