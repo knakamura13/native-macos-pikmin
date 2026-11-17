@@ -140,11 +140,6 @@ jobs:
             ./gradlew assembleRelease -PnectarCompilerLauncher=ccache >"$log" 2>&1
           }
           show_tail() {
-            # Native warnings from unrelated files fill the last 200 lines and
-            # hide the compiler error that actually stopped the build.
-            echo "::group::Compiler errors"
-            grep -aE 'error:|fatal error:|undefined reference to|ninja: build stopped' "$log" | head -100 || true
-            echo "::endgroup::"
             echo "::group::Last 200 lines of assembleRelease (exit $1)"
             tail -n 200 "$log" || true
             echo "::endgroup::"

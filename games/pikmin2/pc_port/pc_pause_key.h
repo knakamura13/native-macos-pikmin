@@ -15,9 +15,9 @@
 
 #include <SDL2/SDL.h>
 
-inline int pc_pause_second_binding(int primary, int secondary)
+inline int pc_pause_second_binding(int primary, int secondary, bool migrated)
 {
-	if (primary == SDL_SCANCODE_RETURN && secondary == SDL_SCANCODE_UNKNOWN)
+	if (!migrated && primary == SDL_SCANCODE_RETURN && secondary == SDL_SCANCODE_UNKNOWN)
 		return SDL_SCANCODE_LALT;
 	return secondary;
 }

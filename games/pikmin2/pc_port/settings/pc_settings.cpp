@@ -1190,6 +1190,7 @@ void saveConfig() {
         return;
     }
     out << "# Open Nectar settings (F1 in-game to change)\n";
+    out << "pauseAltDefaultMigrated = 1\n";
     out << "windowWidth = " << sConfig.windowWidth << "\n";
     out << "windowHeight = " << sConfig.windowHeight << "\n";
     out << "displayMode = " << sConfig.displayMode << "\n";
@@ -1326,6 +1327,7 @@ void loadConfig() {
         return;
     }
     sHadConfigFile = true;
+    bool pauseAltDefaultMigrated = false;
     std::string line;
     while (std::getline(in, line)) {
         size_t a = line.find_first_not_of(" \t");
@@ -1613,6 +1615,9 @@ void loadConfig() {
         }
         else if (key == "stickInvert") sConfig.stickInvert = atoi(val.c_str()) & 3;
         else if (key == "cStickInvert") sConfig.cStickInvert = atoi(val.c_str()) & 3;
+        else if (key == "pauseAltDefaultMigrated") {
+            pauseAltDefaultMigrated = atoi(val.c_str()) != 0;
+        }
         else if (key.rfind("key2_", 0) == 0) {
             int idx = atoi(key.substr(5).c_str());
             if (idx >= 0 && idx < PC_KEY_ACT_COUNT) {
@@ -1649,7 +1654,8 @@ void loadConfig() {
     // Old settings files stored no second Pause key. Left Option fills that
     // gap when Pause itself is still Enter. A chosen second key stays.
     sConfig.keyboardBindings2[PC_KEY_ACT_START] = pc_pause_second_binding(
-        sConfig.keyboardBindings[PC_KEY_ACT_START], sConfig.keyboardBindings2[PC_KEY_ACT_START]);
+        sConfig.keyboardBindings[PC_KEY_ACT_START], sConfig.keyboardBindings2[PC_KEY_ACT_START],
+        pauseAltDefaultMigrated);
 #if PIKI_P2_HOST
     pc_p2_captain_set_choice(0, sConfig.p2Captain1);
     pc_p2_captain_set_choice(1, sConfig.p2Captain2);
