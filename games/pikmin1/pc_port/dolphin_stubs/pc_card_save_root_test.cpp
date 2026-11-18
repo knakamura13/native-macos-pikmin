@@ -6,6 +6,18 @@
 
 namespace fs = std::filesystem;
 
+void setEnv(const char* key, const char* value)
+{
+#ifdef _WIN32
+    _putenv_s(key, value ? value : "");
+#else
+    if (value)
+        setenv(key, value, 1);
+    else
+        unsetenv(key);
+#endif
+}
+
 int main()
 {
     int failures = 0;
@@ -23,16 +35,16 @@ int main()
     fs::create_directories(save / "card0");
     std::ofstream(save / "card0" / "Pikmin dataFile") << "save";
 
-    unsetenv("NECTAR_SAVE_DIR");
-    unsetenv("NECTAR_SAVE_READ_ONLY");
-    setenv("NECTAR_SAVE_DIR", save.string().c_str(), 1);
+    setEnv("NECTAR_SAVE_DIR", nullptr);
+    setEnv("NECTAR_SAVE_READ_ONLY", nullptr);
+    setEnv("NECTAR_SAVE_DIR", save.string().c_str());
     check(pc_card_resolve_save_root({}) == save, "NECTAR_SAVE_DIR wins");
 
-    setenv("NECTAR_SAVE_READ_ONLY", "1", 1);
+    setEnv("NECTAR_SAVE_READ_ONLY", "1");
     check(pc_card_save_writes_blocked(), "read-only env blocks writes");
-    setenv("NECTAR_SAVE_READ_ONLY", "0", 1);
+    setEnv("NECTAR_SAVE_READ_ONLY", "0");
     check(!pc_card_save_writes_blocked(), "0 clears read-only");
-    unsetenv("NECTAR_SAVE_READ_ONLY");
+    setEnv("NECTAR_SAVE_READ_ONLY", nullptr);
     check(!pc_card_save_writes_blocked(), "unset clears read-only");
 
     fs::remove_all(root, ec);
