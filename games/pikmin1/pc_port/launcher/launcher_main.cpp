@@ -11,6 +11,9 @@
 #include "prepared_image.h"
 #include "installer_ui.h"
 #include "install_directory.h"
+#include "install_disc_id.h"
+#include "game_shortcut.h"
+#include "launch_request.h"
 #include "launcher_gui.h"
 #include "crash_report.h"
 #include "launcher_platform.h"
@@ -726,20 +729,10 @@ constexpr const char* kPikmin2UsaExecutable = "pikmin2_pc-usa.exe";
 constexpr const char* kPikmin2Executable = "pikmin2_pc";
 constexpr const char* kPikmin2UsaExecutable = "pikmin2_pc-usa";
 #endif
-// El paquete trae dos builds de Pikmin 2: Europa (GPVP01, pikmin2_pc) y USA
-// (GPVE01, pikmin2_pc-usa). Al instalar se copia la del disco como pikmin2_pc.
-constexpr const char* kPikmin2DiscId = "GPVP01";
-constexpr const char* kPikmin2UsaDiscId = "GPVE01";
-
-// Región de los datos instalados: primera línea de assets/.pikmin2-assets.
-std::string installedPikmin2DiscId(const fs::path& gameDirectory)
-{
-    std::ifstream in(gameDirectory / "assets" / ".pikmin2-assets");
-    std::string line;
-    if (!in || !std::getline(in, line)) return kPikmin2DiscId;
-    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
-    return line == kPikmin2UsaDiscId ? kPikmin2UsaDiscId : kPikmin2DiscId;
-}
+// Región de los datos instalados: install_disc_id.h (#323).
+constexpr const char* kPikmin2DiscId = pikmin::launcher::kPikmin2PalDiscId;
+using pikmin::launcher::installedPikmin2DiscId;
+using pikmin::launcher::kPikmin2UsaDiscId;
 
 // Pikmin 2 vive en <instalación>/pikmin2: su ejecutable y su carpeta assets,
 // aparte de los de Pikmin 1, que ocupan la raíz.
@@ -1025,6 +1018,64 @@ void rememberInstallDirectory(const fs::path& directory)
     platform::createDesktopShortcut(install / kLauncherExecutable);
 }
 
+// The launcher a game shortcut runs (#336): this one inside an install, else
+// the remembered install's (it is the one that plays and updates), else this
+// one (on Linux the AppImage file, not its temporary mount).
+fs::path shortcutLauncher(const fs::path& sourceDirectory, bool isInstallFolder)
+{
+    std::error_code ec;
+    if (isInstallFolder) {
+        const fs::path self = platform::executablePath();
+        return self.empty() ? sourceDirectory / kLauncherExecutable : self;
+    }
+    const fs::path installed = rememberedInstallDirectory();
+    if (!installed.empty() && fs::is_regular_file(installed / kLauncherExecutable, ec)) return installed / kLauncherExecutable;
+#if !defined(_WIN32) && !defined(__APPLE__)
+    if (const char* image = std::getenv("APPIMAGE"); image && *image && fs::is_regular_file(image, ec)) return image;
+#endif
+    return platform::executablePath();
+}
+
+// Create shortcut under a cover: asks where when the system has a choice
+// (macOS: a Save dialog in ~/Applications; Linux: desktop too?), writes the
+// shortcut and says how it went at the bottom of the home screen.
+void createGameShortcut(pikmin::launcher::HubWindow& home, pikmin::launcher::HubGame game, const fs::path& launcher)
+{
+    namespace shortcut = pikmin::launcher::shortcut;
+    using pikmin::launcher::LaunchTarget;
+    const LaunchTarget target = game == pikmin::launcher::HubGame::Pikmin2 ? LaunchTarget::Pikmin2 : LaunchTarget::Pikmin1;
+    const std::string title = shortcut::gameTitle(target);
+    if (launcher.empty()) {
+        home.showNotice(shortcut::failedNotice(target, "the launcher could not find its own file"));
+        return;
+    }
+    platform::GameShortcutRequest request;
+    request.target = target;
+    request.launcher = launcher;
+    request.iconPng = home.gameIconPng(game);
+    std::error_code ec;
+    if (fs::is_regular_file(launcher.parent_path() / "open_nectar.png", ec))
+        request.fallbackIcon = launcher.parent_path() / "open_nectar.png";
+#if defined(__APPLE__)
+    const char* userHome = std::getenv("HOME");
+    const fs::path folder = userHome && *userHome ? shortcut::macDefaultFolder(userHome) : fs::path();
+    request.location = fs::u8path(home.runDialog([&] {
+        return platform::askForShortcutLocation("Open Nectar - Save a shortcut that opens " + title, folder, title).u8string();
+    }, "save dialog"));
+    if (request.location.empty()) return; // cancelled
+#elif !defined(_WIN32)
+    const int answer = home.ask("Create a " + title + " shortcut",
+                                "It goes in your applications menu. Put one on the desktop too?",
+                                "Menu and desktop", "Menu only", false, "Cancel");
+    if (answer < 0) return;
+    request.desktop = answer == 0;
+#endif
+    std::vector<std::string> places;
+    std::string error;
+    if (platform::createGameShortcut(request, places, error)) home.showNotice(shortcut::createdNotice(target, places));
+    else home.showNotice(shortcut::failedNotice(target, error));
+}
+
 // La ruta de dolphin-tool elegida también se recuerda (junto a pikmin2_dir):
 // instalar el otro juego más tarde no vuelve a pedirla (#171).
 fs::path converterFile() { return nectar::paths::configFile("dolphin_tool"); }
@@ -1118,7 +1169,7 @@ UpdateOutcome runPikmin2Install(pikmin::launcher::HubWindow& hub, const fs::path
             return UpdateOutcome::BackHome;
         }
         hub.markInstalled(pikmin::launcher::HubGame::Pikmin2, gameDirectory.string(),
-                          (gameDirectory / kPikmin2Executable).string(), "GPVE01");
+                          (gameDirectory / kPikmin2Executable).string(), installedPikmin2DiscId(gameDirectory));
         rememberPikmin2Directory(gameDirectory);
         rememberInstallDirectory(installDirectory);
         const std::string text = "Pikmin 2 is installed in:\n" + gameDirectory.string()
@@ -1137,6 +1188,8 @@ void usage(const char* argv0)
               << "The disc image must come from your own copy of Pikmin: USA Rev 1 or Europe.\n"
               << "--skip-verify skips the image integrity check.\n"
               << "--dolphin-tool PATH enables RVZ/WIA/GCZ conversion (also found beside the launcher or on PATH).\n"
+              << "--launch=pikmin1 or --launch=pikmin2 starts that game without the home screen; if it\n"
+              << "is not ready to play, the home screen opens instead and says why.\n"
               << "In game, F1 opens graphics, controls and gameplay settings.\n";
 }
 
@@ -1261,6 +1314,12 @@ int main(int argc, char** argv)
     fs::path movedFrom;
     bool crashReport = false; // lo lanza el juego al fallar: abrir y ofrecer el informe
     fs::path crashFile;       // ruta del informe que pasa el juego (opcional)
+    // --launch=pikmin1|pikmin2 (#336): a game straight away, for shortcuts.
+    // It does not count as a command-line install: the window still opens
+    // when the game cannot start.
+    pikmin::launcher::LaunchTarget launchTarget = pikmin::launcher::LaunchTarget::None;
+    std::string launchValue; // as typed, for the error message
+    int launchArguments = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--crash-report") {
@@ -1276,6 +1335,17 @@ int main(int argc, char** argv)
         else if (arg == "--dolphin-tool" && i + 1 < argc) converter = fs::absolute(argv[++i]);
         else if (arg == "--extract-only") extractOnly = true;
         else if (arg == "--skip-verify") skipVerify = true;
+        else if (const int first = i;
+                 pikmin::launcher::consumeLaunchArgument(i, argc, argv, launchTarget, launchValue)) {
+            if (launchTarget == pikmin::launcher::LaunchTarget::Invalid) {
+                std::cerr << (launchValue.empty() ? std::string("--launch needs a game")
+                                                  : "Unknown game for --launch: " + launchValue)
+                          << ". Use --launch=pikmin1 or --launch=pikmin2.\n";
+                usage(argv[0]);
+                return 2;
+            }
+            launchArguments += i - first + 1;
+        }
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
 #if defined(__APPLE__)
         else if (consumeAppleLaunchArgument(arg, i, argc, argv)) continue;
@@ -1351,7 +1421,7 @@ int main(int argc, char** argv)
             if (ec) std::this_thread::sleep_for(std::chrono::milliseconds(300));
         }
     }
-    const int userArgs = userArgumentCount(argc, argv);
+    const int userArgs = userArgumentCount(argc, argv) - launchArguments;
     const bool openWindow = userArgs == 0 || (crashReport && userArgs == (crashFile.empty() ? 1 : 2))
                          || (userArgs == 2 && !movedFrom.empty());
     // El juego lo hereda: si falla, vuelve a abrir este launcher con
@@ -1379,7 +1449,12 @@ int main(int argc, char** argv)
                 && !installPackage(sourceDirectory, installed, failure)) {
                 std::cerr << "Could not update " << installed << ": " << failure << '\n';
             }
-            platform::relaunch(installed / kLauncherExecutable, {});
+            // Solo --launch pasa al instalado: el acceso directo puede
+            // apuntar al launcher descargado o al AppImage.
+            std::vector<std::string> forwarded;
+            if (const std::string launch = pikmin::launcher::launchArgument(launchTarget); !launch.empty())
+                forwarded.push_back(launch);
+            platform::relaunch(installed / kLauncherExecutable, forwarded);
         }
     }
 #ifdef _WIN32
@@ -1388,6 +1463,26 @@ int main(int argc, char** argv)
         fs::remove(sourceDirectory / (std::string(name) + ".old"), ignored);
     }
 #endif
+
+    // --launch: the same start as Play on the home screen. If the game cannot
+    // start (not installed, half-updated install, binary missing), the home
+    // screen opens with a short notice instead.
+    std::string launchNotice;
+    if (launchTarget == pikmin::launcher::LaunchTarget::Pikmin1
+        || launchTarget == pikmin::launcher::LaunchTarget::Pikmin2) {
+        const bool second = launchTarget == pikmin::launcher::LaunchTarget::Pikmin2;
+        const fs::path& directory = second ? pikmin2Directory : pikmin1Directory;
+        const fs::path& executable = second ? pikmin2Executable : pikmin1Executable;
+        pikmin::launcher::LaunchFacts facts;
+        facts.assetsInstalled = second ? fs::is_regular_file(pikmin2Directory / "assets/.pikmin2-assets")
+                                       : assetsReady(pikmin1Directory);
+        facts.executablePresent = fs::is_regular_file(executable);
+        facts.needsRepair = isInstallFolder && packageMissing(sourceDirectory);
+        const pikmin::launcher::LaunchDecision decision = pikmin::launcher::decideLaunch(facts);
+        if (decision == pikmin::launcher::LaunchDecision::Launch) launchGame(directory, executable);
+        launchNotice = pikmin::launcher::launchFallbackNotice(launchTarget, decision);
+        std::cerr << "--launch: " << launchNotice << '\n';
+    }
 
     bool forceInstall = false;
     // La ventana principal sigue abierta durante la instalación y hace de
@@ -1423,7 +1518,7 @@ int main(int argc, char** argv)
         if (pikmin2Available) {
             hubState.games[1].directory = pikmin2Directory.string();
             hubState.games[1].executable = pikmin2Executable.string();
-            hubState.games[1].discId = "GPVE01";
+            hubState.games[1].discId = installedPikmin2DiscId(pikmin2Directory);
         }
         // Datos del juego para decorar la ventana: la instalación de al lado,
         // la de la carpeta por defecto, o la que indique NECTAR_GAME_DIR.
@@ -1463,6 +1558,7 @@ int main(int argc, char** argv)
                 { "Pikmin 2", pikmin2Directory, "pikmin2_crash.log", "pikmin2.log" },
                 { "Pikmin", pikmin1Directory, "pikmin_crash.log", "pikmin.log" },
             });
+            if (!launchNotice.empty()) home->showNotice(launchNotice);
             // Pantalla principal hasta que se pide instalar Pikmin 1 (o salir):
             // jugar, actualizar e instalar Pikmin 2 se resuelven aquí. También
             // la usa el modal de rutas de Pikmin 1 al cancelar.
@@ -1514,6 +1610,10 @@ int main(int argc, char** argv)
                                 return std::string();
                             }, "message");
                         }
+                        continue;
+                    }
+                    if (choice.action == pikmin::launcher::HubAction::CreateShortcut) {
+                        createGameShortcut(*home, choice.game, shortcutLauncher(sourceDirectory, isInstallFolder));
                         continue;
                     }
                     if (choice.action == pikmin::launcher::HubAction::ModelMaker) {

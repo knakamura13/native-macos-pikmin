@@ -13,6 +13,10 @@
 #include "Geometry.h"
 #include "nectar_assets/standin_layout.h"
 #include "pc_gfx.h"
+#include "pc_screen_pointer.h"
+#include "pc_window.h"
+#include "settings/pc_settings_p2d.h"
+#include "Colour.h"
 #include "pc_art.h"
 #include "pc_coop.h"
 #include "PikiMgr.h"
@@ -101,18 +105,19 @@ struct PikiIconCallBack : public P2DPaneCallBack {
 		return true;
 	}
 
-#if PIKI_PC_TOUCH
+#if defined(PIKI_PC_PORT)
 	virtual bool draw(P2DPane* pane) // _0C
 	{
-		// Se llama justo después de drawSelf, con la matriz del pane aún
-		// cargada: el cuadrado (0,0)-(w,h) es exactamente lo que se ha
-		// pintado, escala incluida. Proyectado a ventana, la capa táctil lo
-		// usa como zona de toque para cambiar de color.
+		// Called just after drawSelf, with the pane's matrix still loaded.
+		// (0,0)-(w,h) is the icon that was painted, scale included.
 		if (zen::pGameInfo->mEncodedNextThrowType != 0) {
 			float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
 			if (pc_gfx_project_current(0.0f, 0.0f, 0.0f, &x0, &y0)
 			    && pc_gfx_project_current(f32(pane->getWidth()), f32(pane->getHeight()), 0.0f, &x1, &y1)) {
+				pc_hud_color_icon_mark(x0, y0, x1, y1);
+#if PIKI_PC_TOUCH
 				pc_touch_mark_color_icon(x0, y0, x1, y1);
+#endif
 			}
 		}
 		return true;
@@ -1100,6 +1105,21 @@ void zen::DrawGameInfo::draw(Graphics& gfx)
 		if (customMap) setDatePanesVisible(false);
 		mModeScreenMgr->draw(&perspGraph, dx);
 		if (customMap) setDatePanesVisible(true);
+		// Pause, for Classic: the pointer is free, and Start is otherwise a key.
+		// Mouse Cursor keeps the pointer for aiming, so this stays hidden there.
+		if (pc_window_gameplay_pointer_free() && pc_menu_click_read_pointer_normalized(nullptr, nullptr)
+		    && pc_settings_p2d_active()) {
+			const PcMenuClickRect chip = pc_hud_pause_rect(virtW);
+			float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+			if (pc_gfx_project_current(f32(chip.minX), f32(chip.minY), 0.0f, &x0, &y0)
+			    && pc_gfx_project_current(f32(chip.maxX), f32(chip.maxY), 0.0f, &x1, &y1)) {
+				pc_hud_pause_mark(x0, y0, x1, y1);
+			}
+			PcSettingsP2DFrame frame(virtW, 480);
+			pc_settings_p2d_plate(chip.minX, chip.minY, chip.maxX - chip.minX, chip.maxY - chip.minY, 0);
+			pc_settings_p2d_text_styled(chip.minX + 16, chip.minY + 4, "Pause", Colour(225, 255, 255, 255),
+			                            Colour(170, 210, 220, 255), 14, 18);
+		}
 	}
 	pc_gfx_set_hud_wide(0);
 	if (standinHud) pc_gfx_set_hud_virtual_size(0, 0);

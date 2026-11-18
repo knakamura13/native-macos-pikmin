@@ -11,6 +11,11 @@ class RandomAccessStream;
  *
  * @note Size: 0x14.
  */
+#if defined(__GNUC__) // GCC and Clang
+#pragma GCC diagnostic push
+// The original class hierarchy hides base-class overloads on purpose.
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#endif
 class SYSCORE_API CoreNode : public ANode {
 public:
 	/**
@@ -40,7 +45,7 @@ public:
 	 * @brief Reads the data from a random access stream into the CoreNode.
 	 * @param stream The random access stream to read from.
 	 */
-	virtual void read(RandomAccessStream& stream) { } // _0C (weak)
+	virtual void read([[maybe_unused]] RandomAccessStream& stream) { } // _0C (weak)
 
 	/**
 	 * @brief Initializes the core data of the CoreNode.
@@ -122,6 +127,9 @@ public:
 	CoreNode* mNext;   // _0C
 	CoreNode* mChild;  // _10
 };
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #define FOREACH_NODE(type, first, varname) \
 	for (type* varname = static_cast<type*>(first); varname; varname = static_cast<type*>(varname->mNext))

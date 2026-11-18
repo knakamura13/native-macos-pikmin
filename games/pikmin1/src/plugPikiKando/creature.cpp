@@ -1,4 +1,7 @@
 #include "Creature.h"
+#if defined(PIKI_PC_PORT)
+#include "pc_throw_arc.h"
+#endif
 #include "AIConstant.h"
 #include "AIPerf.h"
 #include "BombItem.h"
@@ -784,6 +787,26 @@ void Creature::update()
 		}
 #endif
 	MATCHING_START_TIMER("MOVENEW", true);
+#if defined(PIKI_PC_PORT)
+	// A thrown Pikmin integrates in 1/30 s steps. Smaller ticks make the same
+	// launch speed peak higher (upstream #320). 30 Hz does not take this branch.
+	// Above 30 Hz the ballistic clock already slices this update into reference
+	// steps, including throws. Stepping the throw arc as well replaces that
+	// slice and returns out of the substep loop, so the arc owns the tick only
+	// when the clock is off.
+	if (!referenceMotion) {
+		bool holdThrow = false;
+		f32 throwStep  = deltaTime;
+		if (pc_throw_arc_movement(this, deltaTime, &holdThrow, &throwStep)) {
+			if (holdThrow) {
+				mVolatileVelocity.set(0.0f, 0.0f, 0.0f);
+				MATCHING_STOP_TIMER("MOVENEW");
+				return;
+			}
+			deltaTime = throwStep;
+		}
+	}
+#endif
 	Vector3f originalVel(mVelocity);
 #if defined(PIKI_PC_PORT)
 	const u32 volatileMode = (usesGravity() ? 1u : 0u) | (isCreatureFlag(CF_EnableAirDrag) ? 2u : 0u);

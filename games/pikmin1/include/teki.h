@@ -193,6 +193,11 @@ public:
 /**
  * @brief TODO
  */
+#if defined(__GNUC__) // GCC and Clang
+#pragma GCC diagnostic push
+// The original class hierarchy hides base-class overloads on purpose.
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#endif
 struct BTeki : public Creature, virtual public PaniAnimKeyListener, public PelletView {
 public:
 	BTeki();
@@ -574,6 +579,9 @@ public:
 	PcBallisticClock mPcActionBallisticClock;
 #endif
 };
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 /**
  * @brief TODO

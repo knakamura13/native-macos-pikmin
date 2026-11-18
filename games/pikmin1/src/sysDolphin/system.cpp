@@ -200,8 +200,14 @@ RandomAccessStream* System::openFile(immut char* path, bool isRelativePath, bool
 	}
 #endif
 	char strPath[PATH_MAX];
+#if defined(BUGFIX)
+	// The original passes strPath as both the destination and the first
+	// source of one sprintf, which is undefined behavior. Same result in one call.
+	snprintf(strPath, sizeof(strPath), "%s%s%s", isRelativePath ? mActiveDir : "", isRelativePath ? mDataRoot : "", path);
+#else
 	sprintf(strPath, "%s", isRelativePath ? mActiveDir : "");
 	sprintf(strPath, "%s%s%s", strPath, isRelativePath ? mDataRoot : "", path);
+#endif
 
 	// The original game serves many resources from a 32-bit ARAM address space.
 	// On the native 64-bit port the assets are already extracted under dataDir;
@@ -380,7 +386,7 @@ void System::run(BaseApp* app)
 #if PIKI_PC_PORT
 		// A netplay session owns the whole loop turn (handshake, ticks,
 		// network wait or shutdown).
-		if (pc_netplay_session_drive != nullptr && pc_netplay_session_drive(this, app)) {
+		if (pc_netplay_session_drive(this, app)) {
 			continue;
 		}
 #endif
@@ -659,8 +665,8 @@ void System::parseArchiveDirectory(immut char* arcPath, immut char* dirPath)
 		list->mNextFreeAddress = addr;
 	}
 
-	u32 unused;
-	f32 unused2;
+	u32 unused = 0;
+	f32 unused2 = 0;
 	STACK_PAD_VAR(1);
 
 	// this is necessary to get it to call the vtable ptr not just inline it.
@@ -1596,7 +1602,13 @@ u32 System::copyRamToCache(u32 mainMemAddr, u32 size, u32 aramCacheAddr)
 	gsys->mDmaComplete = FALSE;
 
 	// sync data cache and RAM
+#if !defined(PIKI_PC_PORT)
 	DCStoreRange((void*)mainMemAddr, size);
+#else
+	// On PC, mainMemAddr is a 64-bit pointer cut down to u32, so this range
+	// would point somewhere else. ARQPostRequest doesn't copy anything on PC,
+	// so there is nothing to sync.
+#endif
 
 	// send request to the aram queue (high priority)
 	ARQPostRequest(cache, (u32)(uintptr_t)cache, ARQ_TYPE_MRAM_TO_ARAM, ARQ_PRIORITY_HIGH, mainMemAddr, adjustedCacheAddr, size, doneDMA);
@@ -1633,7 +1645,12 @@ void System::copyCacheToRam(u32 mainMemAddr, u32 aramCacheAddr, u32 size)
 	gsys->mDmaComplete = FALSE;
 
 	// make sure data cache is clear for where we're putting this
+#if !defined(PIKI_PC_PORT)
 	DCInvalidateRange((void*)mainMemAddr, size);
+#else
+	// Same as copyRamToCache: the address is truncated on PC and no copy
+	// happens. DCInvalidateRange is a no-op on PC anyway.
+#endif
 
 	// send request to the aram queue (high priority)
 	ARQPostRequest(cache, (u32)(uintptr_t)cache, ARQ_TYPE_ARAM_TO_MRAM, ARQ_PRIORITY_HIGH, aramCacheAddr, mainMemAddr, size, doneDMA);
@@ -1646,7 +1663,7 @@ void System::copyCacheToRam(u32 mainMemAddr, u32 aramCacheAddr, u32 size)
  */
 void freeBuffer(u32 cache)
 {
-	CacheTexture* texCache = (CacheTexture*)(((SystemCache*)cache)->owner);
+	CacheTexture* texCache = (CacheTexture*)(uintptr_t)(((SystemCache*)(uintptr_t)cache)->owner);
 
 	// sync data cache of texture to main mem
 	texCache->mPixelData = texCache->mTexImage->mTextureData;

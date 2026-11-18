@@ -75,6 +75,16 @@ set(LEGACY_COMPILE_OPTIONS
     -Wno-format
     -Wno-attributes
     -Wno-comment
+    # Decomp-faithful noise left after #116. Port, launcher and tools use
+    # NATIVE_COMPILE_OPTIONS and keep these warnings. -Wno-unused-value covers
+    # the original-game comma expressions that #334 already silenced on Clang.
+    -Wno-unused-parameter
+    -Wno-missing-field-initializers
+    -Wno-unknown-pragmas
+    -Wno-overloaded-virtual
+    -Wno-unused-value
+    $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
+    $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-unused-private-field>
 )
 
 # Endurecimiento del código decompilado. El compilador de GameCube no
@@ -344,6 +354,8 @@ set(PC_PORT_SOURCES
     pc_port/pc_menu_mode.cpp
     pc_port/pc_menu_repeat.cpp
     pc_port/pc_menu_click.cpp
+    pc_port/pc_file_pointer.cpp
+    pc_port/pc_screen_pointer.cpp
     pc_port/pc_button_prompt.cpp
     pc_port/pc_hand_cursor.cpp
     pc_port/pc_photo_mode.cpp
@@ -393,6 +405,7 @@ set(PC_PORT_SOURCES
     ${NECTAR_LIBS_DIR}/nectar_assets/src/charpack.cpp
     ${PC_PORT_DIR}/launcher/bti_decode.cpp
     pc_port/pc_vs.cpp
+    pc_port/pc_throw_arc.cpp
     pc_port/pc_achievements.cpp
     pc_port/pc_file_dialog.cpp
     pc_port/gl/pc_gfx.cpp
@@ -736,6 +749,23 @@ add_library(${NECTAR_LEGACY} STATIC
 )
 target_compile_options(${NECTAR_LEGACY} PRIVATE ${LEGACY_COMPILE_OPTIONS})
 
+# A few decomp lines warn because they match the original game exactly (each
+# is marked "matches retail"). Changing them could change behavior, so only
+# that one warning is silenced, and only in that file.
+set_source_files_properties(src/plugPikiColin/gameflow.cpp src/plugPikiKando/generator.cpp
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-unused-comparison>")
+set_source_files_properties(src/plugPikiKando/navi.cpp src/sysCommon/shapeBase.cpp
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-pointer-bool-conversion>")
+set_source_files_properties(src/plugPikiYamashita/effectMgr.cpp
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-tautological-compare>")
+set_source_files_properties(src/plugPikiKando/gmWin.cpp
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-implicit-conversion-floating-point-to-bool>")
+set_source_files_properties(src/plugPikiYamashita/drawWorldMap.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-enum-compare")
+# pc_permadeath_test builds this decomp file with the native flags.
+set_source_files_properties(src/sysCommon/stream.cpp
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>")
+
 # Native executable with strict flags. En Android es una biblioteca
 # compartida que carga la actividad Java de SDL (libnectar.so, con SDL_main
 # como punto de entrada).
@@ -751,7 +781,7 @@ endif()
 if (WIN32)
     # VERSIONINFO del .rc (juego y launcher): un .exe sin empresa ni versión
     # tiene menos reputación ante Defender.
-    set(OPEN_NECTAR_VERSION "1.0.9" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
+    set(OPEN_NECTAR_VERSION "1.3" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
     string(REGEX MATCHALL "[0-9]+" _nectar_ver_parts "${OPEN_NECTAR_VERSION}")
     list(APPEND _nectar_ver_parts 0 0 0 0)
     list(SUBLIST _nectar_ver_parts 0 4 _nectar_ver_parts)
@@ -987,6 +1017,7 @@ if(PIKMIN_NETPLAY_BUILD)
         # with NECTAR_ONLINE, the lockstep ICE (NPIX) room otherwise or with
         # PIKMIN_ONLINE_LEGACY_ICE=1; joining follows the pasted code.
         pc_port/netplay/pc_online_menu.cpp
+        pc_port/netplay/pc_online_menu_rows.cpp
         pc_port/netplay/pc_online_relaunch.cpp)
     target_link_libraries(${NECTAR_GAME} PRIVATE gekkonet)
     if(WIN32)
@@ -1186,10 +1217,13 @@ if(ANDROID AND NOT TARGET nectar_launcher)
     file(MAKE_DIRECTORY "${LAUNCHER_EMBED_DIR}")
     embed_file("${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/assets/logo.png" "${LAUNCHER_EMBED_DIR}/logo_open_nectar.h" kLogoOpenNectar)
     embed_file("${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/assets/Fredoka.ttf" "${LAUNCHER_EMBED_DIR}/font_fredoka.h" kFontFredoka)
+    # Solo para la versión junto al logo (#327). Licencia: assets/GameBubble-LICENSE.txt.
+    embed_file("${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/assets/GameBubble.ttf" "${LAUNCHER_EMBED_DIR}/font_game_bubble.h" kFontGameBubble)
 
     add_library(nectar_launcher SHARED
         pc_port/launcher/launcher_android_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/version_label.cpp
         pc_port/launcher/install_directory.cpp
         pc_port/launcher/install_note_layout.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp
@@ -1203,16 +1237,18 @@ if(ANDROID AND NOT TARGET nectar_launcher)
         pc_port/launcher/texture_pack_download_dialog.cpp
         pc_port/launcher/installer_ui.cpp
         pc_port/launcher/launcher_platform_android.cpp
+        pc_port/launcher/game_shortcut.cpp
         pc_port/pc_icon.cpp
         "${LAUNCHER_EMBED_DIR}/logo_open_nectar.h"
-        "${LAUNCHER_EMBED_DIR}/font_fredoka.h")
+        "${LAUNCHER_EMBED_DIR}/font_fredoka.h"
+        "${LAUNCHER_EMBED_DIR}/font_game_bubble.h")
     set_property(TARGET nectar_launcher PROPERTY INCLUDE_DIRECTORIES "")
     target_include_directories(nectar_launcher PRIVATE
         ${PC_PORT_DIR}
         "${LAUNCHER_EMBED_DIR}"
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
         ${SDL2_INCLUDE_DIRS})
-    set(OPEN_NECTAR_VERSION "1.0.9" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
+    set(OPEN_NECTAR_VERSION "1.3" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
     target_compile_definitions(nectar_launcher PRIVATE OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}")
     target_compile_options(nectar_launcher PRIVATE ${NATIVE_COMPILE_OPTIONS})
     target_link_libraries(nectar_launcher PRIVATE launcher_imgui_android pikmin_disc_image ${SDL2_LIBRARIES} GLESv3 EGL log android)
@@ -1224,9 +1260,9 @@ if(PIKMIN_BUILD_LAUNCHER)
     # La capa de plataforma aísla lo único del launcher que depende del sistema:
     # rutas del ejecutable, diálogos y arranque del juego.
     if (WIN32)
-        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_win32.cpp)
+        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_win32.cpp pc_port/launcher/game_shortcut.cpp)
     else()
-        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_posix.cpp)
+        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_posix.cpp pc_port/launcher/game_shortcut.cpp)
     endif()
 
     find_package(Threads REQUIRED)
@@ -1261,10 +1297,13 @@ if(PIKMIN_BUILD_LAUNCHER)
     file(MAKE_DIRECTORY "${LAUNCHER_EMBED_DIR}")
     embed_file("${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/assets/logo.png" "${LAUNCHER_EMBED_DIR}/logo_open_nectar.h" kLogoOpenNectar)
     embed_file("${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/assets/Fredoka.ttf" "${LAUNCHER_EMBED_DIR}/font_fredoka.h" kFontFredoka)
+    # Solo para la versión junto al logo (#327). Licencia: assets/GameBubble-LICENSE.txt.
+    embed_file("${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher/assets/GameBubble.ttf" "${LAUNCHER_EMBED_DIR}/font_game_bubble.h" kFontGameBubble)
 
     add_executable(pikmin_launcher
         pc_port/launcher/launcher_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/version_label.cpp
         pc_port/launcher/hd_model_downloads.cpp
         pc_port/launcher/install_directory.cpp
         pc_port/launcher/install_note_layout.cpp
@@ -1283,7 +1322,8 @@ if(PIKMIN_BUILD_LAUNCHER)
         pc_port/pc_icon.cpp
         ${LAUNCHER_PLATFORM_SOURCE}
         "${LAUNCHER_EMBED_DIR}/logo_open_nectar.h"
-        "${LAUNCHER_EMBED_DIR}/font_fredoka.h")
+        "${LAUNCHER_EMBED_DIR}/font_fredoka.h"
+        "${LAUNCHER_EMBED_DIR}/font_game_bubble.h")
     # El launcher no usa cabeceras del juego (ver launcher_imgui).
     set_property(TARGET pikmin_launcher PROPERTY INCLUDE_DIRECTORIES "")
     target_include_directories(pikmin_launcher PRIVATE
@@ -1297,7 +1337,7 @@ if(PIKMIN_BUILD_LAUNCHER)
         INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann/include;${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")
     # Versión que el launcher compara con el último release de GitHub para
     # avisar y actualizarse. Súbela en cada release (la etiqueta de GitHub).
-    set(OPEN_NECTAR_VERSION "1.0.9" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
+    set(OPEN_NECTAR_VERSION "1.3" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
     target_compile_definitions(pikmin_launcher PRIVATE OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}")
     if (WIN32)
         target_sources(pikmin_launcher PRIVATE packaging/windows/nectar.rc)
@@ -1418,6 +1458,31 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(launcher_page_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME launcher_page_layout_test COMMAND launcher_page_layout_test)
 
+    # --launch=pikmin1|pikmin2 (#336): parsing and the launch-or-home decision.
+    add_executable(launch_request_test pc_port/launcher/launch_request_test.cpp)
+    target_compile_options(launch_request_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME launch_request_test COMMAND launch_request_test)
+
+    # Per-game shortcuts (#336): .app, .desktop and .lnk names and contents,
+    # and the cover icon (PNG, .ico, .icns).
+    add_executable(game_shortcut_test pc_port/launcher/game_shortcut_test.cpp
+        pc_port/launcher/game_shortcut.cpp)
+    set_property(TARGET game_shortcut_test PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(game_shortcut_test PRIVATE ${PC_PORT_DIR}/launcher
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(game_shortcut_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME game_shortcut_test COMMAND game_shortcut_test)
+
+    # Versión junto al logo (#327): la fuente y el estilo, sin ventana.
+    add_executable(version_label_test pc_port/launcher/version_label_test.cpp
+        pc_port/launcher/version_label.cpp
+        "${LAUNCHER_EMBED_DIR}/font_game_bubble.h")
+    set_property(TARGET version_label_test PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(version_label_test PRIVATE ${PC_PORT_DIR}/launcher "${LAUNCHER_EMBED_DIR}"
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui)
+    target_compile_options(version_label_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME version_label_test COMMAND version_label_test)
+
     add_executable(asset_finalize_test pc_port/launcher/asset_finalize_test.cpp)
     target_link_libraries(asset_finalize_test PRIVATE Threads::Threads)
     target_compile_options(asset_finalize_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
@@ -1490,6 +1555,13 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         target_link_libraries(launcher_cursor_test PRIVATE launcher_imgui)
         add_test(NAME launcher_cursor_test COMMAND launcher_cursor_test)
 
+        # D-pad / left stick mapping and headless gamepad focus (no window).
+        add_executable(launcher_nav_test pc_port/launcher/launcher_nav_test.cpp)
+        set_property(TARGET launcher_nav_test PROPERTY INCLUDE_DIRECTORIES "")
+        target_compile_options(launcher_nav_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        target_link_libraries(launcher_nav_test PRIVATE launcher_imgui)
+        add_test(NAME launcher_nav_test COMMAND launcher_nav_test)
+
         add_executable(texture_pack_row_test pc_port/launcher/texture_pack_row_test.cpp
             "${LAUNCHER_EMBED_DIR}/font_fredoka.h")
         set_property(TARGET texture_pack_row_test PROPERTY INCLUDE_DIRECTORIES "")
@@ -1516,6 +1588,17 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_ballistic_test PRIVATE pc_port/timing)
     target_compile_options(pc_ballistic_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_ballistic_test COMMAND pc_ballistic_test)
+
+    # Ship-part carriers must be enemies the game can actually birth (issue #328).
+    add_executable(pc_randomizer_test
+        pc_port/randomizer/pc_randomizer_test.cpp
+        pc_port/randomizer/pc_randomizer.cpp
+        pc_port/randomizer/pc_randomizer_catalog.cpp
+        pc_port/randomizer/pc_randomizer_logic.cpp)
+    target_include_directories(pc_randomizer_test PRIVATE pc_port)
+    target_compile_options(pc_randomizer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_randomizer_test COMMAND pc_randomizer_test)
+
     add_executable(pc_bundle_compat_test pc_port/pc_bundle_compat_test.cpp)
     target_include_directories(pc_bundle_compat_test PRIVATE pc_port)
     target_compile_options(pc_bundle_compat_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
@@ -1565,6 +1648,11 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_envelope_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_envelope_test COMMAND pc_envelope_test)
 
+    # Display-list XF register load decoding (header only, no GL)
+    add_executable(pc_gx_xf_load_test pc_port/gl/pc_gx_xf_load_test.cpp)
+    target_compile_options(pc_gx_xf_load_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_gx_xf_load_test COMMAND pc_gx_xf_load_test)
+
     # Co-op formation (C-stick swarm) sound arbitration (header only, no audio engine)
     add_executable(pc_formation_arbiter_test pc_port/audio/pc_formation_arbiter_test.cpp)
     target_compile_options(pc_formation_arbiter_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
@@ -1597,6 +1685,13 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_cine_skip_order_test PRIVATE pc_port)
     target_compile_options(pc_cine_skip_order_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_cine_skip_order_test COMMAND pc_cine_skip_order_test)
+
+    # End-of-day skip gates (header only, no disc)
+    add_executable(pc_day_end_skip_test pc_port/pc_day_end_skip_test.cpp)
+    target_include_directories(pc_day_end_skip_test PRIVATE pc_port)
+    target_compile_options(pc_day_end_skip_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_day_end_skip_test COMMAND pc_day_end_skip_test)
+
     # Text window presses through the menu translator (no game needed)
     add_executable(pc_text_window_press_test pc_port/pc_text_window_press_test.cpp pc_port/pc_menu_pad.cpp)
     target_include_directories(pc_text_window_press_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
@@ -1879,6 +1974,12 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_host_readable_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_host_readable_test COMMAND pc_host_readable_test)
 
+    # Throw arc at 30/60/120 Hz (no captain, map, or window).
+    add_executable(pc_throw_arc_test pc_port/pc_throw_arc_test.cpp)
+    target_include_directories(pc_throw_arc_test PRIVATE pc_port)
+    target_compile_options(pc_throw_arc_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_throw_arc_test COMMAND pc_throw_arc_test)
+
     # Sprout landing policy (no map or window)
     add_executable(pc_seed_landing_test pc_port/pc_seed_landing_test.cpp)
     target_include_directories(pc_seed_landing_test PRIVATE pc_port)
@@ -1902,12 +2003,30 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_file_select_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_file_select_pointer_test COMMAND pc_file_select_pointer_test)
 
+    # File-select day chevrons and copy-destination clicks (no window, no disc)
+    add_executable(pc_file_pointer_test pc_port/pc_file_pointer_test.cpp pc_port/pc_file_pointer.cpp)
+    target_include_directories(pc_file_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_file_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_file_pointer_test COMMAND pc_file_pointer_test)
+
+    add_executable(pc_screen_pointer_test pc_port/pc_screen_pointer_test.cpp pc_port/pc_screen_pointer.cpp
+                   pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_screen_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_screen_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_screen_pointer_test COMMAND pc_screen_pointer_test)
+
     # Hand cursor over pointer menu targets: hover state to cursor shape, with a stub setter
     add_executable(pc_hand_cursor_test pc_port/pc_hand_cursor_test.cpp pc_port/pc_hand_cursor.cpp
                    pc_port/pc_menu_click.cpp)
     target_include_directories(pc_hand_cursor_test PRIVATE pc_port)
     target_compile_options(pc_hand_cursor_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_hand_cursor_test COMMAND pc_hand_cursor_test)
+
+    add_executable(pc_online_menu_rows_test pc_port/netplay/pc_online_menu_rows_test.cpp
+                   pc_port/netplay/pc_online_menu_rows.cpp pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_online_menu_rows_test PRIVATE pc_port)
+    target_compile_options(pc_online_menu_rows_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_online_menu_rows_test COMMAND pc_online_menu_rows_test)
 
     # New Game and Captain prompt mouse targets and their mapping (no window, no disc)
     add_executable(pc_prompt_pointer_test pc_port/pc_prompt_pointer_test.cpp
@@ -2022,7 +2141,17 @@ if(PIKMIN_BUILD_TESTS)
         target_compile_options(${test} PRIVATE ${NATIVE_COMPILE_OPTIONS})
         add_test(NAME ${test} COMMAND ${test})
     endforeach()
-    target_compile_definitions(pc_texpack_gles_test PRIVATE PIKI_USE_GLES=1)
+    # The directory already defines PIKI_USE_GLES (0 on desktop). Undefine it
+    # first so Clang doesn't warn that the GLES test redefines it.
+    target_compile_options(pc_texpack_gles_test PRIVATE -UPIKI_USE_GLES -DPIKI_USE_GLES=1)
+    # These tests check results with assert(), which Release compiles out.
+    foreach(test pc_texpack_test pc_texpack_gles_test)
+        if(MSVC)
+            target_compile_options(${test} PRIVATE /UNDEBUG)
+        else()
+            target_compile_options(${test} PRIVATE -UNDEBUG)
+        endif()
+    endforeach()
 
     add_executable(pc_tev_shader_test
         pc_port/gl/pc_tev_shader_test.cpp

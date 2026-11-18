@@ -32,6 +32,7 @@
 #include "pc_gx_lighting_glsl.h"
 #include "pc_postprocess.h"
 #include "pc_texpack.h"
+#include "pc_gx_xf_load.h"
 #include "../timing/pc_render_phase.h"
 #include "../timing/pc_tick_profiler.h"
 #include "../netplay/pc_netplay_present.h"
@@ -471,7 +472,7 @@ static void use_scratch_uniform_cache() { sUC = &sScratchUniformSet; }
 // Un programa nuevo (o un id reutilizado) empieza sin valores conocidos.
 static void drop_uniform_cache(GLuint program) {
     if (program == 0 || program >= kUniformSetPrograms || !sProgramUniformSets[program]) return;
-    memset(sProgramUniformSets[program], 0, sizeof(UniformCacheSet));
+    *sProgramUniformSets[program] = UniformCacheSet{};
 }
 
 
@@ -3650,8 +3651,8 @@ void pc_gfx_begin_frame(void) {
         sPerfDisplayListBytes = sPerfTextureUploads = 0;
         sPerfGpuSceneNs = sPerfGpuBlitNs = sPerfGpuSamples = 0;
         memset(sPerfTevStageDraws, 0, sizeof(sPerfTevStageDraws));
-        memset(sPerfTevPatterns, 0, sizeof(sPerfTevPatterns));
-        memset(sPerfTevMultiPatterns, 0, sizeof(sPerfTevMultiPatterns));
+        for (auto& pattern : sPerfTevPatterns) pattern = {};
+        for (auto& pattern : sPerfTevMultiPatterns) pattern = {};
         memset(sPerfFastPathDraws, 0, sizeof(sPerfFastPathDraws));
         memset(sPerfFastPathVertices, 0, sizeof(sPerfFastPathVertices));
         memset(sPerfPrimitiveDraws, 0, sizeof(sPerfPrimitiveDraws));
@@ -7136,7 +7137,7 @@ static void use_program_for_current_state() {
            program ? "" : " (FAILED)");
     // A burst of these blocks one netplay tick; between two programs the
     // netplay keep-alive polls the network.
-    if (pc_netplay_load_keepalive != nullptr) pc_netplay_load_keepalive(pc_netplay_loadguard::kSiteShader);
+    pc_netplay_load_keepalive(pc_netplay_loadguard::kSiteShader);
     if (!program) {
         // One failure is treated as a permanent fallback: a configuration this
         // generator cannot express must not be retried for every draw.
@@ -7443,7 +7444,7 @@ static uint64_t compute_batch_state_key_full() {
     h = hash_bytes(h, sTevRegisters, sizeof(sTevRegisters));
     h = hash_bytes(h, sKonstColors, sizeof(sKonstColors));
     h = hash_bytes(h, &sNumTevStages, sizeof(sNumTevStages));
-    const int stages = sNumTevStages < GX_MAXTEVSTAGE ? sNumTevStages : GX_MAXTEVSTAGE;
+    const int stages = sNumTevStages < static_cast<int>(GX_MAXTEVSTAGE) ? sNumTevStages : static_cast<int>(GX_MAXTEVSTAGE);
     for (int i = 0; i < stages; ++i) {
         h = hash_bytes(h, &sTevStages[i], sizeof(sTevStages[i]));
         h = hash_bytes(h, &sTevRasSwapSel[i], sizeof(sTevRasSwapSel[i]));
@@ -9186,25 +9187,22 @@ static void pc_gfx_call_display_list_impl(const void* list, u32 nbytes) {
         if (command == GX_CMD_LOAD_XF_REG) {
             building = false;
             flushPendingStrip();
-            u32 header;
-            if (!read_be_u32(cursor, end, header)) break;
-            const u32 numWords = (header >> 16) & 0xFFFF;
-            const u32 addrBase = header & 0xFFFF;
+            // The count field is length - 1 and the words are big-endian file
+            // bytes; pc_gx_xf_load.h has the details.
+            PcGxXfLoad xf;
+            if (!pc_gx_decode_xf_load(cursor, end, xf)) break;
 #ifdef PC_GFX_TRACE
             {
-                static FILE* xf = nullptr;
-                if (!xf) xf = fopen("/tmp/opencode/xfdl.log", "w");
-                if (xf) {
-                    fprintf(xf, "XF num=%u addr=%04X w0=%08X w1=%08X\n", numWords, addrBase,
-                            cursor[0] << 24 | cursor[1] << 16 | cursor[2] << 8 | cursor[3],
-                            cursor[4] << 24 | cursor[5] << 16 | cursor[6] << 8 | cursor[7]);
-                    fflush(xf);
+                static FILE* xfLog = nullptr;
+                if (!xfLog) xfLog = fopen("/tmp/opencode/xfdl.log", "w");
+                if (xfLog) {
+                    fprintf(xfLog, "XF num=%u addr=%04X w0=%08X w1=%08X\n", xf.numWords, xf.addrBase,
+                            xf.words[0], xf.numWords > 1 ? xf.words[1] : 0u);
+                    fflush(xfLog);
                 }
             }
 #endif
-            if (end - cursor < ptrdiff_t(numWords * 4)) break;
-            handle_xf_regs(addrBase, numWords, reinterpret_cast<const u32*>(cursor));
-            cursor += numWords * 4;
+            handle_xf_regs(xf.addrBase, xf.numWords, xf.words);
             continue;
         }
         if (command == GX_CMD_CALL_DL) {

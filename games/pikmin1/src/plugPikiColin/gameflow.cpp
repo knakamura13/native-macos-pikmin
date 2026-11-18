@@ -506,7 +506,7 @@ void GameFlow::read(RandomAccessStream& input)
  */
 void preloadLanguage()
 {
-	u32 unused;
+	u32 unused = 0;
 	AyuHeap* oldHeap;
 	int* lang;
 	int heapIdx;
@@ -518,7 +518,7 @@ void preloadLanguage()
 	gsys->setHeap(SYSHEAP_Lang);
 	gsys->resetHeap(SYSHEAP_Lang, AYU_STACK_GROW_UP);
 	oldHeap = gsys->getHeap(gsys->getHeapNum());
-	oldHeap->getFree() != 0;
+	oldHeap->getFree() != 0; // matches retail
 
 	lang = &gameflow.mLanguageIndex;
 	gsys->mBaseAramAllocator.reset();
@@ -704,7 +704,7 @@ void GameFlow::softReset()
 {
 #if defined(PIKI_PC_PORT)
 	// The synchronous stage load below blocks the netplay network pump.
-	if (pc_netplay_on_stage_load != nullptr) pc_netplay_on_stage_load();
+	pc_netplay_on_stage_load();
 #endif
 	// make sure we don't debug-print all this while soft-resetting.
 	BOOL togglePrint   = gsys->mTogglePrint;
