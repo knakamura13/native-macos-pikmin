@@ -430,6 +430,45 @@ void capture_local(bool live)
 	}
 }
 
+PcInputProviderFn sProvider = nullptr;
+
+// Scenario input (--scenario): the provider fills all four pads and the yaw,
+// ext, rotate and local slots for this tick, after the slots are cleared and
+// before the record write, so a recording captures what was fed. It overrides
+// any real gamepad or keyboard read.
+void apply_provider()
+{
+	if (sProvider == nullptr) return;
+	PcInputPad scripted[4];
+	for (int p = 0; p < 4; ++p) {
+		scripted[p] = PcInputPad{};
+		scripted[p].err = (p == 0) ? pc_input_log::kErrConnected : pc_input_log::kErrNoController;
+	}
+	sProvider(scripted);
+	PADStatus* pads = pc_netplay_pad_status();
+	for (int p = 0; p < 4; ++p) {
+		pads[p].button       = scripted[p].button;
+		pads[p].stickX       = scripted[p].stickX;
+		pads[p].stickY       = scripted[p].stickY;
+		pads[p].substickX    = scripted[p].substickX;
+		pads[p].substickY    = scripted[p].substickY;
+		pads[p].triggerLeft  = scripted[p].triggerLeft;
+		pads[p].triggerRight = scripted[p].triggerRight;
+		pads[p].analogA      = scripted[p].analogA;
+		pads[p].analogB      = scripted[p].analogB;
+		pads[p].err          = scripted[p].err;
+		sYawRaw[p]           = scripted[p].controlYaw;
+		sYawFlags[p]         = pc_input_log::kFlagsNone;
+		sYawValid[p]         = true;
+		sExt[p]              = scripted[p].flags & pc_input_log::kExtKnown;
+		sRotate[p]           = scripted[p].cursorRotate;
+		sLocalFlags[p]       = scripted[p].local & pc_input_log::kLocalKnown;
+		sWheel[p]            = scripted[p].wheelSteps;
+		sCursorDx[p]         = scripted[p].cursorDx;
+		sCursorDy[p]         = scripted[p].cursorDy;
+	}
+}
+
 const char* argvValue(int argc, char** argv, const char* flag)
 {
 	for (int i = 1; i + 1 < argc; ++i) {
@@ -510,6 +549,8 @@ int16_t pc_netplay_ext_cursor_rotate(int pad)
 }
 
 void pc_input_log_set_local_capture_fn(PcLocalCaptureFn fn) { sLocalCaptureFn = fn; }
+
+void pc_input_log_set_provider(PcInputProviderFn fn) { sProvider = fn; }
 
 uint8_t pc_netplay_local_flags(int pad)
 {
@@ -838,13 +879,15 @@ void pc_input_log_tick(void)
 		}
 	}
 
+	apply_provider();
+
 	// Pre-sim capture: fill every slot without a replayed value from the
 	// live control cameras (quantised). The hook skips slots already valid
 	// and is a no-op unless det mode or record mode needs it.
 	if (sYawCaptureFn != nullptr) sYawCaptureFn();
 	// Local inputs: live only without a replay (past its end they stay
 	// neutral, like the pads).
-	capture_local(!replaying);
+	capture_local(!replaying && sProvider == nullptr);
 
 	// Pre-sim record write: file the pads plus the yaw the sim will use, so
 	// the filed input is exactly what was fed (in-tick pad writers cannot
