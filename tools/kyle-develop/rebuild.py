@@ -475,9 +475,10 @@ def build_and_ctest(worktree, source, build_name):
             "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
             "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
         ]
-    steps = []
-    if not (build / "CMakeCache.txt").exists():
-        steps.append(configure)
+    # Always reconfigure. The build directory is preserved across SHA
+    # checkouts, so a failed configure on one tree can leave a broken cache
+    # that makes the next tree look like it failed too.
+    steps = [configure]
     steps.append(["cmake", "--build", str(build), "-j", jobs()])
     steps.append(["ctest", "--test-dir", str(build), "--output-on-failure"])
     logs = []
@@ -539,15 +540,19 @@ class Assembly:
         self.skipped = []
 
 
-def assemble(worktree, upstream_sha, steps):
-    reset_worktree(worktree, upstream_sha)
+def assemble(worktree, start_sha, steps):
+    reset_worktree(worktree, start_sha)
     asm = Assembly()
-    asm.checkpoints.append((None, upstream_sha))
+    asm.checkpoints.append((None, start_sha))
     for step in steps:
         if step.get("omit"):
             asm.skipped.append(step["skip"])
             continue
         kind = step["kind"]
+        if kind == "patch-already":
+            # Already present in start_sha (kyle-patches contains upstream main).
+            asm.applied_patches.append(step["sha"])
+            continue
         if kind == "patch":
             status, reason = cherry_pick(worktree, step["sha"])
             if status == "applied":
@@ -711,14 +716,27 @@ def format_other_pr(item):
 def build_steps(repo, patches_sha, upstream_sha, exclude, include_names, fork):
     base = git(["merge-base", patches_sha, upstream_sha], repo).stdout.strip()
     check_patch_merges(repo, base, patches_sha, upstream_sha)
-    # Merge commits carry no changes of their own here: the plain commits they
-    # bring in are replayed one by one, and upstream main is the base.
     patch_commits = git(
         ["rev-list", "--reverse", "--no-merges", f"{base}..{patches_sha}"], repo
     ).stdout.split()
     steps = []
-    for sha in patch_commits:
-        steps.append({"kind": "patch", "sha": sha, "ident": f"patch:{sha}"})
+    already_on_main = is_ancestor(repo, upstream_sha, patches_sha)
+    if already_on_main:
+        # kyle-patches already has current main (via a merge). The conflict
+        # resolutions live in that merge commit, which a cherry-pick replay
+        # would skip, so start from the kyle-patches tree instead.
+        eprint("kyle-patches already contains upstream main; using its tree")
+        for sha in patch_commits:
+            steps.append({
+                "kind": "patch-already",
+                "sha": sha,
+                "ident": f"patch:{sha}",
+            })
+    else:
+        # Linear stack on an older main: replay the plain commits onto current
+        # main. Merge commits carry no changes of their own here.
+        for sha in patch_commits:
+            steps.append({"kind": "patch", "sha": sha, "ident": f"patch:{sha}"})
 
     prs, others = open_fork_prs(fork["owner"], fork["repos"])
     eprint(f"open fork PRs: {', '.join('#' + str(pr['number']) for pr in prs) or '(none)'}")
@@ -817,7 +835,7 @@ def build_steps(repo, patches_sha, upstream_sha, exclude, include_names, fork):
             "sha": fetched,
             "ident": f"include:{name}",
         })
-    return steps, others
+    return steps, others, (patches_sha if already_on_main else upstream_sha)
 
 
 def omit_step(steps, ident, reason):
@@ -905,26 +923,31 @@ def main():
         eprint(f"exclude {sorted(exclude) or '(empty)'}")
         eprint(f"include {include_names or '(empty)'}")
 
-        steps, other_prs = build_steps(
+        steps, other_prs, start_sha = build_steps(
             repo, patches_sha, upstream_sha, exclude, include_names, fork
         )
-        worktree = prepare_worktree(repo, upstream_sha)
+        worktree = prepare_worktree(repo, start_sha)
         cache = {}
         asm = None
         guard = 0
+        base_failed = (
+            "kyle-patches already includes upstream main, but that tree failed the test suites; not pushing"
+            if start_sha == patches_sha
+            else "upstream main failed the test suites; not pushing"
+        )
         while True:
             guard += 1
             if guard > len(steps) + 2:
                 raise RebuildError("could not find a test-passing subset")
             eprint(f"assembling (pass {guard})")
-            asm = assemble(worktree, upstream_sha, steps)
+            asm = assemble(worktree, start_sha, steps)
             if tests_pass(worktree, asm.head, cache):
                 break
             if len(asm.checkpoints) < 2:
-                raise RebuildError("upstream main failed the test suites; not pushing")
+                raise RebuildError(base_failed)
             index = first_failing_index(worktree, asm.checkpoints, cache)
             if index == 0:
-                raise RebuildError("upstream main failed the test suites; not pushing")
+                raise RebuildError(base_failed)
             step = asm.checkpoints[index][0]
             eprint(f"tests failed at {step['ident']}; leaving it out")
             if not omit_step(steps, step["ident"], "tests failed when this step was included"):
