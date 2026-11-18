@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
-# test-build.sh [--self-test] [--save-self-test] [save-mode flags]
+# test-build.sh [--self-test] [--save-self-test] [--build-dir DIR] [save-mode flags]
 #
 # Build the checkout that contains this script (any branch or worktree) as
 # "Open Nectar Test.app" and point ~/Desktop/Open Nectar at that build.
 #
+# The app includes Pikmin 1, the launcher, and both Pikmin 2 region binaries
+# (pikmin2_pc and pikmin2_pc-usa). CFBundleExecutable is a small native stub
+# (tools/mac/open-nectar-stub.c) that execs open-nectar.sh; a bash script as
+# the main executable will not launch on macOS (Launchd error 162, Finder
+# "no permission"). The finished bundle is ad-hoc signed.
+#
 # Test builds stay in ~/OpenNectar-test-builds.noindex (Spotlight skips it), each
 # with its own bundle id (org.opennectar.testbuild.<hash>). The newest 5 builds
-# are kept; data/ is never removed. By default every test build shares the
-# central save under ~/Library/Application Support/Open Nectar/save.
+# are kept; data/ and the shared CMake build dir (build/) are never removed.
+# By default every test build shares the central save under
+# ~/Library/Application Support/Open Nectar/save. CMake output is reused in
+# ~/OpenNectar-test-builds.noindex/build (override with --build-dir) so
+# rebuilds stay fast with ccache.
 #
 # Run it from any directory:
 #   /path/to/checkout/tools/mac/test-build.sh
@@ -55,6 +64,59 @@ EOF
         return 1
     fi
     rm -rf "${work}"
+}
+
+# macOS will not launch a bundle whose CFBundleExecutable is a shell script
+# (Launchd error 162 / Finder "no permission"). Compile the native stub that
+# execs open-nectar.sh instead.
+compile_launcher_stub() {
+    local output="$1"
+    local src="${script_dir}/open-nectar-stub.c"
+    if [[ ! -f "${src}" ]]; then
+        printf 'Missing launcher stub source: %s\n' "${src}" >&2
+        return 1
+    fi
+    if ! command -v cc >/dev/null 2>&1; then
+        printf 'cc is required to build the app launcher stub.\n' >&2
+        return 1
+    fi
+    if ! cc -O2 -Wall -Werror -o "${output}" "${src}"; then
+        printf 'cc could not build the app launcher stub.\n' >&2
+        return 1
+    fi
+}
+
+# Reconfigure SRC into DEST, dropping a stale CMake cache (for example after
+# a build directory was copied or moved) and retrying once.
+cmake_reconfigure() {
+    local src="$1"
+    local dest="$2"
+    shift 2
+    if cmake -S "${src}" -B "${dest}" "$@"; then
+        return 0
+    fi
+    printf 'CMake cache in %s looks stale; reconfiguring from scratch.\n' "${dest}" >&2
+    rm -rf "${dest}"
+    cmake -S "${src}" -B "${dest}" "$@"
+}
+
+# Ad-hoc sign the finished bundle. Must run after every file is in place,
+# including Pikmin 2 binaries and build-info.json.
+sign_test_app() {
+    local app="$1"
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        return 0
+    fi
+    local sign_out
+    if ! sign_out="$(codesign --force --deep --sign - "${app}" 2>&1)"; then
+        printf '%s\n' "${sign_out}" >&2
+        printf 'codesign failed for %s\n' "${app}" >&2
+        return 1
+    fi
+    if ! codesign --verify --deep --strict "${app}"; then
+        printf 'codesign --verify --deep --strict failed for %s\n' "${app}" >&2
+        return 1
+    fi
 }
 
 atomic_symlink() {
@@ -117,7 +179,7 @@ prune_test_builds() {
         [[ -z "${dir}" ]] && continue
         dir="${dir%/}"
         base="$(basename -- "${dir}")"
-        if [[ "${base}" == "data" || "${base}" == .* ]]; then
+        if [[ "${base}" == "data" || "${base}" == "build" || "${base}" == .* ]]; then
             continue
         fi
         count=$((count + 1))
@@ -263,9 +325,16 @@ write_test_app() {
     bundle_suffix="$(printf '%s\n%s' "${branch}" "${snapshot}" | shasum -a 256 | cut -c1-16)"
     mkdir -p "${macos}" "${resources}"
     cp "${save_mode_py}" "${resources}/save_mode.py"
-    write_wrapper "${macos}/open-nectar" \
+    write_wrapper "${macos}/open-nectar.sh" \
         "${data_home}" "${config_home}" "${cache_home}" \
         "${data_root}" "${save_dir}" "${game_bin}" "${launcher_bin}" "${title}" "${NECTAR_SAVE_READ_ONLY:-0}"
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        compile_launcher_stub "${macos}/open-nectar"
+    else
+        # Keep --self-test working off the Mac: a tiny trampoline.
+        printf '#!/bin/bash\nexec "$(dirname -- "$0")/open-nectar.sh" "$@"\n' > "${macos}/open-nectar"
+        chmod +x "${macos}/open-nectar"
+    fi
     local data_home_xml config_home_xml cache_home_xml data_root_xml game_bin_xml save_xml save_ro_xml=""
     local sha_json branch_json
     sha_json="$(json_escape "${sha}")"
@@ -324,6 +393,7 @@ write_test_app() {
 EOF
     printf '{\n  "sha": "%s",\n  "branch": "%s"\n}\n' "${sha_json}" "${branch_json}" \
         > "${resources}/build-info.json"
+    sign_test_app "${app}"
 }
 
 self_test() {
@@ -406,6 +476,14 @@ FAKE
         "${data_root}" "${central_save}" "${tmp}/bin/nectar" "${fake}" \
         "0123456789abcdef" "fixture" "0123456789ab" "0"
     wrapper="${app}/Contents/MacOS/open-nectar"
+    script_wrapper="${app}/Contents/MacOS/open-nectar.sh"
+    [[ -x "${wrapper}" && -x "${script_wrapper}" ]]
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        file "${wrapper}" | grep -q 'Mach-O'
+        file "${script_wrapper}" | grep -q 'shell script'
+        codesign --verify --deep --strict "${app}"
+    fi
+    grep -q '<string>open-nectar</string>' "${app}/Contents/Info.plist"
     HOME="${home}" output="$("${wrapper}")"
     [[ "${output}" == *"XDG_DATA_HOME=${data_home}"* ]]
     [[ "${output}" == *"NECTAR_PIKMIN1_DIR=${data_root}"* ]]
@@ -447,6 +525,15 @@ FAKE
     [[ -f "${finish_root}/data/marker" && -d "${newest}" ]]
     [[ "$(find "${finish_root}" -mindepth 1 -maxdepth 1 -type d ! -name data | wc -l | tr -d ' ')" -eq 5 ]]
     [[ -d "${finish_root}/old-7" && -d "${finish_root}/old-4" && ! -d "${finish_root}/old-3" ]]
+    # The shared CMake dir at <root>/build must survive prune.
+    mkdir -p "${finish_root}/build"
+    touch "${finish_root}/build/marker"
+    touch -t 201801010101 "${finish_root}/build"
+    prune_test_builds "${finish_root}" 5 "${newest}"
+    [[ -f "${finish_root}/build/marker" ]]
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        bash "${script_dir}/tests/test_open_nectar_stub.sh"
+    fi
     printf 'test-build self-test ok\n'
 }
 
@@ -461,6 +548,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
 fi
 
 save_flag_args=()
+custom_build_dir=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --fresh-save|--sandbox-save|--read-only-save|--choose-save)
@@ -471,8 +559,12 @@ while [[ $# -gt 0 ]]; do
             save_flag_args+=("$1" "$2")
             shift 2
             ;;
+        --build-dir)
+            custom_build_dir="$2"
+            shift 2
+            ;;
         *)
-            printf 'usage: %s [--self-test | --save-self-test] [save-mode flags]\n' "${BASH_SOURCE[0]}" >&2
+            printf 'usage: %s [--self-test | --save-self-test] [--build-dir DIR] [save-mode flags]\n' "${BASH_SOURCE[0]}" >&2
             exit 2
             ;;
     esac
@@ -503,7 +595,11 @@ root="${HOME}/OpenNectar-test-builds.noindex"
 mkdir -p "${root}"
 dest="$(mktemp -d "${root}/${name}-${identity_hash}.XXXXXXXX")"
 snapshot="${short}-${dest##*.}"
-build_dir="${dest}/build"
+if [[ -n "${custom_build_dir}" ]]; then
+    build_dir="${custom_build_dir}"
+else
+    build_dir="${root}/build"
+fi
 # shellcheck disable=SC1090
 eval "$(bash "${resolve_save_sh}" --home "${HOME}" --build-output "${dest}" --non-interactive -- ${save_flag_args[@]+"${save_flag_args[@]}"})"
 data_home="${root}/data"
@@ -522,21 +618,45 @@ if command -v ccache >/dev/null 2>&1; then
 fi
 jobs="$(sysctl -n hw.ncpu 2>/dev/null || printf '4')"
 # bash 3.2 with set -u rejects an empty array, so expand it the long way.
-cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release \
+cmake_reconfigure "${game_dir}" "${build_dir}" -DCMAKE_BUILD_TYPE=Release \
     ${cache_flags[@]+"${cache_flags[@]}"}
 cmake --build "${build_dir}" --target pikmin_pc pikmin_launcher -j "${jobs}"
 
+# Same Pikmin 2 layout as games/pikmin1/packaging/macos/build-app.sh: Europe
+# in build/p2 and USA in build/p2-usa, then rename the USA binary on copy.
+p2_dir="${game_dir}/../pikmin2"
+if [[ ! -f "${p2_dir}/CMakeLists.txt" ]]; then
+    printf 'No Pikmin 2 checkout at %s\n' "${p2_dir}" >&2
+    exit 1
+fi
+cmake_reconfigure "${p2_dir}" "${build_dir}/p2" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    ${cache_flags[@]+"${cache_flags[@]}"}
+cmake --build "${build_dir}/p2" --target pikmin2_pc -j "${jobs}"
+cmake_reconfigure "${p2_dir}" "${build_dir}/p2-usa" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    -DPIKMIN_GAME_VERSION=VERSION_GPVE01 ${cache_flags[@]+"${cache_flags[@]}"}
+cmake --build "${build_dir}/p2-usa" --target pikmin2_pc -j "${jobs}"
+
 game_source="${build_dir}/bin/nectar"
 launcher_source="${build_dir}/bin/nectar-launcher"
+p2_source="${build_dir}/p2/pikmin2_pc"
+p2_usa_source="${build_dir}/p2-usa/pikmin2_pc"
 if [[ ! -x "${game_source}" || ! -x "${launcher_source}" ]]; then
     printf 'Build did not produce nectar and nectar-launcher in %s\n' "${build_dir}/bin" >&2
+    exit 1
+fi
+if [[ ! -x "${p2_source}" || ! -x "${p2_usa_source}" ]]; then
+    printf 'Build did not produce pikmin2_pc and pikmin2_pc-usa in %s/p2 and %s/p2-usa\n' "${build_dir}" "${build_dir}" >&2
     exit 1
 fi
 mkdir -p "${app}/Contents/MacOS"
 game_bin="${app}/Contents/MacOS/nectar"
 launcher_bin="${app}/Contents/MacOS/nectar-launcher"
+p2_bin="${app}/Contents/MacOS/pikmin2_pc"
+p2_usa_bin="${app}/Contents/MacOS/pikmin2_pc-usa"
 cp "${game_source}" "${game_bin}"
 cp "${launcher_source}" "${launcher_bin}"
+cp "${p2_source}" "${p2_bin}"
+cp "${p2_usa_source}" "${p2_usa_bin}"
 
 write_test_app "${app}" "${data_home}" "${config_home}" "${cache_home}" \
     "${data_root}" "${configured_save_dir}" "${game_bin}" "${launcher_bin}" "${sha}" "${identity}" "${snapshot}" "${save_read_only}"
@@ -545,6 +665,8 @@ python3 "${script_dir}/build_identity.py" --repo "${repo}" \
     --launcher "${launcher_bin}" --cache "${build_dir}/CMakeCache.txt" --data "${data_root}" --role feature \
     --save-mode "${PIKMIN_SAVE_MODE}" --save-mode-label "${save_mode_label}" \
     --save-directory "${configured_save_dir}"
+# build-info.json is rewritten after write_test_app, so sign again.
+sign_test_app "${app}"
 finish_test_build "${root}" "${dest}" "${app}" "${HOME}/Desktop/Open Nectar"
 
 printf 'branch: %s\n' "${branch}"
