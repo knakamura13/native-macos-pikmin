@@ -683,14 +683,8 @@ bool snapshotEntireCard0(const fs::path& card0Dir, std::string& error, CardBacku
         break;
     }
     if (!hasAny) return true;
-    const std::string stamp = [] {
-        const std::time_t now = std::time(nullptr);
-        std::tm local {};
-        localtime_r(&now, &local);
-        char text[32];
-        std::strftime(text, sizeof(text), "%Y%m%d-%H%M%S", &local);
-        return std::string(text);
-    }();
+    // backupStampNow() already has the MinGW localtime_s shim.
+    const std::string stamp = backupStampNow();
     int next = 0;
     for (const CardBackup& existing : listCardBackups(card0Dir)) {
         if (existing.name.compare(0, stamp.size(), stamp) != 0) continue;
