@@ -247,6 +247,14 @@ bool pc_netplay_ext_trace(void);
 typedef void (*PcLocalCaptureFn)(PcLocalInput out[4]);
 void pc_input_log_set_local_capture_fn(PcLocalCaptureFn fn);
 
+// Scenario input provider (--scenario). Called every tick after the slots are
+// cleared and replay input applied; fills pads 0-3 (pads 1-3 arrive neutral
+// with err = kErrNoController, pad 0 connected) plus controlYaw, flags (ext
+// bits), cursorRotate and the local slots per pad. The provider overrides real
+// input, so the live capture hooks leave the slots alone while one is set.
+typedef void (*PcInputProviderFn)(PcInputPad pads[4]);
+void pc_input_log_set_provider(PcInputProviderFn fn);
+
 // Per-pad local inputs for the current tick, for the sim in deterministic
 // mode. The flags hold for the whole tick; the delta and the notches go to
 // the first reader of the tick and read as zero afterwards, as the window
