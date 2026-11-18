@@ -1,0 +1,49 @@
+# ui 1180x780 scale 1.000
+logo 260 18 920 163 ##hub | logo
+button 360 173 504 215 ##hub | Games
+label 360 173 504 215 ##hub | Games
+button 518 173 662 215 ##hub | Settings
+label 518 173 662 215 ##hub | Settings
+button 676 173 820 215 ##hub | Move Install
+label 676 173 820 215 ##hub | Move Install
+button 440 231 584 269 ##hub | Pikmin
+label 440 231 584 269 ##hub | Pikmin
+button 596 231 740 269 ##hub | Pikmin 2
+label 596 231 740 269 ##hub | Pikmin 2
+button 90 293 280 327 ##hub | Display
+label 90 293 280 327 ##hub | Display
+button 90 335 280 368 ##hub | Graphics
+label 90 335 280 368 ##hub | Graphics
+button 90 376 280 410 ##hub | Controls
+label 90 376 280 410 ##hub | Controls
+button 90 418 280 452 ##hub | Camera
+label 90 418 280 452 ##hub | Camera
+button 90 460 280 493 ##hub | Gameplay
+label 90 460 280 493 ##hub | Gameplay
+button 90 501 280 535 ##hub | Cheats
+label 90 501 280 535 ##hub | Cheats
+button 90 543 280 577 ##hub | Texture Packs
+label 90 543 280 577 ##hub | Texture Packs
+button 90 585 280 618 ##hub | HD Models
+label 90 585 280 618 ##hub | HD Models
+button 90 626 280 660 ##hub | Saves
+label 90 626 280 660 ##hub | Saves
+button 90 672 280 716 ##hub | Reset all
+label 90 672 280 716 ##hub | Reset all
+button 318 422 618 466 ##hub | Get HD models
+label 318 422 618 466 ##hub | Get HD models
+button 912 498 1056 538 ##hub | Install
+label 912 498 1056 538 ##hub | Install
+button 912 558 1056 598 ##hub | Install
+label 912 558 1056 598 ##hub | Install
+button 912 618 1056 658 ##hub | #38f5f1bb
+label 912 618 1056 658 ##hub | Install
+button 912 678 1056 718 ##hub | #af84067a
+label 912 678 1056 718 ##hub | Install
+button 912 738 1056 778 ##hub | #45e55a2e
+label 912 738 1056 778 ##hub | Install
+button 912 798 1056 838 ##hub | #d294adef
+label 912 798 1056 838 ##hub | Install
+button-disabled 756 996 1056 1035 ##hub | #415f778b
+button-disabled 756 1047 1056 1086 ##hub | #99522393
+button-disabled 756 1098 1056 1137 ##hub | #554233e5

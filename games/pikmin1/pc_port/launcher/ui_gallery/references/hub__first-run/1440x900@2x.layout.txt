@@ -1,0 +1,8 @@
+# ui 1248x780 scale 2.308
+logo 275 18 973 171 ##hub | logo
+button 337 205 574 537 ##hub | cover
+button 361 597 551 641 ##hub | Install
+label 361 597 551 641 ##hub | Install
+button 674 205 911 537 ##hub | cover
+button 697 597 887 641 ##hub | Install
+label 697 597 887 641 ##hub | Install

@@ -1,0 +1,8 @@
+# ui 1600x720 scale 1.000
+logo 450 18 1150 171 ##hub | logo
+button 472 205 731 568 ##hub | cover
+button 506 628 696 672 ##hub | Install
+label 506 628 696 672 ##hub | Install
+button 869 205 1128 568 ##hub | cover
+button 904 628 1094 672 ##hub | Install
+label 904 628 1094 672 ##hub | Install
