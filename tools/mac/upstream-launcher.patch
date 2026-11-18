@@ -1,5 +1,5 @@
 diff --git a/games/pikmin1/pc_port/launcher/launcher_gui.cpp b/games/pikmin1/pc_port/launcher/launcher_gui.cpp
-index b775f40ac..1ca978808 100644
+index 301060f60..cda135b86 100644
 --- a/games/pikmin1/pc_port/launcher/launcher_gui.cpp
 +++ b/games/pikmin1/pc_port/launcher/launcher_gui.cpp
 @@ -15,6 +15,7 @@
@@ -7,10 +7,10 @@ index b775f40ac..1ca978808 100644
  //    propio disco. Sin instalación se dibuja una pradera con flores.
  #include "launcher_gui.h"
 +#include "json_mini.h"
+ #include "../pc_mac_keys.h"
  
  #include "bti_decode.h"
- #include "button_layout.h"
-@@ -3283,17 +3284,17 @@ struct Hub {
+@@ -3279,17 +3280,17 @@ struct Hub {
  
      // El pie va en la ventana del hub (debajo de modales y de "What's new"),
      // en su franja reservada; si la ruta no cabe se recorta por delante.
@@ -31,7 +31,7 @@ index b775f40ac..1ca978808 100644
                                               - fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, "Installed in: ").x));
          // Placa semitransparente para que el texto se lea sobre la hierba.
          const ImVec2 extent = fonts.caption->CalcTextSizeA(16.0f, FLT_MAX, 0.0f, where.c_str());
-@@ -3380,17 +3381,71 @@ struct Hub {
+@@ -3376,17 +3377,71 @@ struct Hub {
  
          drawReleaseNotice(size, t);
          drawVersionLabel(size, logoAt, logoW, logoH);
@@ -104,7 +104,7 @@ index b775f40ac..1ca978808 100644
          ImGui::End();
          toastTime = std::max(0.0f, toastTime - dt);
          drawToast(size);
-@@ -3907,7 +3962,9 @@ bool HubWindow::open(const HubState& state, std::string& error)
+@@ -3913,7 +3968,9 @@ bool HubWindow::open(const HubState& state, std::string& error)
      SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
                                            SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_ALLOW_HIGHDPI);
  #else
