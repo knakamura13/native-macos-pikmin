@@ -2,6 +2,7 @@
 #include "port/jaudio_host.h"
 #endif
 #include "pc_window.h"
+#include "pc_pad_filter.h"
 #include "pc_menu_pad.h"
 #include "pc_build_window_title.h"
 
@@ -109,18 +110,19 @@ static bool sLastInputIsGamepad = false;
 
 // DualSense on Linux also shows up as a motion-sensor joystick. Gravity on
 // that device's Y axis looks like a held stick, so the F1 menu walks itself.
+// On Android the same words are the name of the merged gamepad (issue #213).
 static bool pc_joystick_is_secondary(int index)
 {
 	const char* name = SDL_JoystickNameForIndex(index);
 	if (!name)
 		name = SDL_GameControllerNameForIndex(index);
-	if (!name)
-		return false;
-	std::string n(name);
-	for (char& c : n)
-		c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-	return n.find("motion") != std::string::npos || n.find("touchpad") != std::string::npos
-	    || n.find("accelerometer") != std::string::npos || n.find("gyro") != std::string::npos;
+	const SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(index);
+#if defined(__ANDROID__)
+	const bool android = true;
+#else
+	const bool android = false;
+#endif
+	return pc_pad_is_auxiliary_device(name, android, guid.data);
 }
 
 // Abre el joystick en la primera ranura libre (P1 y luego P2).
@@ -436,7 +438,7 @@ const SDL_Scancode kDefaultKeyBindings[PC_KEY_ACT_COUNT] = {
     /* PC_KEY_ACT_BOMB        */ SDL_SCANCODE_B, // B solo es "atrás" dentro de los menús
     /* PC_KEY_ACT_SPEEDRUN_RESET */ SDL_SCANCODE_F5,
     /* PC_KEY_ACT_SWARM_STICK */ SDL_SCANCODE_UNKNOWN, // el teclado ya tiene Swarm y TFGH
-    /* PC_KEY_ACT_LIEDOWN     */ SDL_SCANCODE_UNKNOWN, // la cruceta abajo (flecha abajo) ya lo hace
+    /* PC_KEY_ACT_LIEDOWN     */ SDL_SCANCODE_SLASH, // tumbarse sin la flecha abajo; los menús no la leen
     /* PC_KEY_ACT_AIM_STICK  */ SDL_SCANCODE_UNKNOWN, // el ratón ya apunta
     // Quick Save: F6/F7 are debug keys only outside deterministic mode, which
     // the feature always runs in, and F5 stays the speedrun reset.
@@ -1171,6 +1173,7 @@ bool pc_window_init(const char* title, int width, int height) {
 }
 
 #include "audio/pc_audio.h"
+#include "pc_screen_pointer.h"
 #if defined(PIKI_PC_PORT) && defined(PIKI_PC_SETTINGS_MENU)
 #include "settings/pc_settings.h"
 #endif
@@ -1356,6 +1359,24 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
 
 void pc_gfx_get_drawable_size(int* width, int* height); // gl/pc_gfx.h
 
+// One pad edge from a HUD click, applied on the next sample and then cleared.
+static std::uint16_t sHudPadEdge = 0;
+
+static void pcNoteHudPointer(int x, int y, bool left)
+{
+    if (!pc_window_gameplay_pointer_free()) return;
+    int dw = 0, dh = 0, ww = 0, wh = 0;
+    pc_gfx_get_drawable_size(&dw, &dh);
+    if (sWindow) SDL_GetWindowSize(sWindow, &ww, &wh);
+    if (ww <= 0 || wh <= 0 || dw <= 0 || dh <= 0) return;
+    const float px = float(x) / float(ww) * float(dw);
+    const float py = float(y) / float(wh) * float(dh);
+    const int act = pc_hud_icon_action_at(px, py, left);
+    if (act == PC_HUD_ICON_COLOR_NEXT) sHudPadEdge = PAD_BUTTON_RIGHT;
+    else if (act == PC_HUD_ICON_COLOR_PREV) sHudPadEdge = PAD_BUTTON_LEFT;
+    else if (pc_hud_pause_hit(px, py)) sHudPadEdge = PAD_BUTTON_START;
+}
+
 void pc_window_poll_events(PADStatus* pad) {
     pc_xinput_usb_update();
     // Age a menu click only on the logical input sample. The present path
@@ -1366,6 +1387,7 @@ void pc_window_poll_events(PADStatus* pad) {
         // (not only during gameplay). Keys and pad still drive every menu.
         pc_menu_click_set_enabled(pc_menu_click_allowed(pc_netplay_deterministic()));
         pc_menu_click_begin_tick();
+        pc_screen_pointer_begin_frame();
     }
 #if PIKI_USE_JAUDIO
     PikiJAudioTick();
@@ -1433,8 +1455,10 @@ void pc_window_poll_events(PADStatus* pad) {
                 if (event.type != SDL_MOUSEBUTTONDOWN)
                     break;
                 if (event.button.which != SDL_TOUCH_MOUSEID) pc_menu_click_disarm_hover();
-                if (event.button.button == SDL_BUTTON_RIGHT && event.button.which != SDL_TOUCH_MOUSEID)
+                if (event.button.button == SDL_BUTTON_RIGHT && event.button.which != SDL_TOUCH_MOUSEID) {
                     pc_menu_click_post_back();
+                    pcNoteHudPointer(event.button.x, event.button.y, false);
+                }
                 // F1: left click is a tap (same as touch: select a row / press the
                 // selected one). Campaign map shares this tap path for zone picks,
                 // but that changes sim state, so it stays off in deterministic mode
@@ -1454,6 +1478,7 @@ void pc_window_poll_events(PADStatus* pad) {
                     if (sWindow) SDL_GetWindowSize(sWindow, &ww, &wh);
                     if (ww > 0 && wh > 0) {
                         pc_menu_click_post(event.button.x / float(ww), event.button.y / float(wh));
+                        pcNoteHudPointer(event.button.x, event.button.y, true);
                     }
                 }
                 // Issue #52: Escape (or the OS) can drop the mouse out of
@@ -1695,7 +1720,6 @@ void pc_window_poll_events(PADStatus* pad) {
                        || (!pc_bind_is_mouse(bindB2) && pc_window_binding_held(bindB2, state, boundMouse));
 
     if (held(PC_KEY_ACT_A))        button |= PAD_BUTTON_A;
-    if (held(PC_KEY_ACT_LIEDOWN))  button |= PAD_BUTTON_DOWN; // tumbarse = cruceta abajo
     const bool bMouseHeld = (pc_bind_is_mouse(bindB1) && pc_window_binding_held(bindB1, state, boundMouse))
                          || (pc_bind_is_mouse(bindB2) && mouseSecondOk && pc_window_binding_held(bindB2, state, boundMouse));
     if (bMouseHeld || bKeyHeld) button |= PAD_BUTTON_B;
@@ -1791,6 +1815,23 @@ void pc_window_poll_events(PADStatus* pad) {
         stickX = static_cast<s8>(sx);
         stickY = static_cast<s8>(sy);
     }
+
+    // Lie down is D-pad down on the disc. Slash is the same press outside menus,
+    // so a menu cursor does not move when that key is held. A HUD click (colour
+    // or Pause) is one pad edge, logged with the rest of the pad.
+    if (!pc_menu_mode_active()) {
+        if (held(PC_KEY_ACT_LIEDOWN)) button |= PAD_BUTTON_DOWN;
+        if (sHudPadEdge) button |= sHudPadEdge;
+#if defined(PIKI_PC_PORT) && defined(PIKI_PC_SETTINGS_MENU)
+        // Optional Pikmin 2 squad picking: [ and ] stand in for D-pad down/up
+        // while A is held. Down still lies down, as the D-pad does.
+        if (pc_settings_get_p2_selection() && (button & PAD_BUTTON_A)) {
+            if (state[SDL_SCANCODE_RIGHTBRACKET]) button |= PAD_BUTTON_UP;
+            if (state[SDL_SCANCODE_LEFTBRACKET]) button |= PAD_BUTTON_DOWN;
+        }
+#endif
+    }
+    sHudPadEdge = 0;
 
     bool usedKeyboard = button != 0 || dirX != 0 || dirY != 0 || cdirX != 0 || cdirY != 0;
     bool usedGamepad = false;
@@ -2533,6 +2574,14 @@ void pc_window_set_menu_overlay(bool open) {
         int dummyX, dummyY;
         SDL_GetRelativeMouseState(&dummyX, &dummyY);
     }
+}
+
+bool pc_window_gameplay_pointer_free(void)
+{
+    // Mouse Cursor keeps the pointer for aiming. Classic gameplay leaves it free,
+    // which is when a click on the colour icon or Pause is a click and not a throw.
+    return sGameplayActive && !sMenuOverlayOpen && !sSettingsMenuOpen && !pc_menu_click_pointer_menu_active()
+        && effectiveControlMode() != PC_CONTROL_MOUSE_CURSOR;
 }
 
 // Virtual cursor getters (used by navi.cpp for mouse-controlled cursor)

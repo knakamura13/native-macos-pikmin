@@ -3,6 +3,9 @@
 #endif
 #include "pc_window.h"
 #include "pc_menu_pad.h"
+#include "pc_text_box.h"
+#include "pc_mac_keys.h"
+#include "pc_pad_filter.h"
 
 static_assert(PAD_BUTTON_LEFT == PC_MENU_PAD_LEFT && PAD_BUTTON_RIGHT == PC_MENU_PAD_RIGHT
                   && PAD_BUTTON_DOWN == PC_MENU_PAD_DOWN && PAD_BUTTON_UP == PC_MENU_PAD_UP
@@ -71,18 +74,19 @@ static bool sLastInputIsGamepad = false;
 
 // DualSense on Linux also shows up as a motion-sensor joystick. Gravity on
 // that device's Y axis looks like a held stick, so the F1 menu walks itself.
+// On Android the same words are the name of the merged gamepad (issue #213).
 static bool pc_joystick_is_secondary(int index)
 {
 	const char* name = SDL_JoystickNameForIndex(index);
 	if (!name)
 		name = SDL_GameControllerNameForIndex(index);
-	if (!name)
-		return false;
-	std::string n(name);
-	for (char& c : n)
-		c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-	return n.find("motion") != std::string::npos || n.find("touchpad") != std::string::npos
-	    || n.find("accelerometer") != std::string::npos || n.find("gyro") != std::string::npos;
+	const SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(index);
+#if defined(__ANDROID__)
+	const bool android = true;
+#else
+	const bool android = false;
+#endif
+	return pc_pad_is_auxiliary_device(name, android, guid.data);
 }
 
 // Abre el joystick en la primera ranura libre (P1 y luego P2).
@@ -191,6 +195,8 @@ static void pc_controller_close_instance(SDL_JoystickID which)
 }
 static int sWindowWidth = 1280;
 static int sWindowHeight = 720;
+static int sRequestedWidth = 1280;
+static int sRequestedHeight = 720;
 static int sLogicalRetraceInterval = 1;
 
 // Mouse wheel notches accumulated since the last consumer read them. The wheel
@@ -239,6 +245,9 @@ static bool sSwarmPending[2]  = { false, false };
 
 bool pc_window_swarm_held(void) { return sSwarmHeld; }
 static bool sKeyBindingsInitialized = false;
+// Physical Enter, including a Mac portable Return key and a key the state
+// array missed. Sampled with the keyboard state in the menu translator.
+static PcMenuEnterLatch sEnterLatch = {};
 
 // Gamepad remapping state.
 static int sGamepadBindings[PC_KEY_ACT_COUNT];
@@ -313,6 +322,9 @@ SDL_Scancode pc_window_default_key_binding2(int action) {
     case PC_KEY_ACT_A: return static_cast<SDL_Scancode>(PC_BIND_MOUSE_BASE + SDL_BUTTON_LEFT);
     case PC_KEY_ACT_B: return static_cast<SDL_Scancode>(PC_BIND_MOUSE_BASE + SDL_BUTTON_RIGHT);
     case PC_KEY_ACT_Z: return static_cast<SDL_Scancode>(PC_BIND_MOUSE_BASE + SDL_BUTTON_MIDDLE);
+    // Left Option also opens the pause menu. Enter stays the first binding,
+    // and inside the menu it confirms, including Go to Sunset.
+    case PC_KEY_ACT_START: return SDL_SCANCODE_LALT;
     default: return SDL_SCANCODE_UNKNOWN;
     }
 }
@@ -835,7 +847,25 @@ bool pc_window_save_key_bindings(const char* path) {
     return true;
 }
 
+static bool sTextInputWanted = false;
+
+void pc_window_set_text_input_wanted(bool wanted) {
+    sTextInputWanted = wanted;
+    if (!SDL_WasInit(SDL_INIT_VIDEO)) return;
+    if (wanted) SDL_StartTextInput();
+    else SDL_StopTextInput();
+}
+
+static void pc_window_keep_text_input_off() {
+    if (sTextInputWanted) return;
+    if (SDL_WasInit(SDL_INIT_VIDEO) && SDL_IsTextInputActive() == SDL_TRUE)
+        SDL_StopTextInput();
+}
+
 bool pc_window_init(const char* title, int width, int height) {
+    // Before the window exists: a system SDL build does not set this, so a
+    // held key would open the macOS accent popup (Pikmin 1, issue #206).
+    pc_mac_disable_press_and_hold();
     // The PC entry point creates the window before System::Initialise so GX can
     // build its GL resources. PADInit is called later by ControllerMgr and also
     // requests window initialisation. Recreating it there switches to a fresh
@@ -843,11 +873,14 @@ bool pc_window_init(const char* title, int width, int height) {
     // two black windows. Keep the original window and context instead.
     if (sWindow && sGLContext) {
         SDL_GL_MakeCurrent(sWindow, sGLContext);
+        pc_window_keep_text_input_off();
         return true;
     }
 
     sWindowWidth = width;
     sWindowHeight = height;
+    sRequestedWidth = width;
+    sRequestedHeight = height;
     sShouldClose = false;
 
 #if defined(__linux__) && !defined(__ANDROID__)
@@ -1012,7 +1045,8 @@ bool pc_window_init(const char* title, int width, int height) {
 
     // SDL turns text input on when video starts, and on macOS that lets a held
     // key open the accent picker during gameplay (sdl2-compat does not hide
-    // it). Text fields turn it on while they are open.
+    // it). Text fields turn it on while they are open. Focus can turn it back
+    // on, so each poll stops it again unless a field asked for it.
     SDL_StopTextInput();
 
     printf("[PC Port] SDL2 window and GL context initialized successfully (%dx%d)\n", sWindowWidth, sWindowHeight);
@@ -1191,6 +1225,7 @@ static int pc_window_poll_one(SDL_Event* event)
 }
 
 void pc_window_poll_events(PADStatus* pad) {
+    pc_window_keep_text_input_off();
     pc_xinput_usb_update();
 #if PIKI_P2_HOST
     // Pikmin 2: el audio lo pauta la cola de SDL desde VIWaitForRetrace.
@@ -1202,6 +1237,10 @@ void pc_window_poll_events(PADStatus* pad) {
 
     SDL_Event event;
     while (pc_window_poll_one(&event)) {
+        if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+            pc_menu_pad_note_enter(sEnterLatch, event.key.keysym.scancode, event.key.keysym.sym,
+                                   event.type == SDL_KEYDOWN);
+        }
         switch (event.type) {
             case SDL_QUIT:
                 sShouldClose = true;
@@ -1303,8 +1342,10 @@ void pc_window_poll_events(PADStatus* pad) {
                     sMouseCursorDeltaY = 0.0f;
                 }
                 // The matching button-up can be dropped when the window loses focus.
-                if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+                if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
                     sRealMouseButtons = 0;
+                    sEnterLatch.down = false;
+                }
                 // Some platforms release the relative-mode grab while the
                 // window is unfocused; put it back on return (issue #52).
                 if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED && !sSettingsMenuOpen) {
@@ -1392,6 +1433,7 @@ void pc_window_poll_events(PADStatus* pad) {
         }
     }
 
+    pc_text_update_input(sEnterLatch.down);
     if (!pad) return;
 
     // Reset pad status for Channel 0
@@ -1445,7 +1487,19 @@ void pc_window_poll_events(PADStatus* pad) {
     if (held(PC_KEY_ACT_X))        button |= PAD_BUTTON_X;
     if (held(PC_KEY_ACT_Y))        button |= PAD_BUTTON_Y;
     if (held(PC_KEY_ACT_Z))        button |= PAD_TRIGGER_Z;
-    if (held(PC_KEY_ACT_START))    button |= PAD_BUTTON_START;
+    // Enter is Start. A Mac portable reports that key as KP_ENTER, and text
+    // input can leave it out of the state array, so the binding matches every
+    // physical Enter, not only SDL_SCANCODE_RETURN.
+    const bool enterDown = pc_menu_pad_enter_down(
+        state && state[SDL_SCANCODE_RETURN] != 0,
+        state && state[SDL_SCANCODE_KP_ENTER] != 0,
+        state && state[SDL_SCANCODE_RETURN2] != 0,
+        sEnterLatch.down);
+    auto startBindingHeld = [&](int bind) {
+        return pc_menu_pad_start_binding_down(bind, pc_window_binding_held(bind, state, boundMouse), enterDown);
+    };
+    if (startBindingHeld(sKeyBindings[PC_KEY_ACT_START]) || startBindingHeld(sKeyBindings2[PC_KEY_ACT_START]))
+        button |= PAD_BUTTON_START;
 
     // D-Pad
     if (held(PC_KEY_ACT_DPAD_UP))    button |= PAD_BUTTON_UP;
@@ -1491,8 +1545,11 @@ void pc_window_poll_events(PADStatus* pad) {
     if (pc_menu_mode_active()) {
         PcMenuPadKeys keys = {};
         auto down = [&](SDL_Scancode sc) { return state[sc] != 0; };
-        keys.enter     = down(SDL_SCANCODE_RETURN);
-        keys.kpEnter   = down(SDL_SCANCODE_KP_ENTER);
+        // Same Enter Space uses: Return, the portable Return key, Return2,
+        // or a key event the state array did not record. Menu mode turns it
+        // into A and takes Start back off.
+        keys.enter     = enterDown;
+        keys.kpEnter   = enterDown;
         keys.space     = down(SDL_SCANCODE_SPACE);
         keys.escape    = down(SDL_SCANCODE_ESCAPE);
         keys.backspace = down(SDL_SCANCODE_BACKSPACE);
@@ -1934,7 +1991,39 @@ void pc_window_set_window_size(int w, int h) {
         sWindowHeight = h;
         return;
     }
+    // Compare with the size asked for last time, not with SDL's size: a display
+    // shorter than the window makes the OS shorten it, and SDL then reports the
+    // shorter size, which would look like a change on every settings apply.
+    const bool sizeChanged = w != sRequestedWidth || h != sRequestedHeight;
+    // Read the display before resizing: on Windows and X11, SDL picks it from
+    // the window's center, which the resize moves.
+    const int display = sizeChanged ? SDL_GetWindowDisplayIndex(sWindow) : -1;
     SDL_SetWindowSize(sWindow, w, h);
+    sRequestedWidth = w;
+    sRequestedHeight = h;
+    if (sizeChanged && display >= 0) {
+        // SDL keeps the top-left corner when a window grows, so a window created
+        // centered at 1280x720 ends up off-center and past the right edge at a
+        // larger size. Re-center it on its own display, inside the usable area
+        // (the display minus taskbars, docks and menu bars). SDL_WINDOWPOS_CENTERED
+        // would move it to the primary display instead.
+        // X11 can report an empty usable area; use the whole display then.
+        SDL_Rect area {};
+        const bool haveUsable = SDL_GetDisplayUsableBounds(display, &area) == 0 && area.w > 0 && area.h > 0;
+        if (haveUsable || SDL_GetDisplayBounds(display, &area) == 0) {
+            // SDL_SetWindowPosition places the client area, so center the whole
+            // frame and keep the title bar on the usable area. A window larger than
+            // the area keeps the frame's top-left corner on it. Backends without
+            // border sizes (macOS) count as zero.
+            int top = 0, left = 0, bottom = 0, right = 0;
+            if (SDL_GetWindowBordersSize(sWindow, &top, &left, &bottom, &right) != 0) {
+                top = left = bottom = right = 0;
+            }
+            SDL_SetWindowPosition(sWindow,
+                area.x + left + std::max(0, (area.w - (w + left + right)) / 2),
+                area.y + top + std::max(0, (area.h - (h + top + bottom)) / 2));
+        }
+    }
     sWindowWidth = w;
     sWindowHeight = h;
 }

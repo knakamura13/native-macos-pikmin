@@ -7,6 +7,7 @@
 #include "pc_permadeath.h"
 #include "pc_record.h"
 #include "pc_coop.h"
+#include "pc_squad_enter.h"
 #include "pc_window.h"
 #include "pc_gyro.h"
 #include "settings/pc_settings.h"
@@ -16,6 +17,7 @@
 #include "timing/pc_anim_timing.h"
 #include "netplay/pc_netplay_camlead.h"
 #include "netplay/pc_netplay_present.h"
+#include "pc_throw_arc.h"
 #if PIKI_PC_TOUCH
 #include "touch/pc_touch.h"
 #endif
@@ -321,10 +323,15 @@ void Navi::enterAllPikis()
 	{
 		Piki* piki = static_cast<Piki*>(*iter);
 		if (piki->isAlive() && piki->mMode == PikiMode::FormationMode) {
-			#if defined(PIKI_PC_PORT)
+#if defined(PIKI_PC_PORT)
 			// The field limit is configurable, so this gather can no longer
 			// assume the squad fits. Stop filling rather than run off the array.
 			if (pikiCount >= PIKI_LIST_CAPACITY) break;
+			// Cutscene whistle calls this once per captain. EnterMode reads
+			// the Pikmin's own captain, so the other squad has to wait for
+			// that captain's call. Claiming it here starts ActEnter on a null
+			// goal ("karl caught a cold").
+			if (!pc_cutscene_enter_claims(this, piki->mNavi)) continue;
 #endif
 			pikiList[pikiCount++] = piki;
 		}
@@ -343,6 +350,11 @@ void Navi::enterAllPikis()
 		mGoalItem = onyons[pikiList[i]->mColor];
 		if (mGoalItem) {
 			if (pikiList[i]->getState() != PIKISTATE_Nukare) {
+#if defined(PIKI_PC_PORT)
+				// EnterMode dereferences mNavi. An unassigned squad member was
+				// claimed by this captain above.
+				if (!pikiList[i]->mNavi) pikiList[i]->mNavi = this;
+#endif
 				pikiList[i]->changeMode(PikiMode::EnterMode, nullptr);
 			}
 		} else {
@@ -4871,6 +4883,11 @@ void Navi::throwPiki(Piki* piki, immut Vector3f& pos)
 #endif
 	piki->mTargetVelocity = piki->mVelocity;
 	piki->mVolatileVelocity.set(0.0f, 0.0f, 0.0f);
+#if defined(PIKI_PC_PORT)
+	// The launch speed stays the disc formula. Above 30 Hz the flight is
+	// integrated in 1/30 s steps so the arc does not grow with the tick rate.
+	pc_throw_arc_launch(piki);
+#endif
 }
 
 /**

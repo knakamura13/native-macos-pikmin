@@ -351,6 +351,8 @@ set(PC_PORT_SOURCES
     pc_port/pc_menu_mode.cpp
     pc_port/pc_menu_repeat.cpp
     pc_port/pc_menu_click.cpp
+    pc_port/pc_file_pointer.cpp
+    pc_port/pc_screen_pointer.cpp
     pc_port/pc_button_prompt.cpp
     pc_port/pc_hand_cursor.cpp
     pc_port/pc_photo_mode.cpp
@@ -400,6 +402,7 @@ set(PC_PORT_SOURCES
     ${NECTAR_LIBS_DIR}/nectar_assets/src/charpack.cpp
     ${PC_PORT_DIR}/launcher/bti_decode.cpp
     pc_port/pc_vs.cpp
+    pc_port/pc_throw_arc.cpp
     pc_port/pc_achievements.cpp
     pc_port/pc_file_dialog.cpp
     pc_port/gl/pc_gfx.cpp
@@ -888,6 +891,7 @@ if(PIKMIN_NETPLAY_BUILD)
         # with NECTAR_ONLINE, the lockstep ICE (NPIX) room otherwise or with
         # PIKMIN_ONLINE_LEGACY_ICE=1; joining follows the pasted code.
         pc_port/netplay/pc_online_menu.cpp
+        pc_port/netplay/pc_online_menu_rows.cpp
         pc_port/netplay/pc_online_relaunch.cpp)
     target_link_libraries(${NECTAR_GAME} PRIVATE gekkonet)
     if(WIN32)
@@ -1107,6 +1111,7 @@ if(ANDROID AND NOT TARGET nectar_launcher)
         pc_port/launcher/texture_pack_download_dialog.cpp
         pc_port/launcher/installer_ui.cpp
         pc_port/launcher/launcher_platform_android.cpp
+        pc_port/launcher/game_shortcut.cpp
         pc_port/pc_icon.cpp
         "${LAUNCHER_EMBED_DIR}/logo_open_nectar.h"
         "${LAUNCHER_EMBED_DIR}/font_fredoka.h"
@@ -1129,9 +1134,9 @@ if(PIKMIN_BUILD_LAUNCHER)
     # La capa de plataforma aísla lo único del launcher que depende del sistema:
     # rutas del ejecutable, diálogos y arranque del juego.
     if (WIN32)
-        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_win32.cpp)
+        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_win32.cpp pc_port/launcher/game_shortcut.cpp)
     else()
-        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_posix.cpp)
+        set(LAUNCHER_PLATFORM_SOURCE pc_port/launcher/launcher_platform_posix.cpp pc_port/launcher/game_shortcut.cpp)
     endif()
 
     find_package(Threads REQUIRED)
@@ -1220,6 +1225,10 @@ if(PIKMIN_BUILD_LAUNCHER)
     endif()
     target_include_directories(pikmin_launcher PRIVATE ${SDL2_INCLUDE_DIRS})
     target_link_libraries(pikmin_launcher PRIVATE pikmin_disc_image nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
+    if(APPLE)
+        # pc_mac_disable_press_and_hold calls the Objective-C runtime directly.
+        target_link_libraries(pikmin_launcher PRIVATE "-framework Foundation")
+    endif()
     if (WIN32)
         # Diálogo de archivo clásico, selector de carpeta del shell y COM.
         target_link_libraries(pikmin_launcher PRIVATE comdlg32 ole32 shell32 uuid winhttp)
@@ -1283,6 +1292,9 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher
         ${SDL2_INCLUDE_DIRS})
     target_link_libraries(install_dialog_snapshot PRIVATE nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
+    if(APPLE)
+        target_link_libraries(install_dialog_snapshot PRIVATE "-framework Foundation")
+    endif()
     if (WIN32)
         target_link_libraries(install_dialog_snapshot PRIVATE comdlg32 ole32 shell32 uuid winhttp)
     endif()
@@ -1305,6 +1317,9 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher
         ${SDL2_INCLUDE_DIRS})
     target_link_libraries(installer_ui_test PRIVATE nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
+    if(APPLE)
+        target_link_libraries(installer_ui_test PRIVATE "-framework Foundation")
+    endif()
     if (WIN32)
         target_link_libraries(installer_ui_test PRIVATE comdlg32 ole32 shell32 uuid winhttp)
     endif()
@@ -1336,6 +1351,16 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     add_executable(launch_request_test pc_port/launcher/launch_request_test.cpp)
     target_compile_options(launch_request_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME launch_request_test COMMAND launch_request_test)
+
+    # Per-game shortcuts (#336): .app, .desktop and .lnk names and contents,
+    # and the cover icon (PNG, .ico, .icns).
+    add_executable(game_shortcut_test pc_port/launcher/game_shortcut_test.cpp
+        pc_port/launcher/game_shortcut.cpp)
+    set_property(TARGET game_shortcut_test PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(game_shortcut_test PRIVATE ${PC_PORT_DIR}/launcher
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(game_shortcut_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME game_shortcut_test COMMAND game_shortcut_test)
 
     # Versión junto al logo (#327): la fuente y el estilo, sin ventana.
     add_executable(version_label_test pc_port/launcher/version_label_test.cpp
@@ -1419,6 +1444,13 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         target_link_libraries(launcher_cursor_test PRIVATE launcher_imgui)
         add_test(NAME launcher_cursor_test COMMAND launcher_cursor_test)
 
+        # D-pad / left stick mapping and headless gamepad focus (no window).
+        add_executable(launcher_nav_test pc_port/launcher/launcher_nav_test.cpp)
+        set_property(TARGET launcher_nav_test PROPERTY INCLUDE_DIRECTORIES "")
+        target_compile_options(launcher_nav_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        target_link_libraries(launcher_nav_test PRIVATE launcher_imgui)
+        add_test(NAME launcher_nav_test COMMAND launcher_nav_test)
+
         add_executable(texture_pack_row_test pc_port/launcher/texture_pack_row_test.cpp
             "${LAUNCHER_EMBED_DIR}/font_fredoka.h")
         set_property(TARGET texture_pack_row_test PROPERTY INCLUDE_DIRECTORIES "")
@@ -1441,6 +1473,16 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
 endif()
 
 if(PIKMIN_BUILD_TESTS)
+    # Ship-part carriers must be enemies the game can actually birth (issue #328).
+    add_executable(pc_randomizer_test
+        pc_port/randomizer/pc_randomizer_test.cpp
+        pc_port/randomizer/pc_randomizer.cpp
+        pc_port/randomizer/pc_randomizer_catalog.cpp
+        pc_port/randomizer/pc_randomizer_logic.cpp)
+    target_include_directories(pc_randomizer_test PRIVATE pc_port)
+    target_compile_options(pc_randomizer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_randomizer_test COMMAND pc_randomizer_test)
+
     add_executable(pc_bundle_compat_test pc_port/pc_bundle_compat_test.cpp)
     target_include_directories(pc_bundle_compat_test PRIVATE pc_port)
     target_compile_options(pc_bundle_compat_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
@@ -1517,6 +1559,12 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_menu_pad_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_menu_pad_test COMMAND pc_menu_pad_test)
 
+    # Android merged-gamepad names versus desktop motion nodes (issue #213)
+    add_executable(pc_pad_filter_test pc_port/pc_pad_filter_test.cpp)
+    target_include_directories(pc_pad_filter_test PRIVATE pc_port)
+    target_compile_options(pc_pad_filter_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_pad_filter_test COMMAND pc_pad_filter_test)
+
     # GameCube PADClamp (no window). Links the decomp translation unit.
     add_executable(pc_pad_clamp_test pc_port/pc_pad_clamp_test.cpp src/pad/Padclamp.c)
     target_include_directories(pc_pad_clamp_test PRIVATE include pc_port)
@@ -1528,6 +1576,12 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_cine_skip_order_test PRIVATE pc_port)
     target_compile_options(pc_cine_skip_order_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_cine_skip_order_test COMMAND pc_cine_skip_order_test)
+
+    # End-of-day skip gates (header only, no disc)
+    add_executable(pc_day_end_skip_test pc_port/pc_day_end_skip_test.cpp)
+    target_include_directories(pc_day_end_skip_test PRIVATE pc_port)
+    target_compile_options(pc_day_end_skip_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_day_end_skip_test COMMAND pc_day_end_skip_test)
 
     # Text window presses through the menu translator (no game needed)
     add_executable(pc_text_window_press_test pc_port/pc_text_window_press_test.cpp pc_port/pc_menu_pad.cpp)
@@ -1608,6 +1662,12 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_throw_release_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_throw_release_test COMMAND pc_throw_release_test)
 
+    # Throw arc at 30/60/120 Hz (no captain, map, or window).
+    add_executable(pc_throw_arc_test pc_port/pc_throw_arc_test.cpp)
+    target_include_directories(pc_throw_arc_test PRIVATE pc_port)
+    target_compile_options(pc_throw_arc_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_throw_arc_test COMMAND pc_throw_arc_test)
+
     # Sprout landing policy (no map or window)
     add_executable(pc_seed_landing_test pc_port/pc_seed_landing_test.cpp)
     target_include_directories(pc_seed_landing_test PRIVATE pc_port)
@@ -1631,12 +1691,30 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_file_select_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_file_select_pointer_test COMMAND pc_file_select_pointer_test)
 
+    # File-select day chevrons and copy-destination clicks (no window, no disc)
+    add_executable(pc_file_pointer_test pc_port/pc_file_pointer_test.cpp pc_port/pc_file_pointer.cpp)
+    target_include_directories(pc_file_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_file_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_file_pointer_test COMMAND pc_file_pointer_test)
+
+    add_executable(pc_screen_pointer_test pc_port/pc_screen_pointer_test.cpp pc_port/pc_screen_pointer.cpp
+                   pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_screen_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_screen_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_screen_pointer_test COMMAND pc_screen_pointer_test)
+
     # Hand cursor over pointer menu targets: hover state to cursor shape, with a stub setter
     add_executable(pc_hand_cursor_test pc_port/pc_hand_cursor_test.cpp pc_port/pc_hand_cursor.cpp
                    pc_port/pc_menu_click.cpp)
     target_include_directories(pc_hand_cursor_test PRIVATE pc_port)
     target_compile_options(pc_hand_cursor_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_hand_cursor_test COMMAND pc_hand_cursor_test)
+
+    add_executable(pc_online_menu_rows_test pc_port/netplay/pc_online_menu_rows_test.cpp
+                   pc_port/netplay/pc_online_menu_rows.cpp pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_online_menu_rows_test PRIVATE pc_port)
+    target_compile_options(pc_online_menu_rows_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_online_menu_rows_test COMMAND pc_online_menu_rows_test)
 
     # New Game and Captain prompt mouse targets and their mapping (no window, no disc)
     add_executable(pc_prompt_pointer_test pc_port/pc_prompt_pointer_test.cpp
@@ -1858,6 +1936,13 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_coop_switch_test PRIVATE pc_port)
     target_compile_options(pc_coop_switch_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_coop_switch_test COMMAND pc_coop_switch_test)
+
+    # Co-op onion enter: a cutscene whistle must not send the other captain's
+    # squad into ActEnter (upstream crash #348, "karl caught a cold").
+    add_executable(pc_squad_enter_test pc_port/pc_squad_enter_test.cpp)
+    target_include_directories(pc_squad_enter_test PRIVATE pc_port)
+    target_compile_options(pc_squad_enter_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_squad_enter_test COMMAND pc_squad_enter_test)
 
     # PKNI input-file format, yaw quantisation and the per-tick yaw and local slots.
     add_executable(pc_input_log_test
