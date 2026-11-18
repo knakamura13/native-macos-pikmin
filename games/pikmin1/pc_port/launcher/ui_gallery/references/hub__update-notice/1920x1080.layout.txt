@@ -6,18 +6,20 @@ button 621 181 765 223 ##hub | Settings
 label 621 181 765 223 ##hub | Settings
 button 779 181 923 223 ##hub | Move Install
 label 779 181 923 223 ##hub | Move Install
-button 417 247 596 498 ##hub | cover
-button 356 558 500 602 ##hub | Map editor
-label 356 558 500 602 ##hub | Map editor
-button 512 558 656 602 ##hub | Model maker
-label 512 558 656 602 ##hub | Model maker
-button 356 612 500 656 ##hub | HD textures
-label 356 612 500 656 ##hub | HD textures
-button 512 612 656 656 ##hub | Characters
-label 512 612 656 656 ##hub | Characters
-button 791 247 970 498 ##hub | cover
-button 785 558 975 602 ##hub | Install
-label 785 558 975 602 ##hub | Install
+button 436 247 576 444 ##hub | cover
+button 356 504 500 548 ##hub | Map editor
+label 356 504 500 548 ##hub | Map editor
+button 512 504 656 548 ##hub | Model maker
+label 512 504 656 548 ##hub | Model maker
+button 356 558 500 602 ##hub | HD textures
+label 356 558 500 602 ##hub | HD textures
+button 512 558 656 602 ##hub | Characters
+label 512 558 656 602 ##hub | Characters
+button 411 612 601 656 ##hub | Create shortcut
+label 411 612 601 656 ##hub | Create shortcut
+button 810 247 951 444 ##hub | cover
+button 785 504 975 548 ##hub | Install
+label 785 504 975 548 ##hub | Install
 button 598 688 788 732 ##hub | Update to 1.4
 label 598 688 788 732 ##hub | Update to 1.4
 notice 1136 18 1369 58 ##hub | Open Nectar 1.4 is available

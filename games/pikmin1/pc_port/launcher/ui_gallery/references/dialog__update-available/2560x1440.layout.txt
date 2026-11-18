@@ -6,18 +6,20 @@ button-disabled 659 181 803 223 ##hub | Settings
 label 659 181 803 223 ##hub | Settings
 button-disabled 817 181 961 223 ##hub | Move Install
 label 817 181 961 223 ##hub | Move Install
-button-disabled 429 247 639 541 ##hub | cover
-button-disabled 384 601 528 645 ##hub | Map editor
-label 384 601 528 645 ##hub | Map editor
-button-disabled 540 601 684 645 ##hub | Model maker
-label 540 601 684 645 ##hub | Model maker
-button-disabled 384 655 528 699 ##hub | HD textures
-label 384 655 528 699 ##hub | HD textures
-button-disabled 540 655 684 699 ##hub | Characters
-label 540 655 684 699 ##hub | Characters
-button-disabled 824 247 1034 541 ##hub | cover
-button-disabled 834 601 1024 645 ##hub | Install
-label 834 601 1024 645 ##hub | Install
+button-disabled 449 247 620 487 ##hub | cover
+button-disabled 384 547 528 591 ##hub | Map editor
+label 384 547 528 591 ##hub | Map editor
+button-disabled 540 547 684 591 ##hub | Model maker
+label 540 547 684 591 ##hub | Model maker
+button-disabled 384 601 528 645 ##hub | HD textures
+label 384 601 528 645 ##hub | HD textures
+button-disabled 540 601 684 645 ##hub | Characters
+label 540 601 684 645 ##hub | Characters
+button-disabled 439 655 629 699 ##hub | Create shortcut
+label 439 655 629 699 ##hub | Create shortcut
+button-disabled 843 247 1014 487 ##hub | cover
+button-disabled 834 547 1024 591 ##hub | Install
+label 834 547 1024 591 ##hub | Install
 button-disabled 636 731 826 775 ##hub | Update to 1.4
 label 636 731 826 775 ##hub | Update to 1.4
 notice 1212 18 1445 58 ##hub | Open Nectar 1.4 is available

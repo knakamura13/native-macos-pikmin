@@ -6,18 +6,20 @@ button-disabled 568 181 712 223 ##hub | Settings
 label 568 181 712 223 ##hub | Settings
 button-disabled 726 181 870 223 ##hub | Move Install
 label 726 181 870 223 ##hub | Move Install
-button-disabled 399 247 535 438 ##hub | cover
-button-disabled 317 498 461 542 ##hub | Map editor
-label 317 498 461 542 ##hub | Map editor
-button-disabled 473 498 617 542 ##hub | Model maker
-label 473 498 617 542 ##hub | Model maker
-button-disabled 317 552 461 596 ##hub | HD textures
-label 317 552 461 596 ##hub | HD textures
-button-disabled 473 552 617 596 ##hub | Characters
-label 473 552 617 596 ##hub | Characters
-button-disabled 745 247 881 438 ##hub | cover
-button-disabled 718 498 908 542 ##hub | Install
-label 718 498 908 542 ##hub | Install
+button-disabled 404 235 531 414 ##hub | cover
+button-disabled 317 460 461 504 ##hub | Map editor
+label 317 460 461 504 ##hub | Map editor
+button-disabled 473 460 617 504 ##hub | Model maker
+label 473 460 617 504 ##hub | Model maker
+button-disabled 317 514 461 558 ##hub | HD textures
+label 317 514 461 558 ##hub | HD textures
+button-disabled 473 514 617 558 ##hub | Characters
+label 473 514 617 558 ##hub | Characters
+button-disabled 372 568 562 612 ##hub | Create shortcut
+label 372 568 562 612 ##hub | Create shortcut
+button-disabled 749 235 876 414 ##hub | cover
+button-disabled 718 460 908 504 ##hub | Install
+label 718 460 908 504 ##hub | Install
 button-disabled 545 628 735 672 ##hub | Update
 label 545 628 735 672 ##hub | Update
 button 624 427 768 477 ##modal | Back

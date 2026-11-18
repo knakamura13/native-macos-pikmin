@@ -6,17 +6,21 @@ button 795 181 939 223 ##hub | Settings
 label 795 181 939 223 ##hub | Settings
 button 953 181 1097 223 ##hub | Move Install
 label 953 181 1097 223 ##hub | Move Install
-button 578 247 757 498 ##hub | cover
-button 518 558 662 602 ##hub | Map editor
-label 518 558 662 602 ##hub | Map editor
-button 674 558 818 602 ##hub | Model maker
-label 674 558 818 602 ##hub | Model maker
-button 518 612 662 656 ##hub | HD textures
-label 518 612 662 656 ##hub | HD textures
-button 674 612 818 656 ##hub | Characters
-label 674 612 818 656 ##hub | Characters
-button 976 247 1155 498 ##hub | cover
-button 970 558 1160 602 ##hub | HD textures
-label 970 558 1160 602 ##hub | HD textures
+button 598 247 738 444 ##hub | cover
+button 518 504 662 548 ##hub | Map editor
+label 518 504 662 548 ##hub | Map editor
+button 674 504 818 548 ##hub | Model maker
+label 674 504 818 548 ##hub | Model maker
+button 518 558 662 602 ##hub | HD textures
+label 518 558 662 602 ##hub | HD textures
+button 674 558 818 602 ##hub | Characters
+label 674 558 818 602 ##hub | Characters
+button 573 612 763 656 ##hub | Create shortcut
+label 573 612 763 656 ##hub | Create shortcut
+button 995 247 1136 444 ##hub | cover
+button 970 504 1160 548 ##hub | HD textures
+label 970 504 1160 548 ##hub | HD textures
+button 970 558 1160 602 ##hub | Create shortcut
+label 970 558 1160 602 ##hub | Create shortcut
 button 772 688 962 732 ##hub | Update
 label 772 688 962 732 ##hub | Update
