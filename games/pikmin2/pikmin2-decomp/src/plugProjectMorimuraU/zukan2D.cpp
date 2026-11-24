@@ -17,6 +17,7 @@ static const int unusedArray[] = { 0, 0, 0 };
 
 #include "nans.h"
 #include "pc_menu_tap.h"
+#include "pc_menu_hover.h"
 #if PIKI_PC_MENU_TAP
 #include "Dolphin/pad.h"
 #include "pc_menu_pointer.h"
@@ -510,6 +511,10 @@ static int sZukanCol = -1;
 static int sZukanPick = -1;
 static int sZukanPickCol = 0;
 static int sZukanPickSteps = 0;
+// Mouse drag that started over the model picture; the book camera reads it.
+static float sZukanDragX = 0.0f;
+static float sZukanDragY = 0.0f;
+static PcHoverGroup sZukanButtonHover[5];
 
 // Icon under the pointer. Big rows only have the center picture.
 static bool pcZukanIconAt(TZukanBase* self, float nx, float ny, int* row, int* col)
@@ -531,6 +536,15 @@ static bool pcZukanIconAt(TZukanBase* self, float nx, float ny, int* row, int* c
 		}
 	}
 	return *row >= 0;
+}
+
+bool pcZukanTakeModelDrag(float* dx, float* dy)
+{
+	*dx = sZukanDragX;
+	*dy = sZukanDragY;
+	const bool any = sZukanDragX != 0.0f || sZukanDragY != 0.0f;
+	sZukanDragX = sZukanDragY = 0.0f;
+	return any;
 }
 #endif
 
@@ -610,51 +624,92 @@ bool TZukanBase::doUpdate()
 	if (!mIsInDemo && mCanInput && mState < Screen::Game2DMgr::CHECK2D_Zukan_ExitStart && !isOpenConfirmWindow()) {
 		mIsInFadeInOut = false;
 #if PIKI_PC_MENU_TAP
-		// Mouse: button plates for the keys this screen reads. Up and Down scroll the list.
-		pc_menu_plate(PAD_BUTTON_B, "B Back");
-		pc_menu_plate(PAD_BUTTON_A, "A Zoom");
-		pc_menu_plate(PAD_BUTTON_Y, "Y Louie");
-		pc_menu_plate(PAD_BUTTON_X, "X Olimar");
-		pc_menu_plate(PAD_TRIGGER_R, "R Switch");
-		pc_menu_plate(PAD_TRIGGER_L, "L Switch");
-		pc_menu_plate(PAD_BUTTON_RIGHT, "Right");
-		pc_menu_plate(PAD_BUTTON_LEFT, "Left");
-		pc_menu_plate(PAD_BUTTON_DOWN, "Down");
-		pc_menu_plate(PAD_BUTTON_UP, "Up");
+		// Mouse: every button the screen draws is a button. L and R switch between the two books,
+		// X and Y change the journal, A zooms. The list scrolls with the wheel; the model turns when dragged.
 		{
+			pc_menu_claim();
+			pc_menu_wheel_list(PAD_BUTTON_UP, PAD_BUTTON_DOWN);
+			J2DPane* lPane = mYajiScreen ? mYajiScreen->mScreenObj->search(MC8("N_Lbtn")) : nullptr;
+			J2DPane* rPane = mYajiScreen ? mYajiScreen->mScreenObj->search(MC8("N_Rbtn")) : nullptr;
+			struct Btn { J2DPane* container; unsigned short pad; };
+			Btn buttons[5] = { { lPane, PAD_TRIGGER_L }, { rPane, PAD_TRIGGER_R }, { mXButtonPane, PAD_BUTTON_X },
+			                   { mYButtonPane, PAD_BUTTON_Y }, { mAButtonPane, PAD_BUTTON_A } };
+			// A pane is only measured while something asks about it every update.
+			for (int k = 0; k < 5; k++) {
+				if (buttons[k].container) pc_menu_pane_hit(pcHoverTarget(buttons[k].container), 0.0f, 0.0f, 0.0f);
+			}
+			if (mPaneModel) pc_menu_pane_hit(mPaneModel, 0.0f, 0.0f, 0.0f);
 			float hx = 0.0f;
 			float hy = 0.0f;
-			if (pc_menu_hover(&hx, &hy)) pcZukanIconAt(this, hx, hy, &sZukanRow, &sZukanCol);
-			if (sZukanRow >= 0) pc_menu_set_hand(true);
+			int overButton = -1;
+			bool overModel = false;
+			if (pc_menu_hover(&hx, &hy)) {
+				for (int k = 0; k < 5 && overButton < 0; k++) {
+					if (buttons[k].container && pc_menu_pane_hit(pcHoverTarget(buttons[k].container), hx, hy, 0.015f)) overButton = k;
+				}
+				if (overButton < 0) {
+					overModel = mPaneModel && mPaneModel->isVisible() && pc_menu_pane_hit(mPaneModel, hx, hy, 0.0f);
+					pcZukanIconAt(this, hx, hy, &sZukanRow, &sZukanCol);
+				}
+				if (overButton >= 0 || sZukanRow >= 0 || overModel) pc_menu_set_hand(overButton >= 0 || sZukanRow >= 0);
+			}
+			for (int k = 0; k < 5; k++) pcHoverLift(buttons[k].container, sZukanButtonHover[k], k == overButton);
+
+			// Dragging over the model turns it. A drag anywhere else is dropped.
+			float ddx = 0.0f;
+			float ddy = 0.0f;
+			if (pc_menu_take_drag(&ddx, &ddy) && overModel) {
+				sZukanDragX += ddx;
+				sZukanDragY += ddy;
+			}
+
+			// Hovering the first or last row of the list scrolls toward it, one step per update.
+			if (sZukanRow >= 0 && !mIsBigWindowOpened && !mWindow->mState && sZukanRow != mCurrActiveRowSel
+			    && (sZukanRow == 0 || sZukanRow == mNumActiveRows - 1) && sZukanPick < 0) {
+				TIndexPane* edge = mIndexPaneList[sZukanRow];
+				const bool big   = edge->mSizeType != TIndexPane::Size_Small;
+				sZukanPick       = edge->getIndex();
+				sZukanPickCol    = big ? 1 : sZukanCol;
+				sZukanPickSteps  = 0;
+			}
+
 			float tx = 0.0f;
 			float ty = 0.0f;
 			int clickRow = -1;
 			int clickCol = -1;
-			if (!mIsBigWindowOpened && !mWindow->mState && pc_menu_take_tap(&tx, &ty)
-			    && pcZukanIconAt(this, tx, ty, &clickRow, &clickCol)) {
-				TIndexPane* clicked = mIndexPaneList[clickRow];
-				TIconInfo* icon     = clicked->mIconInfos[clickCol];
-				if (icon && icon->mPane) pc_menu_hover_press(icon->mPane);
-				const bool big = clicked->mSizeType != TIndexPane::Size_Small;
-				const int col  = big ? 1 : clickCol;
-				if (clickRow == mCurrActiveRowSel && (big || mRightOffset == col)) {
-					sZukanPick = -1;
-					mState     = Screen::Game2DMgr::CHECK2D_Zukan_Changing;
-					if (mCameraFadeInLevel < 0.5f) {
-						if (!mIsBigWindowOpened) PSSystem::spSysIF->playSystemSe(PSSE_SY_CAMERAVIEW_CHANGE, 0);
-						mIsBigWindowOpened = true;
+			if (pc_menu_take_tap(&tx, &ty)) {
+				int clickedButton = -1;
+				for (int k = 0; k < 5 && clickedButton < 0; k++) {
+					if (buttons[k].container && pc_menu_pane_hit(pcHoverTarget(buttons[k].container), tx, ty, 0.015f)) clickedButton = k;
+				}
+				if (clickedButton >= 0) {
+					pc_menu_hover_press(buttons[clickedButton].container);
+					pc_menu_queue_button(buttons[clickedButton].pad);
+				} else if (!mIsBigWindowOpened && !mWindow->mState && pcZukanIconAt(this, tx, ty, &clickRow, &clickCol)) {
+					TIndexPane* clicked = mIndexPaneList[clickRow];
+					TIconInfo* icon     = clicked->mIconInfos[clickCol];
+					if (icon && icon->mPane) pc_menu_hover_press(icon->mPane);
+					const bool big = clicked->mSizeType != TIndexPane::Size_Small;
+					const int col  = big ? 1 : clickCol;
+					if (clickRow == mCurrActiveRowSel && (big || mRightOffset == col)) {
+						sZukanPick = -1;
+						mState     = Screen::Game2DMgr::CHECK2D_Zukan_Changing;
+						if (mCameraFadeInLevel < 0.5f) {
+							if (!mIsBigWindowOpened) PSSystem::spSysIF->playSystemSe(PSSE_SY_CAMERAVIEW_CHANGE, 0);
+							mIsBigWindowOpened = true;
+						}
+						if (mWindow->mState) windowOpenClose(getXMsgID(clicked->getIndex()));
+					} else if (clickRow == mCurrActiveRowSel) {
+						sZukanPick   = -1;
+						mRightOffset = col;
+						isHorizontalScroll = true;
+						icon->startScaleUp(1.0f);
+						PSSystem::spSysIF->playSystemSe(PSSE_SY_MENU_CURSOR, 0);
+					} else {
+						sZukanPick      = clicked->getIndex();
+						sZukanPickCol   = col;
+						sZukanPickSteps = 0;
 					}
-					if (mWindow->mState) windowOpenClose(getXMsgID(clicked->getIndex()));
-				} else if (clickRow == mCurrActiveRowSel) {
-					sZukanPick   = -1;
-					mRightOffset = col;
-					isHorizontalScroll = true;
-					icon->startScaleUp(1.0f);
-					PSSystem::spSysIF->playSystemSe(PSSE_SY_MENU_CURSOR, 0);
-				} else {
-					sZukanPick      = clicked->getIndex();
-					sZukanPickCol   = col;
-					sZukanPickSteps = 0;
 				}
 			}
 		}

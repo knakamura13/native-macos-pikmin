@@ -15,21 +15,33 @@
 #include "Controller.h"
 #include "System.h" // PC_ORIG_DT_SCALE / PC_DAMP
 #include "pc_menu_tap.h"
+#include "pc_menu_hover.h"
 #if PIKI_PC_MENU_TAP
 // Area tapped or clicked on the map: getTarget returns it instead of reading the D-pad.
 static int sPcTouchTarget = -1;
-static float sPointHover[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-static float sButtonHover[2] = { 1.0f, 1.0f };
+static PcHoverGroup sButtonHover[2];
 
-static void pcWorldMapScale(J2DPane* pane, float& prev, bool over)
+// A landing site is a container whose children include wide effect panes, so its union
+// rectangle covers half the map. Only its small child panes count as the site.
+static bool pcPointHit(J2DPane* pane, float nx, float ny, float margin, int depth = 0)
 {
-	if (!pane) return;
-	const float next = pc_menu_hover_scale(pane, over, 0.08f, sys->mDeltaTime);
-	if (prev <= 0.0f) prev = 1.0f;
-	pane->updateScale(pane->getScaleX() / prev * next, pane->getScaleY() / prev * next);
-	prev = next;
+	if (!pane || depth > 4) return false;
+	bool hit = false;
+	for (JSUTreeIterator<J2DPane> it = pane->mTree.getFirstChild(); it != pane->mTree.getEndChild(); ++it) {
+		J2DPane* c = it.getObject();
+		if (!c) continue;
+		const float w = (c->mBounds.f.x - c->mBounds.i.x) * c->getScaleX();
+		const float h = (c->mBounds.f.y - c->mBounds.i.y) * c->mScaleY;
+		if (c->getTypeID() != PANETYPE_Pane && w > 0.0f && h > 0.0f && w <= 90.0f && h <= 90.0f) {
+			if (pc_menu_pane_hit(c, nx, ny, margin)) hit = true;
+		}
+		if (pcPointHit(c, nx, ny, margin, depth + 1)) hit = true;
+	}
+	return hit;
 }
+
 #endif
+
 
 static void _Print(char* format, ...)
 {
@@ -1377,46 +1389,51 @@ bool WorldMap::changeState()
 	bool pcTapA = false, pcTapL = false, pcTapR = false;
 	{
 		pc_menu_claim();
+		J2DPane* left   = pcHoverTarget(mScreenInfo->search(MC8("Nlbtn")));
+		J2DPane* right  = pcHoverTarget(mScreenInfo->search(MC8("Nrbtn")));
+		J2DPane* points[4] = { nullptr, nullptr, nullptr, nullptr };
+		for (int i = 0; i < mOpenCourses && i < 4; i++) points[i] = mScreenKitagawa->search(getSerialTagName(MC8("Npoint0"), i));
+		// A pane is only measured while something asks about it every update.
+		if (left) pc_menu_pane_hit(left, 0.0f, 0.0f, 0.0f);
+		if (right) pc_menu_pane_hit(right, 0.0f, 0.0f, 0.0f);
+		for (int i = 0; i < 4; i++) pcPointHit(points[i], 0.0f, 0.0f, 0.0f);
+		// A glyph is small, so the buttons take a little slack; a click on one never reaches the other.
 		float nx = 0.0f, ny = 0.0f;
-		const bool tapped = pc_menu_take_tap(&nx, &ny);
-		for (int i = 0; i < mOpenCourses && i < 4; i++) {
-			J2DPane* point = mScreenKitagawa->search(getSerialTagName(MC8("Npoint0"), i));
-			if (point && pc_menu_pane_hit(point, nx, ny, 0.04f) && tapped) {
-				pc_menu_hover_press(point);
-				if (i == mCurrentCourseIndex) pcTapA = true;
-				else sPcTouchTarget = i;
+		if (pc_menu_take_tap(&nx, &ny)) {
+			if (left && pc_menu_pane_hit(left, nx, ny, 0.02f)) {
+				pc_menu_hover_press(mScreenInfo->search(MC8("Nlbtn")));
+				pcTapL = true;
+			} else if (right && pc_menu_pane_hit(right, nx, ny, 0.02f)) {
+				pc_menu_hover_press(mScreenInfo->search(MC8("Nrbtn")));
+				pcTapR = true;
+			} else {
+				for (int i = 0; i < mOpenCourses && i < 4; i++) {
+					if (pcPointHit(points[i], nx, ny, 0.02f)) {
+						pc_menu_hover_press(points[i]);
+						if (i == mCurrentCourseIndex) pcTapA = true;
+						else sPcTouchTarget = i;
+					}
+				}
 			}
 		}
-		J2DPane* left = mScreenInfo->search(MC8("Nlbtn"));
-		J2DPane* right = mScreenInfo->search(MC8("Nrbtn"));
-		if (left && pc_menu_pane_hit(left, nx, ny, 0.1f) && tapped) {
-			pc_menu_hover_press(left);
-			pcTapL = true;
-		}
-		if (right && pc_menu_pane_hit(right, nx, ny, 0.1f) && tapped) {
-			pc_menu_hover_press(right);
-			pcTapR = true;
-		}
-		// Mouse: the hand shows over an open area, the selected one included, and the L/R buttons.
+		// Mouse: the ship follows the pointer to a landing site, like Pikmin 1; the site and the
+		// L/R buttons lift while hovered and the hand shows.
 		float hx = 0.0f, hy = 0.0f;
 		int overPoint = -1;
 		bool overL = false, overR = false;
 		if (pc_menu_hover(&hx, &hy)) {
-			J2DPane* left  = mScreenInfo->search(MC8("Nlbtn"));
-			J2DPane* right = mScreenInfo->search(MC8("Nrbtn"));
-			overL = left && pc_menu_pane_hit(left, hx, hy, 0.1f);
-			overR = right && pc_menu_pane_hit(right, hx, hy, 0.1f);
-			for (int i = 0; i < mOpenCourses && i < 4; i++) {
-				J2DPane* point = mScreenKitagawa->search(getSerialTagName(MC8("Npoint0"), i));
-				if (point && pc_menu_pane_hit(point, hx, hy, 0.04f)) overPoint = i;
+			overL = left && pc_menu_pane_hit(left, hx, hy, 0.02f);
+			overR = !overL && right && pc_menu_pane_hit(right, hx, hy, 0.02f);
+			if (!overL && !overR) {
+				for (int i = 0; i < mOpenCourses && i < 4; i++) {
+					if (pcPointHit(points[i], hx, hy, 0.02f)) overPoint = i;
+				}
 			}
 			pc_menu_set_hand(overPoint >= 0 || overL || overR);
+			if (overPoint >= 0 && overPoint != mCurrentCourseIndex && sPcTouchTarget < 0) sPcTouchTarget = overPoint;
 		}
-		for (int i = 0; i < 4; i++) {
-			pcWorldMapScale(mScreenKitagawa->search(getSerialTagName(MC8("Npoint0"), i)), sPointHover[i], i == overPoint);
-		}
-		pcWorldMapScale(mScreenInfo->search(MC8("Nlbtn")), sButtonHover[0], overL);
-		pcWorldMapScale(mScreenInfo->search(MC8("Nrbtn")), sButtonHover[1], overR);
+		pcHoverLift(mScreenInfo->search(MC8("Nlbtn")), sButtonHover[0], overL);
+		pcHoverLift(mScreenInfo->search(MC8("Nrbtn")), sButtonHover[1], overR);
 	}
 	if (sPcTouchTarget >= 0) {
 		isStateChange   = true;

@@ -1,6 +1,10 @@
 #include "Game/IllustratedBook.h"
 #ifdef PIKI_PC_PORT
 extern "C" void pc_gfx_set_post_allowed(int allowed);
+#if defined(PIKI_PC_PORT) && PIKI_P2_HOST
+// Mouse drag over the model picture, window-normalised (zukan2D.cpp).
+namespace Morimura { bool pcZukanTakeModelDrag(float* dx, float* dy); }
+#endif
 #endif
 #include "Game/SingleGame.h"
 #include "Game/Entities/PelletOtakara.h"
@@ -298,6 +302,17 @@ void Camera::doUpdate()
 		f32 angleRatio = (mViewAngle - mMinViewAngle) / (mMaxViewAngle - mMinViewAngle);
 
 		mCurrentHeight += mCStickMoveModifierY * mController->getSubStickY();
+#if defined(PIKI_PC_PORT) && PIKI_P2_HOST
+		{
+			// Dragging the model turns the book camera like the C stick. A full window width is about half a turn.
+			float dragX = 0.0f;
+			float dragY = 0.0f;
+			if (Morimura::pcZukanTakeModelDrag(&dragX, &dragY)) {
+				mHorizontalAngle -= 3.5f * dragX;
+				mCurrentHeight += 700.0f * dragY;
+			}
+		}
+#endif
 		if (mCurrentHeight < mMinHeight) {
 			mCurrentHeight = mMinHeight;
 		}

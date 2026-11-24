@@ -4214,10 +4214,6 @@ void pc_newgame_prompt_draw(void) {
                                          : Colour(190, 200, 220, 255),
                     Colour(8, 12, 28, 255), detail);
 
-    const char* help = difficultyStep
-                           ? "Left/Right: choose    A / Enter: start    B / Esc: back"
-                           : "Left/Right: choose    A / Enter: next    B / Esc: back";
-    drawHelpLine(panelX + panelW / 2, panelY + 212, help, Colour(150, 165, 195, 255));
 }
 
 
@@ -4364,9 +4360,6 @@ void pc_playercount_prompt_draw(void) {
     drawTextOutline(panelX + panelW / 2 - menuTextWidth(detail) / 2, panelY + 172,
                     "%s", Colour(190, 200, 220, 255), Colour(8, 12, 28, 255), detail);
 
-    const char* help = es ? "Izq/Der: elegir    A / Intro: seguir    B / Esc: volver"
-                          : "Left/Right: choose    A / Enter: next    B / Esc: back";
-    drawHelpLine(panelX + panelW / 2, panelY + 212, help, Colour(150, 165, 195, 255));
 }
 
 
@@ -4544,7 +4537,7 @@ void captainPickDraw(DGXGraphics* gfx, int panelX, int panelY, int panelW, int p
     const bool noticing = louieMissing && SDL_GetTicks() < sDevAssignLouieNoticeUntil;
     const char* help = noticing ? "Louie model not installed: Advanced Options > HD Models (Louie zip)."
                      : (louieMissing ? "Louie: model not installed (Advanced Options > HD Models)." : helpDefault);
-    drawHelpLine(panelX + panelW / 2, panelY + 220, help, noticing ? Colour(255, 160, 120, 255) : Colour(150, 165, 195, 255));
+    if (noticing || louieMissing) drawHelpLine(panelX + panelW / 2, panelY + 220, help, noticing ? Colour(255, 160, 120, 255) : Colour(150, 165, 195, 255));
 }
 }
 
@@ -4785,8 +4778,6 @@ void pc_devassign_prompt_draw(void) {
             drawTextOutline(panelX + panelW / 2 - menuTextWidth(p1) / 2, panelY + 166,
                             "%s", Colour(150, 165, 195, 255), Colour(8, 12, 28, 255), p1);
         }
-        const char* help = "Esc: back";
-        drawHelpLine(panelX + panelW / 2, panelY + 212, help, Colour(150, 165, 195, 255));
         return;
     }
 
@@ -4821,8 +4812,6 @@ void pc_devassign_prompt_draw(void) {
     const char* detail = sDevAssignChoice ? "Pick the controllers again." : "Continue to file select.";
     drawTextOutline(panelX + panelW / 2 - menuTextWidth(detail) / 2, panelY + 186,
                     "%s", Colour(190, 200, 220, 255), Colour(8, 12, 28, 255), detail);
-    const char* help = "Left/Right: choose    A / Enter: confirm    B / Esc: back";
-    drawHelpLine(panelX + panelW / 2, panelY + 212, help, Colour(150, 165, 195, 255));
 }
 #else
 // Pikmin 2 no tiene el selector 1P/2P ni el de capitán de Pikmin 1 (el co-op
@@ -4896,7 +4885,6 @@ void pc_erased_notice_draw(void)
         const int tw = f1TextW(lines[i], 13);
         f1Text(panelX + panelW / 2 - tw / 2, panelY + 44 + i * 30, lines[i], Colour(205, 239, 250, 255), 13, 19);
     }
-    drawHelpLine(panelX + panelW / 2, panelY + 148, "A: continue", Colour(150, 170, 190, 255), panelW - 40);
 }
 
 // ─── Ventana "New Game" de Pikmin 2 ───
@@ -5338,7 +5326,6 @@ void ngrDrawIntro(DGXGraphics* gfx, int screenW, int screenH)
         ngrText(textX, y, bullets[i].text, pale, 13, textW, false);
         ngrText(textX, y + 23, bullets[i].sub, dim, 11, textW, false);
     }
-    drawHelpLine(panelX + panelW / 2, panelY + panelH - 34, "A / Enter: continue    B / Esc: back", dim, panelW - 40);
 }
 
 void ngrDrawSettings(DGXGraphics* gfx, int screenW, int screenH)
@@ -5387,10 +5374,6 @@ void ngrDrawSettings(DGXGraphics* gfx, int screenW, int screenH)
                                         : ngrDetail(sNgrRow);
     ngrText(panelX + kNgrPanelW / 2, panelY + kNgrPanelH - 64, help, sNgrMessage[0] ? gold : pale, 12,
             kNgrPanelW - 60, true);
-    drawHelpLine(panelX + kNgrPanelW / 2, panelY + kNgrPanelH - 34,
-                 sNgrShareEditing ? "Enter / A: confirm    Esc / B: cancel"
-                                  : "Arrows: change    A / Enter: select    B / Esc: back",
-                 dim, kNgrPanelW - 40);
 }
 
 void ngrDraw(DGXGraphics* gfx, int screenW, int screenH)
@@ -5672,7 +5655,6 @@ void pc_newgame_prompt_draw(void)
         p = end ? end + 1 : p + std::strlen(p);
     }
 
-    drawHelpLine(panelX + panelW / 2, panelY + panelH - 46, "Arrows: move    A: select    B: back", dim, panelW - 60);
 }
 
 // ─── Randomizer: código de la partida en la pausa (PLAN_RANDOMIZER.md §11.4) ───
@@ -5948,9 +5930,6 @@ void pc_devassign_prompt_draw(void)
             : "Player 1: press a key or a controller button.";
         coopCentered(panelX, panelY + 180, hint, dim);
     }
-    drawHelpLine(panelX + kCoopPanelW / 2, panelY + kCoopPanelH - 46,
-                 sDevAssignStep == COOPASSIGN_Confirm ? "Left/Right: choose    A: confirm    B: back" : "B / Esc: back", dim,
-                 kCoopPanelW - 60);
 }
 
 // ─── Selector de capitanes de Pikmin 2 ───
@@ -6555,13 +6534,6 @@ void pc_captain_select_draw(void)
         f1Text(bx + kCsStartW / 2 - f1TextW("Start", 14) / 2, by + 9, "Start", sCapSelStart ? white : dim, 14, 20);
     }
 
-    drawHelpLine(panelX + kCsPanelW / 2, panelY + kCsPanelH - 46,
-                 sCsCoop ? "Each player: A: pick    B: change    Both ready: A / Start"
-#if PIKI_PC_TOUCH
-                 : pc_touch_visible() ? "Tap a card: pick    Tap a captain: switch    Start: go"
-#endif
-                         : "A: pick    L/R: switch captain    Start: go    B: back",
-                 dim, kCsPanelW - 60);
 }
 
 // Button plates (pc_menu_plate): drawn while the mouse is in use, at the bottom
@@ -6928,9 +6900,6 @@ void srDrawTimes(DGXGraphics* gfx, int screenW, int screenH, bool confirm)
     } else if (sSrExportMsg[0] && SDL_GetTicks() - sSrExportMsgAt < 4000) {
         drawHelpLine(panelX + panelW / 2, panelY + panelH - 46, sSrExportMsg, title, panelW - 60);
     } else {
-        drawHelpLine(panelX + panelW / 2, panelY + panelH - 46,
-                     pc_speedrun_has_pb() ? "B: back    X: erase records    Y / E: export to LiveSplit" : "B: back",
-                     dim, panelW - 60);
     }
 }
 } // namespace
@@ -6990,7 +6959,6 @@ void pc_speedrun_menu_draw(void)
                         "Your best times are kept for each category, and\n"
                         "Practice replays a single day from where a run got.",
                         pale, 24);
-        drawHelpLine(panelX + panelW / 2, panelY + panelH - 46, "A / B: back", dim, panelW - 60);
         return;
     }
     if (sSrPage == SR_Times || sSrPage == SR_ConfirmReset) {
@@ -7042,10 +7010,6 @@ void pc_speedrun_menu_draw(void)
         const Colour tc = sel ? Colour(255, 255, 255, 255) : dim;
         f1Text(boxX + kSrBoxW / 2 - f1TextW(label, 14) / 2, boxY + 10, label, tc, 14, 20);
     }
-
-    const char* help = sSrPage == SR_Settings ? "Arrows: change    B: back"
-                                              : "Arrows: move    A: select    B: title screen";
-    drawHelpLine(panelX + panelW / 2, panelY + panelH - 46, help, dim, panelW - 60);
 }
 
 bool pc_captain_prompt_active(void) { return false; }

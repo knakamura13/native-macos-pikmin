@@ -74,6 +74,16 @@ void pc_menu_plate(unsigned short padButton, const char* label) {
     (void)tookWheel;
 #endif
 }
+void pc_menu_wheel_list(unsigned short up, unsigned short down) {
+    pc_pointer_claim();
+#if PIKI_P2_HOST
+    const unsigned short bit = pc_list_wheel_button(true, true, pc_window_take_wheel_steps(), up, down);
+    if (bit) pc_pointer_queue_button(bit);
+#else
+    (void)up;
+    (void)down;
+#endif
+}
 float pc_menu_hover_scale(const void* pane, bool hovered, float amount, float dt) {
     return pc_pointer_hover_scale(pane, hovered, amount, dt);
 }

@@ -25,6 +25,9 @@ bool pc_menu_pane_hit(const void* pane, float nx, float ny, float margin);
 // plate shows while the mouse is in use and a click presses `padButton`.
 // Asking also claims the pointer for the screen.
 void pc_menu_plate(unsigned short padButton, const char* label);
+// A list screen that reads Up and Down: claims the pointer and turns each wheel notch
+// into one Up or Down press for the next pad sample. Call every update.
+void pc_menu_wheel_list(unsigned short up, unsigned short down);
 // Mouse drag since the last call, window-normalised (left button held).
 bool pc_menu_take_drag(float* dx, float* dy);
 // Presses a pad button for the next sample, through the device that tapped.

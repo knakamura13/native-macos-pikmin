@@ -586,6 +586,32 @@ bool ObjDayEndResultItem::doUpdateFadein()
 }
 
 #if PIKI_PC_MENU_TAP
+#include "pc_menu_hover.h"
+// The A button the game draws at the bottom right of every day-end page. It lifts while hovered.
+// With takeTap a click anywhere on the page presses A.
+static PcHoverGroup sDayEndA;
+static bool pcDayEndPointer(kh::Screen::ObjDayEndResultBase* self, bool takeTap)
+{
+	pc_menu_claim();
+	J2DPane* a      = self->mScreenTitle ? self->mScreenTitle->search(MC8("Nbtn2")) : nullptr;
+	J2DPane* target = a ? pcHoverTarget(a) : nullptr;
+	if (target) pc_menu_pane_hit(target, 0.0f, 0.0f, 0.0f);
+	float hx = 0.0f;
+	float hy = 0.0f;
+	const bool over = target && pc_menu_hover(&hx, &hy) && pc_menu_pane_hit(target, hx, hy, 0.02f);
+	if (over) pc_menu_set_hand(true);
+	pcHoverLift(a, sDayEndA, over);
+	if (!takeTap) return false;
+	float tx = 0.0f;
+	float ty = 0.0f;
+	if (!pc_menu_take_tap(&tx, &ty)) return false;
+	if (a) pc_menu_hover_press(a);
+	pc_menu_queue_button(Controller::PRESS_A);
+	return true;
+}
+#endif
+
+#if PIKI_PC_MENU_TAP
 static int sDayItemRow = -1;
 static int sDayItemPick = -1;
 static float sDayItemScale[48];
@@ -624,7 +650,8 @@ bool ObjDayEndResultItem::doUpdate()
 	updateCommon();
 	mScreenMain->update();
 #if PIKI_PC_MENU_TAP
-	pc_menu_claim();
+	pcDayEndPointer(this, false);
+	if (mFlags & 0x1) pc_menu_wheel_list(PAD_BUTTON_UP, PAD_BUTTON_DOWN);
 	{
 		float hx = 0.0f, hy = 0.0f;
 		const bool hovering = pc_menu_hover(&hx, &hy);
@@ -633,11 +660,13 @@ bool ObjDayEndResultItem::doUpdate()
 		float tx = 0.0f, ty = 0.0f;
 		if (pc_menu_take_tap(&tx, &ty)) {
 			const int pressed = pcDayItemAt(this, tx, ty);
-			if (pressed >= 0 && pressed < 48) {
-				pc_menu_hover_press(&sDayItemFeel[pressed]);
-				// No scroll on a short list, and the top visible row is the one A acts on.
-				if ((mFlags & 0x1) == 0 || pressed == mCurrentSelectId) pc_menu_queue_button(Controller::PRESS_A);
-				else sDayItemPick = pressed;
+			if (pressed >= 0 && pressed < 48) pc_menu_hover_press(&sDayItemFeel[pressed]);
+			// A click on another row of a long list scrolls to it. Anywhere else is A.
+			if (pressed >= 0 && pressed < 48 && (mFlags & 0x1) && pressed != mCurrentSelectId) {
+				sDayItemPick = pressed;
+			} else {
+				pc_menu_hover_press(mScreenTitle->search(MC8("Nbtn2")));
+				pc_menu_queue_button(Controller::PRESS_A);
 			}
 		}
 		for (int i = 0; i < 48; i++) {
@@ -908,10 +937,6 @@ void ObjDayEndResultItem::statusNormal()
 
 	if (mFlags & 0x1) {
 #if PIKI_PC_MENU_TAP
-	pc_menu_plate(PAD_BUTTON_A, "A Continue");
-	pc_menu_plate(PAD_BUTTON_DOWN, "Down");
-	pc_menu_plate(PAD_BUTTON_UP, "Up");
-	// Those Up and Down plates already take the wheel, one row per notch.
 #endif
 		if (getGamePad()->getButton() & (Controller::PRESS_UP | Controller::PRESS_DOWN)) {
 #if PIKI_PC_MENU_TAP
@@ -1436,8 +1461,7 @@ bool ObjDayEndResultIncP::doUpdate()
 	}
 
 #if PIKI_PC_MENU_TAP
-	pc_menu_plate(PAD_BUTTON_B, "B Back");
-	pc_menu_plate(PAD_BUTTON_A, "A Next");
+	pcDayEndPointer(this, true);
 #endif
 	if (getGamePad()->getButtonDown() & (Controller::PRESS_A | Controller::PRESS_B)) {
 		if (getGamePad()->getButtonDown() & Controller::PRESS_A && mStatus == INCPSTATUS_Slot && !isFlag(0x40)) {
@@ -2075,10 +2099,9 @@ bool ObjDayEndResultMail::doUpdateFadeout()
 void ObjDayEndResultMail::statusNormal()
 {
 #if PIKI_PC_MENU_TAP
-	pc_menu_plate(PAD_TRIGGER_R, "R Next");
-	pc_menu_plate(PAD_TRIGGER_L, "L Prev");
-	pc_menu_plate(PAD_BUTTON_B, "B Back");
-	pc_menu_plate(PAD_BUTTON_A, "A Save");
+	// The wheel turns the pages (L previous, R next); a click anywhere saves.
+	pc_menu_wheel_list(PAD_TRIGGER_L, PAD_TRIGGER_R);
+	pcDayEndPointer(this, true);
 #endif
 	if (getGamePad()->getButtonDown() & Controller::PRESS_A) {
 		mFlags |= 4;
