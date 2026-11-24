@@ -246,11 +246,23 @@ void THurryUp2D::doDraw(Graphics& gfx)
 			f32 zero     = 0.0f;
 			f32 minusone = -1.0f;
 
+#ifdef PIKI_PC_PORT
+			// The vertex format above holds only a position, so on the console
+			// these three-float writes are each a triangle's first vertex (six
+			// per step, as GXBegin declares). The port's GXNormal3f32 records a
+			// normal instead, which left every triangle degenerate.
+			GXPosition3f32(wpos.x, wpos.y, zero);
+#else
 			GXNormal3f32(wpos.x, wpos.y, zero);
+#endif
 			GXPosition3f32(s1, s2, zero);
 			GXPosition3f32(s3, s4, zero);
 
+#ifdef PIKI_PC_PORT
+			GXPosition3f32(sunpos.x, sunpos.y, minusone);
+#else
 			GXNormal3f32(sunpos.x, sunpos.y, minusone);
+#endif
 			GXPosition3f32(s1, s2, zero);
 			GXPosition3f32(s3, s4, zero);
 		}
