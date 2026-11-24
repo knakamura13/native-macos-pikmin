@@ -376,6 +376,8 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
         ${PC_PORT_DIR}/mods/pc_hd_model_convert.cpp
         ${PC_PORT_DIR}/pc_pad_axis.cpp
         ${PC_PORT_DIR}/pc_menu_pad.cpp
+        ${PC_PORT_DIR}/pc_menu_pointer.cpp
+        ${PC_PORT_DIR}/pc_menu_tap.cpp
         ${PC_PORT_DIR}/pc_menu_mode.cpp
         ${PC_PORT_DIR}/pc_text_box.cpp
         ${PC_PORT_DIR}/pc_menu_repeat.cpp
@@ -658,6 +660,9 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
             ${PC_PORT_DIR}/gl/pc_postprocess_test.cpp
             ${PC_PORT_DIR}/gl/pc_postprocess.cpp
         )
+        pikmin2_add_host_test(p2_captain_preview_layout_test
+            ${PC_PORT_DIR}/pc_p2_captain_preview_layout_test.cpp
+        )
         pikmin2_add_host_test(p2_tev_shader_test
             ${PC_PORT_DIR}/gl/pc_tev_shader_test.cpp
             ${PC_PORT_DIR}/gl/pc_tev_shader.cpp
@@ -683,8 +688,15 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
         pikmin2_add_host_test(p2_cursor_ring_test
             ${PC_PORT_DIR}/pc_cursor_ring_test.cpp
         )
+        pikmin2_add_host_test(p2_menu_pointer_test
+            ${PC_PORT_DIR}/pc_menu_pointer_test.cpp
+            ${PC_PORT_DIR}/pc_menu_pointer.cpp
+        )
         pikmin2_add_host_test(p2_pause_key_test
             ${PC_PORT_DIR}/pc_pause_key_test.cpp
+        )
+        pikmin2_add_host_test(p2_dpad_keys_test
+            ${PC_PORT_DIR}/pc_dpad_keys_test.cpp
         )
         pikmin2_add_host_test(p2_text_box_test
             ${PC_PORT_DIR}/pc_text_box_test.cpp
