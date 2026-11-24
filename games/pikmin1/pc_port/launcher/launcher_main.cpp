@@ -1417,9 +1417,20 @@ int main(int argc, char** argv)
         if (!remembered.empty() && fs::is_regular_file(remembered / "assets/.pikmin2-assets")) pikmin2Default = remembered;
     }
     const fs::path pikmin2Directory = environmentPath("NECTAR_PIKMIN2_DIR", pikmin2Default);
-    const fs::path pikmin2Executable = environmentPath("NECTAR_PIKMIN2_EXECUTABLE",
-        fs::is_regular_file(pikmin2Directory / kPikmin2Executable) ? pikmin2Directory / kPikmin2Executable
-                                                                    : sourceDirectory / kPikmin2Executable);
+    fs::path pikmin2Binary = fs::is_regular_file(pikmin2Directory / kPikmin2Executable)
+        ? pikmin2Directory / kPikmin2Executable
+        : sourceDirectory / kPikmin2Executable;
+    // A managed app skips installPackage, so the copy in the Pikmin 2 folder is
+    // never refreshed and keeps running whatever build installed it (issue
+    // #242: a month-old binary without the window centering fix). Run the
+    // bundled build for the installed disc's region instead, as Pikmin 1 runs
+    // the bundled nectar; the game finds its data through the working directory.
+    if (isManagedBundle()) {
+        const bool usa = installedPikmin2DiscId(pikmin2Directory) == kPikmin2UsaDiscId;
+        const fs::path bundled = sourceDirectory / (usa ? kPikmin2UsaExecutable : kPikmin2Executable);
+        if (fs::is_regular_file(bundled)) pikmin2Binary = bundled;
+    }
+    const fs::path pikmin2Executable = environmentPath("NECTAR_PIKMIN2_EXECUTABLE", pikmin2Binary);
     const bool pikmin1Available = assetsReady(pikmin1Directory)
                                && fs::is_regular_file(pikmin1Executable);
     const bool pikmin2Available = fs::is_regular_file(pikmin2Executable)
