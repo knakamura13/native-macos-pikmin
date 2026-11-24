@@ -105,6 +105,14 @@ struct DocGuard {
 };
 
 /// Malla estática de un .mod del juego metida en el mapa.
+/// Material del suelo: uno de los de un .mod de escenario del juego.
+struct DocMaterial {
+	std::string source = "courses/practice/practice.mod";
+	int index          = 14;
+	int attribute      = 2; ///< terreno para el juego: 0 sólido, 1 roca, 2 hierba, 3 madera, 4 barro
+	double uvScale     = 0; ///< unidades de UV por unidad de mundo; 0 = la del escenario original
+};
+
 struct DocProp {
 	/// Ruta en dataDir, p. ej. "objects/hinderrock/cube10.mod", o "map:..."
 	/// (un archivo de la carpeta del mapa: mallas importadas, en meshes/).
@@ -114,14 +122,30 @@ struct DocProp {
 	double scale    = 1;
 	bool collide    = true;
 	bool ground     = false; ///< se pisa: su colisión es suelo y no corta caminos
+	/// Se dibuja. false = solo colisión (la malla de colisión de un nivel
+	/// que trae aparte su malla visual, issue #376).
+	bool visible = true;
+	/// Escala con la que se importó la malla (0 = no se sabe). Las mallas del
+	/// mismo nivel se importan con la misma para que encajen.
+	double importScale = 0;
+	/// Pintura sobre la malla (issue #376): por triángulo, en el orden de
+	/// propTriangles(), 0 = su material y k = paintPalette[k - 1].
+	std::vector<DocMaterial> paintPalette;
+	std::vector<std::uint8_t> paint;
 };
 
-/// Material del suelo: uno de los de un .mod de escenario del juego.
-struct DocMaterial {
-	std::string source = "courses/practice/practice.mod";
-	int index          = 14;
-	int attribute      = 2; ///< terreno para el juego: 0 sólido, 1 roca, 2 hierba, 3 madera, 4 barro
-	double uvScale     = 0; ///< unidades de UV por unidad de mundo; 0 = la del escenario original
+/// Bloque de terreno (issue #376): una caja que se coloca, se estira y se
+/// sube a mano, también encima de un nivel importado.
+///  - "ground": se pisa por arriba (plataformas, rampas planas, suelo extra);
+///  - "wall": sólido y alto, corta los caminos;
+///  - "water": agua con la cara de arriba como superficie; lo que se pisa
+///    dentro de la caja y por debajo de ella pasa a ser agua (se ahogan).
+struct DocBlock {
+	std::string kind = "ground";
+	double x = 0, y = 0, z = 0; ///< centro de la base
+	double sx = 400, sy = 60, sz = 400;
+	double ry = 0; ///< grados
+	DocMaterial material;
 };
 
 /// Terreno editable: una cuadrícula de nx x nz celdas desde (minX, minZ).
@@ -297,6 +321,7 @@ struct MapDoc {
 	std::vector<DocWall> walls;
 	std::vector<DocPond> ponds;
 	std::vector<DocProp> props;
+	std::vector<DocBlock> blocks;
 
 	double routeStep = 150, routeMargin = 100;
 	std::vector<double> barrierX;
@@ -401,11 +426,21 @@ struct MapMaterial {
 	float uvScale;
 };
 
+enum MapBlockKind { MAPBLOCK_Ground, MAPBLOCK_Wall, MAPBLOCK_Water };
+struct MapBlock {
+	MapBlockKind kind;
+	float x, y, z, sx, sy, sz, ry; ///< ry en radianes
+	MapMaterial material;
+};
+
 struct MapProp {
 	std::string asset;
 	float x, y, z, rx, ry, rz, scale; ///< rotación en radianes
 	bool collide;
-	bool ground = false;
+	bool ground  = false;
+	bool visible = true;
+	std::vector<MapMaterial> paintPalette; ///< ver DocProp::paint
+	std::vector<std::uint8_t> paint;
 };
 
 enum MapObjective { MAPGOAL_Parts, MAPGOAL_Pellets, MAPGOAL_Pikmin, MAPGOAL_Boss, MAPGOAL_Survive, MAPGOAL_Waves };
@@ -492,6 +527,7 @@ struct MapData {
 	std::vector<MapWall> walls;
 	std::vector<MapPond> ponds;
 	std::vector<MapProp> props;
+	std::vector<MapBlock> blocks;
 	float routeStep, routeMargin;
 	std::vector<float> barrierX;
 	std::vector<MapSpot> passes;

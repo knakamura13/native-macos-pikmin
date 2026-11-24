@@ -10,6 +10,7 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <sstream>
 
@@ -349,6 +350,13 @@ f32 maxPondDepth(const MapData& map)
 // única articulación del mapa.
 
 // Lo que se añade a las tablas del mapa por los props.
+struct MaterialUse {
+	int material = 0;               // índice en el .mod de salida
+	u32 flags    = 1 | 4 | 8;       // formato de vértice
+	f32 scale[8] = { 1.0f / 512.0f }; // UV por unidad de mundo, por canal
+	u32 code     = kFloorCode;
+};
+
 struct PropTables {
 	std::vector<std::vector<u8>> textures, texAttrs, tevInfos, materials;
 };
@@ -371,7 +379,24 @@ void putBE32(std::vector<u8>& b, std::size_t at, u32 v)
 	for (int i = 0; i < 4; i++) b[at + std::size_t(i)] = u8(v >> (24 - 8 * i));
 }
 
-bool addProp(const MapProp& prop, const Model& model, PropContext& ctx, std::string& error)
+// Pintura de los props: UV de mundo proyectadas por el eje más cercano a la
+// normal de la cara (en planta lo que mira arriba, de lado las paredes).
+void triplanarUv(const V3& n, const V3& p, f32& u, f32& v)
+{
+	const f32 ax = std::fabs(n.x), ay = std::fabs(n.y), az = std::fabs(n.z);
+	if (ay >= ax && ay >= az) {
+		u = p.x;
+		v = p.z;
+	} else if (ax >= az) {
+		u = p.z;
+		v = p.y;
+	} else {
+		u = p.x;
+		v = p.y;
+	}
+}
+
+bool addProp(const MapProp& prop, const Model& model, PropContext& ctx, const std::vector<MaterialUse>& paintUses, std::string& error)
 {
 	const std::size_t collStart = ctx.coll.size();
 	if (ctx.tables.materials.size() + std::size_t(ctx.baseMaterials) + model.materials.size() > 0x7FFF) {
@@ -415,9 +440,17 @@ bool addProp(const MapProp& prop, const Model& model, PropContext& ctx, std::str
 		for (const Vec2& t : model.uvs[k]) ctx.uvs[k].push_back({ t.x, t.y });
 	}
 
+	// Triángulos pintados: una malla por material de su lista. `ordinal`
+	// cuenta todos los triángulos del modelo como propTriangles().
+	std::vector<MeshBuild> painted;
+	for (const MaterialUse& use : paintUses) painted.push_back(MeshBuild { use.material, use.flags, {}, {} });
+	std::size_t ordinal = 0;
 	for (std::size_t mi = 0; mi < model.meshes.size(); mi++) {
 		const int mat = mats[mi];
-		if (mat < 0 || std::size_t(mat) >= model.materials.size()) continue;
+		if (mat < 0 || std::size_t(mat) >= model.materials.size()) {
+			for (const ModMtxGroup& g : model.meshes[mi].groups) ordinal += g.tris.size();
+			continue;
+		}
 		const ModMesh& mesh = model.meshes[mi];
 		// Sin matrices propias (todo va colocado) ni NBT (sin ese bloque, la
 		// normal sale de la tabla normal).
@@ -426,6 +459,9 @@ bool addProp(const MapProp& prop, const Model& model, PropContext& ctx, std::str
 		std::map<std::pair<int, int>, int> posIndex, nrmIndex;
 		for (const ModMtxGroup& g : mesh.groups) {
 			for (const ModTriangle& t : g.tris) {
+				const std::size_t paintK = ordinal < prop.paint.size() ? prop.paint[ordinal] : 0;
+				ordinal++;
+				const bool isPainted = paintK > 0 && paintK <= painted.size();
 				Tri tri {};
 				tri.code = kWallCode;
 				V3 world[3];
@@ -474,18 +510,37 @@ bool addProp(const MapProp& prop, const Model& model, PropContext& ctx, std::str
 						if (tri.n[k] < 0) tri.n[k] = ni;
 					}
 				}
-				std::array<int, 3> uv[8];
-				for (int c = 0; c < 8; c++) {
-					for (int k = 0; k < 3; k++) uv[c][k] = t.v[k].uv[c] >= 0 ? t.v[k].uv[c] + uvOff[c] : 0;
-					out.uv[c].push_back(uv[c]);
+				if (isPainted) {
+					// Su material de la lista, con UV de mundo.
+					MeshBuild& pm        = painted[paintK - 1];
+					const MaterialUse& u = paintUses[paintK - 1];
+					V3 fn                = cross(world[1] - world[0], world[2] - world[0]);
+					for (int c = 0; c < 8; c++) {
+						if (!(pm.flags & (1u << (3 + c)))) continue;
+						std::array<int, 3> at;
+						for (int k = 0; k < 3; k++) {
+							f32 a, b;
+							triplanarUv(fn, world[k], a, b);
+							at[k] = int(ctx.uvs[c].size());
+							ctx.uvs[c].push_back({ a * u.scale[c], b * u.scale[c] });
+						}
+						pm.uv[c].push_back(at);
+					}
+					pm.tris.push_back(tri);
+				} else {
+					std::array<int, 3> uv[8];
+					for (int c = 0; c < 8; c++) {
+						for (int k = 0; k < 3; k++) uv[c][k] = t.v[k].uv[c] >= 0 ? t.v[k].uv[c] + uvOff[c] : 0;
+						out.uv[c].push_back(uv[c]);
+					}
+					out.tris.push_back(tri);
 				}
-				out.tris.push_back(tri);
 
 				if (prop.collide && model.collision.empty()) {
 					// Colisión con la cara hacia fuera: si la del triángulo no
 					// coincide con su normal de vértice, se le da la vuelta.
 					Tri c = tri;
-					if (prop.ground) c.code = kFloorCode;
+					if (prop.ground) c.code = isPainted ? paintUses[paintK - 1].code : kFloorCode;
 					const V3 face = triNormal(ctx.verts, c);
 					const V3 vn   = ctx.normals[std::size_t(tri.n[0])];
 					if (face.DP(vn) < 0.0f) std::swap(c.v[1], c.v[2]);
@@ -493,7 +548,11 @@ bool addProp(const MapProp& prop, const Model& model, PropContext& ctx, std::str
 				}
 			}
 		}
-		if (!out.tris.empty()) ctx.meshes.push_back(std::move(out));
+		// Solo colisión: la malla no se dibuja (la visual va en otro prop).
+		if (!out.tris.empty() && prop.visible) ctx.meshes.push_back(std::move(out));
+	}
+	for (MeshBuild& pm : painted) {
+		if (!pm.tris.empty() && prop.visible) ctx.meshes.push_back(std::move(pm));
 	}
 	// Con colisión propia (recortes de escenarios): esa, con sus códigos (el
 	// agua sigue siendo agua), en vez de los triángulos que se dibujan.
@@ -536,13 +595,6 @@ void writeTable(Writer& w, u32 chunk, const std::vector<std::vector<u8>>& base, 
 // ── Materiales del terreno ─────────────────────────────────────────────────
 // Un material de un escenario del juego se usa con el formato de vértice y la
 // escala de textura de la malla original que lo lleva: así se ve como allí.
-
-struct MaterialUse {
-	int material = 0;               // índice en el .mod de salida
-	u32 flags    = 1 | 4 | 8;       // formato de vértice
-	f32 scale[8] = { 1.0f / 512.0f }; // UV por unidad de mundo, por canal
-	u32 code     = kFloorCode;
-};
 
 // Ruido de valor suave en [0, 1] (determinista: el mismo mapa da el mismo
 // resultado). Sirve para variar el tono y deformar las UV del terreno, que si
@@ -819,6 +871,50 @@ bool compileMap(const MapData& map, const GameFileReader& read, const std::strin
 	std::vector<MeshBuild> lakes;
 	constexpr f32 kLakeDepth = 25.0f, kLakeBelow = 4.0f; // fondo y superficie bajo la orilla
 
+	// Material de la paleta o de un bloque -> material del .mod de salida
+	// (copiado si es de otro escenario) con el formato y la escala de su malla
+	// original. Cada material de fuera se copia una sola vez.
+	std::unique_ptr<MaterialImporter> importer;
+	std::map<std::string, Model> courses;
+	auto resolve = [&](const MapMaterial& pm, MaterialUse& use) {
+		if (!loadBase()) return false;
+		if (!importer) {
+			importer.reset(new MaterialImporter { extra, int(baseModel.textures.size()), int(baseModel.texAttrs.size()), int(baseModel.tevInfos.size()),
+			                                      int(baseModel.materials.size()), {} });
+		}
+		const Model* model = &baseModel;
+		if (pm.source != sourceMod) {
+			auto it = courses.find(pm.source);
+			if (it == courses.end()) {
+				std::vector<u8> bytes;
+				Model m;
+				std::string why;
+				if (!read(pm.source, bytes) || bytes.empty()) {
+					error = tr("falta ") + pm.source + tr(" (material del suelo)");
+					return false;
+				}
+				if (!parseMod(bytes.data(), bytes.size(), m, why)) {
+					error = pm.source + ": " + why;
+					return false;
+				}
+				it = courses.emplace(pm.source, std::move(m)).first;
+			}
+			model = &it->second;
+		}
+		if (pm.index < 0 || std::size_t(pm.index) >= model->materials.size()) {
+			error = pm.source + tr(" no tiene el material ") + std::to_string(pm.index);
+			return false;
+		}
+		use          = analyseMaterial(*model, pm.index);
+		use.material = model == &baseModel ? pm.index : importer->material(pm.source, *model, pm.index);
+		use.code     = pm.code;
+		if (pm.uvScale > 0.0f && use.scale[0] > 0.0f) {
+			const f32 k = pm.uvScale / use.scale[0];
+			for (f32& sc : use.scale) sc *= k;
+		}
+		return true;
+	};
+
 	if (!map.grid) {
 		// Suelo en cuadrícula; dentro de las charcas se hunde y es agua.
 		const f32 cell   = map.cell;
@@ -911,44 +1007,6 @@ bool compileMap(const MapData& map, const GameFileReader& read, const std::strin
 	} else {
 		// ── Terreno editable ────────────────────────────────────────────────
 		if (!loadBase()) return false;
-		MaterialImporter importer { extra, int(baseModel.textures.size()), int(baseModel.texAttrs.size()), int(baseModel.tevInfos.size()),
-			                        int(baseModel.materials.size()), {} };
-		std::map<std::string, Model> courses;
-		// Material de la paleta -> material del .mod de salida (copiado si es
-		// de otro escenario) con el formato y la escala de su malla original.
-		auto resolve = [&](const MapMaterial& pm, MaterialUse& use) {
-			const Model* model = &baseModel;
-			if (pm.source != sourceMod) {
-				auto it = courses.find(pm.source);
-				if (it == courses.end()) {
-					std::vector<u8> bytes;
-					Model m;
-					std::string why;
-					if (!read(pm.source, bytes) || bytes.empty()) {
-						error = tr("falta ") + pm.source + tr(" (material del suelo)");
-						return false;
-					}
-					if (!parseMod(bytes.data(), bytes.size(), m, why)) {
-						error = pm.source + ": " + why;
-						return false;
-					}
-					it = courses.emplace(pm.source, std::move(m)).first;
-				}
-				model = &it->second;
-			}
-			if (pm.index < 0 || std::size_t(pm.index) >= model->materials.size()) {
-				error = pm.source + tr(" no tiene el material ") + std::to_string(pm.index);
-				return false;
-			}
-			use          = analyseMaterial(*model, pm.index);
-			use.material = model == &baseModel ? pm.index : importer.material(pm.source, *model, pm.index);
-			use.code     = pm.code;
-			if (pm.uvScale > 0.0f && use.scale[0] > 0.0f) {
-				const f32 k = pm.uvScale / use.scale[0];
-				for (f32& sc : use.scale) sc *= k;
-			}
-			return true;
-		};
 		std::vector<MaterialUse> uses(map.palette.size());
 		for (std::size_t i = 0; i < map.palette.size(); i++) {
 			if (!resolve(map.palette[i], uses[i])) return false;
@@ -1518,10 +1576,137 @@ bool compileMap(const MapData& map, const GameFileReader& read, const std::strin
 				}
 				it = loaded.emplace(prop.asset, std::move(model)).first;
 			}
-			if (!addProp(prop, it->second, ctx, error)) return false;
+			std::vector<MaterialUse> paintUses(prop.paintPalette.size());
+			for (std::size_t k = 0; k < prop.paintPalette.size(); k++) {
+				if (!resolve(prop.paintPalette[k], paintUses[k])) return false;
+			}
+			if (!addProp(prop, it->second, ctx, paintUses, error)) return false;
 		}
 		groundRanges = ctx.groundColl;
 		result.props = map.props.size();
+	}
+
+	// ── Bloques de terreno (issue #376) ────────────────────────────────────
+	// Cajas giradas en Y. Suelo y muro: cara de arriba y lados con su
+	// material y UV de mundo (arriba en planta, a los lados a lo largo); se
+	// pisa arriba con el código del material y los lados son pared. Agua:
+	// solo su superficie, y lo que se pisa dentro y por debajo pasa a ser agua.
+	std::vector<MeshBuild> blockMeshes;
+	auto blockCorner = [](const MapBlock& b, f32 lx, f32 lz, f32 y) {
+		const f32 c = std::cos(b.ry), sn = std::sin(b.ry);
+		return V3(b.x + lx * c + lz * sn, y, b.z - lx * sn + lz * c);
+	};
+	auto insideBlock = [](const MapBlock& b, const V3& p) {
+		const f32 c = std::cos(b.ry), sn = std::sin(b.ry), dx = p.x - b.x, dz = p.z - b.z;
+		const f32 lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+		return std::fabs(lx) <= b.sx * 0.5f && std::fabs(lz) <= b.sz * 0.5f;
+	};
+	for (const MapBlock& b : map.blocks) {
+		const f32 hx = b.sx * 0.5f, hz = b.sz * 0.5f, y0 = b.y, y1 = b.y + b.sy;
+		if (b.kind == MAPBLOCK_Water) {
+			// Superficie como la de las charcas: transparente en el borde.
+			const f32 fade  = std::min(40.0f, 0.15f * std::min(b.sx, b.sz));
+			const f32 ring[2][2] = { { hx, hz }, { hx - fade, hz - fade } };
+			for (std::size_t l = 0; l < water.size() && l < 3; l++) {
+				MeshBuild& m   = water[l];
+				const int base = int(verts.size()), uvBase = int(uv0.size());
+				for (int r = 0; r < 2; r++) {
+					const f32 sxr = ring[r][0], szr = ring[r][1];
+					for (const V3& v : { blockCorner(b, -sxr, -szr, y1), blockCorner(b, sxr, -szr, y1), blockCorner(b, sxr, szr, y1), blockCorner(b, -sxr, szr, y1) }) {
+						verts.push_back(v);
+						uv0.push_back({ v.x * kWaterLayers[l].uv, v.z * kWaterLayers[l].uv });
+					}
+				}
+				auto quad = [&](int a, int bb, int cc, int d, int alphaA, int alphaB, int alphaC, int alphaD) {
+					for (const std::array<int, 3>& t : { std::array<int, 3> { a, d, bb }, std::array<int, 3> { bb, d, cc } }) {
+						Tri tri = makeTri(base + t[0], base + t[1], base + t[2], 0, 0);
+						const int alpha[4] = { alphaA, alphaB, alphaC, alphaD };
+						for (int k = 0; k < 3; k++) {
+							const int corner = t[k] == a ? 0 : t[k] == bb ? 1 : t[k] == cc ? 2 : 3;
+							tri.col[k]       = alpha[corner];
+						}
+						// Normal hacia arriba, como el suelo (si no, se descarta).
+						if (triNormal(verts, tri).y < 0.0f) {
+							std::swap(tri.v[1], tri.v[2]);
+							std::swap(tri.col[1], tri.col[2]);
+						}
+						const auto uvOf = [&](int vi) { return uvBase + (vi - base); };
+						m.tris.push_back(tri);
+						m.uv[0].push_back({ uvOf(tri.v[0]), uvOf(tri.v[1]), uvOf(tri.v[2]) });
+					}
+				};
+				quad(4, 5, 6, 7, 0, 0, 0, 0); // dentro, opaca
+				for (int k = 0; k < 4; k++) {
+					const int k2 = (k + 1) % 4;
+					quad(k, k2, 4 + k2, 4 + k, 1, 1, 0, 0); // orilla, de transparente a opaca
+				}
+			}
+			continue;
+		}
+		MaterialUse use;
+		if (!resolve(b.material, use)) return false;
+		MeshBuild m { use.material, use.flags, {}, {} };
+		const std::size_t collStart = coll.size();
+		const u32 topCode           = b.kind == MAPBLOCK_Ground ? use.code : kWallCode;
+		const V3 lo[4] = { blockCorner(b, -hx, -hz, y0), blockCorner(b, hx, -hz, y0), blockCorner(b, hx, hz, y0), blockCorner(b, -hx, hz, y0) };
+		const V3 mid(b.x, y0, b.z);
+		auto face = [&](const V3& p0, const V3& p1, const V3& p2, const V3& p3, const V3& facing, u32 code, bool top) {
+			const int vb = int(verts.size());
+			for (const V3& v : { p0, p1, p2, p3 }) verts.push_back(v);
+			const f32 len = (p1 - p0).length(), hh = (p3 - p0).length();
+			Tri t1 = makeTri(vb, vb + 1, vb + 3, 0, code), t2 = makeTri(vb + 1, vb + 2, vb + 3, 0, code);
+			const bool flip = triNormal(verts, t1).DP(facing) < 0.0f;
+			if (flip) {
+				std::swap(t1.v[1], t1.v[2]);
+				std::swap(t2.v[1], t2.v[2]);
+			}
+			const int ni = int(normals.size());
+			for (int k = 0; k < 3; k++) t1.n[k] = t2.n[k] = ni;
+			normals.push_back(triNormal(verts, t1));
+			for (int ch = 0; ch < 8; ch++) {
+				if (!(m.flags & (1u << (3 + ch)))) continue;
+				const int uu = int(uvs[ch].size());
+				const f32 sc = use.scale[ch];
+				if (top) {
+					for (const V3& v : { p0, p1, p2, p3 }) uvs[ch].push_back({ v.x * sc, v.z * sc });
+				} else {
+					uvs[ch].push_back({ 0.0f, 0.0f });
+					uvs[ch].push_back({ len * sc, 0.0f });
+					uvs[ch].push_back({ len * sc, hh * sc });
+					uvs[ch].push_back({ 0.0f, hh * sc });
+				}
+				std::array<int, 3> c1 { uu, uu + 1, uu + 3 }, c2 { uu + 1, uu + 2, uu + 3 };
+				if (flip) {
+					std::swap(c1[1], c1[2]);
+					std::swap(c2[1], c2[2]);
+				}
+				m.uv[ch].push_back(c1);
+				m.uv[ch].push_back(c2);
+			}
+			m.tris.push_back(t1);
+			m.tris.push_back(t2);
+			coll.push_back(t1);
+			coll.push_back(t2);
+		};
+		face(up(lo[0], y1), up(lo[1], y1), up(lo[2], y1), up(lo[3], y1), V3(0.0f, 1.0f, 0.0f), topCode, true);
+		for (int k = 0; k < 4; k++) {
+			const V3& a = lo[k];
+			const V3& c = lo[(k + 1) % 4];
+			face(a, c, up(c, y1), up(a, y1), (a + c) * 0.5f - mid, kWallCode, false);
+		}
+		blockMeshes.push_back(std::move(m));
+		// Los de suelo se pisan: no cortan caminos (como los props de suelo).
+		if (b.kind == MAPBLOCK_Ground) groundRanges.push_back({ collStart, coll.size() });
+	}
+	for (const MapBlock& b : map.blocks) {
+		if (b.kind != MAPBLOCK_Water) continue;
+		const f32 y0 = b.y - 1.0f, y1 = b.y + b.sy + 1.0f;
+		for (Tri& t : coll) {
+			const V3 c = (verts[std::size_t(t.v[0])] + verts[std::size_t(t.v[1])] + verts[std::size_t(t.v[2])]) * (1.0f / 3.0f);
+			if (c.y < y0 || c.y > y1 || !insideBlock(b, c)) continue;
+			if (triNormal(verts, t).y < 0.5f) continue; // solo lo que se pisa
+			t.code = kWaterCode;
+		}
 	}
 
 	// Orden de las translúcidas como en practice.mod (16, 15, 24, 23): el juego
@@ -1541,11 +1726,12 @@ bool compileMap(const MapData& map, const GameFileReader& read, const std::strin
 		}
 	}
 	for (const MeshBuild& m : propMeshes) meshes.push_back(&m);
+	for (const MeshBuild& m : blockMeshes) meshes.push_back(&m);
 
 	f32 top = wallH;
 	for (const Obstacle& o : obstacles) top = std::max(top, o.height);
 	V3 bmin(map.minX, -deepest, map.minZ), bmax(map.maxX, top, map.maxZ);
-	if (!propMeshes.empty() || map.grid) {
+	if (!propMeshes.empty() || map.grid || !map.blocks.empty()) {
 		for (const V3& v : verts) {
 			bmin = V3(std::min(bmin.x, v.x), std::min(bmin.y, v.y), std::min(bmin.z, v.z));
 			bmax = V3(std::max(bmax.x, v.x), std::max(bmax.y, v.y), std::max(bmax.z, v.z));
@@ -1867,7 +2053,7 @@ bool compileMap(const MapData& map, const GameFileReader& read, const std::strin
 		f32 x0, z0, x1, z1;
 	};
 	std::vector<Box> propBoxes;
-	if (!propMeshes.empty()) {
+	if (coll.size() > firstPropColl) {
 		// La caja en planta de cada triángulo de colisión de los props que
 		// sobresale del suelo (lo bajo se pisa, no corta el camino).
 		for (std::size_t ti = firstPropColl; ti < coll.size(); ti++) {
@@ -2064,6 +2250,35 @@ bool compileMap(const MapData& map, const GameFileReader& read, const std::strin
 	result.collisionTris = coll.size();
 	result.routePoints   = points.size();
 	return buildIni(map, read, modPath, result.ini, error);
+}
+
+std::vector<std::array<Vec3, 3>> propTriangles(const Model& model)
+{
+	// Mismo orden y misma pose que addProp (todos los triángulos, también los
+	// de mallas sin material, que allí se saltan pero cuentan).
+	const std::vector<Mat34> pose = model.bindPose();
+	std::vector<std::array<Vec3, 3>> out;
+	for (const ModMesh& mesh : model.meshes) {
+		for (const ModMtxGroup& g : mesh.groups) {
+			for (const ModTriangle& t : g.tris) {
+				std::array<Vec3, 3> tri;
+				for (int k = 0; k < 3; k++) {
+					const ModVertex& v = t.v[k];
+					Mat34 m;
+					if (v.mtxSlot >= 0 && std::size_t(v.mtxSlot) < g.deps.size()) {
+						const int dep = g.deps[std::size_t(v.mtxSlot)];
+						if (dep >= 0 && std::size_t(dep) < model.vtxMatrices.size() && model.vtxMatrices[std::size_t(dep)].joint) {
+							const int key = model.vtxMatrices[std::size_t(dep)].index;
+							if (std::size_t(key) < pose.size()) m = pose[std::size_t(key)];
+						}
+					}
+					tri[std::size_t(k)] = v.pos >= 0 && std::size_t(v.pos) < model.positions.size() ? m.point(model.positions[std::size_t(v.pos)]) : Vec3 {};
+				}
+				out.push_back(tri);
+			}
+		}
+	}
+	return out;
 }
 
 } // namespace nectar
