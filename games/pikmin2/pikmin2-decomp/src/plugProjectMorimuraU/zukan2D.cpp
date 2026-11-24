@@ -515,6 +515,8 @@ static int sZukanPickSteps = 0;
 static float sZukanDragX = 0.0f;
 static float sZukanDragY = 0.0f;
 static PcHoverGroup sZukanButtonHover[5];
+// The list tile under the pointer; TIconInfo::update lifts it.
+static const void* sZukanHoverPane = nullptr;
 
 // Icon under the pointer. Big rows only have the center picture.
 static bool pcZukanIconAt(TZukanBase* self, float nx, float ny, int* row, int* col)
@@ -538,6 +540,8 @@ static bool pcZukanIconAt(TZukanBase* self, float nx, float ny, int* row, int* c
 	return *row >= 0;
 }
 
+const void* pcZukanHoveredIcon() { return sZukanHoverPane; }
+
 bool pcZukanTakeModelDrag(float* dx, float* dy)
 {
 	*dx = sZukanDragX;
@@ -553,6 +557,7 @@ bool TZukanBase::doUpdate()
 #if PIKI_PC_MENU_TAP
 	sZukanRow = -1;
 	sZukanCol = -1;
+	sZukanHoverPane = nullptr;
 #endif
 	if (!mIsInDemo) {
 		doUpdateIn();
@@ -631,12 +636,13 @@ bool TZukanBase::doUpdate()
 			pc_menu_wheel_list(PAD_BUTTON_UP, PAD_BUTTON_DOWN);
 			J2DPane* lPane = mYajiScreen ? mYajiScreen->mScreenObj->search(MC8("N_Lbtn")) : nullptr;
 			J2DPane* rPane = mYajiScreen ? mYajiScreen->mScreenObj->search(MC8("N_Rbtn")) : nullptr;
-			struct Btn { J2DPane* container; unsigned short pad; };
-			Btn buttons[5] = { { lPane, PAD_TRIGGER_L }, { rPane, PAD_TRIGGER_R }, { mXButtonPane, PAD_BUTTON_X },
-			                   { mYButtonPane, PAD_BUTTON_Y }, { mAButtonPane, PAD_BUTTON_A } };
+			struct Btn { J2DPane* container; unsigned short pad; bool wide; };
+			// L and R test their glyph. X, Y and A test the icon and its label together.
+			Btn buttons[5] = { { lPane, PAD_TRIGGER_L, false }, { rPane, PAD_TRIGGER_R, false }, { mXButtonPane, PAD_BUTTON_X, true },
+			                   { mYButtonPane, PAD_BUTTON_Y, true }, { mAButtonPane, PAD_BUTTON_A, true } };
 			// A pane is only measured while something asks about it every update.
 			for (int k = 0; k < 5; k++) {
-				if (buttons[k].container) pc_menu_pane_hit(pcHoverTarget(buttons[k].container), 0.0f, 0.0f, 0.0f);
+				if (buttons[k].container) pc_menu_pane_hit(buttons[k].wide ? buttons[k].container : pcHoverTarget(buttons[k].container), 0.0f, 0.0f, 0.0f);
 			}
 			if (mPaneModel) pc_menu_pane_hit(mPaneModel, 0.0f, 0.0f, 0.0f);
 			float hx = 0.0f;
@@ -645,11 +651,14 @@ bool TZukanBase::doUpdate()
 			bool overModel = false;
 			if (pc_menu_hover(&hx, &hy)) {
 				for (int k = 0; k < 5 && overButton < 0; k++) {
-					if (buttons[k].container && pc_menu_pane_hit(pcHoverTarget(buttons[k].container), hx, hy, 0.015f)) overButton = k;
+					if (buttons[k].container && pc_menu_pane_hit(buttons[k].wide ? buttons[k].container : pcHoverTarget(buttons[k].container), hx, hy, 0.015f)) overButton = k;
 				}
 				if (overButton < 0) {
 					overModel = mPaneModel && mPaneModel->isVisible() && pc_menu_pane_hit(mPaneModel, hx, hy, 0.0f);
-					pcZukanIconAt(this, hx, hy, &sZukanRow, &sZukanCol);
+					if (pcZukanIconAt(this, hx, hy, &sZukanRow, &sZukanCol)) {
+						TIconInfo* hovered = mIndexPaneList[sZukanRow]->mIconInfos[sZukanCol];
+						sZukanHoverPane    = hovered ? hovered->mPane : nullptr;
+					}
 				}
 				if (overButton >= 0 || sZukanRow >= 0 || overModel) pc_menu_set_hand(overButton >= 0 || sZukanRow >= 0);
 			}
@@ -680,7 +689,7 @@ bool TZukanBase::doUpdate()
 			if (pc_menu_take_tap(&tx, &ty)) {
 				int clickedButton = -1;
 				for (int k = 0; k < 5 && clickedButton < 0; k++) {
-					if (buttons[k].container && pc_menu_pane_hit(pcHoverTarget(buttons[k].container), tx, ty, 0.015f)) clickedButton = k;
+					if (buttons[k].container && pc_menu_pane_hit(buttons[k].wide ? buttons[k].container : pcHoverTarget(buttons[k].container), tx, ty, 0.015f)) clickedButton = k;
 				}
 				if (clickedButton >= 0) {
 					pc_menu_hover_press(buttons[clickedButton].container);
