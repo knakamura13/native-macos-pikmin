@@ -316,22 +316,6 @@ def abort_op(cwd, kind):
         git(["reset", "--hard", "HEAD"], cwd, check=False)
 
 
-def cherry_pick(cwd, sha):
-    result = git(["cherry-pick", "--no-edit", sha], cwd, check=False)
-    if result.returncode == 0:
-        return "applied", ""
-    combined = (result.stdout or "") + (result.stderr or "")
-    if "now empty" in combined or "empty commit" in combined:
-        skipped = git(["cherry-pick", "--skip"], cwd, check=False)
-        if skipped.returncode != 0:
-            abort_op(cwd, "cherry-pick")
-        return "empty", "already applied (empty cherry-pick)"
-    files = conflict_files(cwd)
-    reason = reason_conflict(files, combined)
-    abort_op(cwd, "cherry-pick")
-    return "conflict", reason
-
-
 def keep_both_text(text):
     """Join each conflict hunk as ours followed by theirs.
 
@@ -550,21 +534,8 @@ def assemble(worktree, start_sha, steps):
             continue
         kind = step["kind"]
         if kind == "patch-already":
-            # Already present in start_sha (kyle-patches contains upstream main).
+            # Already present in start_sha, the kyle-patches tree.
             asm.applied_patches.append(step["sha"])
-            continue
-        if kind == "patch":
-            status, reason = cherry_pick(worktree, step["sha"])
-            if status == "applied":
-                asm.applied_patches.append(step["sha"])
-                asm.checkpoints.append((step, git(["rev-parse", "HEAD"], worktree).stdout.strip()))
-            else:
-                asm.skipped.append({
-                    "kind": "patch",
-                    "id": step["sha"],
-                    "sha": step["sha"],
-                    "reason": reason,
-                })
             continue
         if kind == "pr":
             message = f"Merge upstream PR #{step['number']} ({step['ref']})\n\nHead {step['sha']}"
@@ -607,14 +578,11 @@ def marker_message(upstream_sha, patches_sha, asm):
         lines.append(f"merged_include {item['branch']} {item['sha']}")
     skipped_prs = [s for s in asm.skipped if s["kind"] == "pr"]
     skipped_includes = [s for s in asm.skipped if s["kind"] == "include"]
-    skipped_patches = [s for s in asm.skipped if s["kind"] == "patch"]
     for item in sorted(skipped_prs, key=lambda item: int(item["id"])):
         lines.append(f"skipped_pr {item['id']} {item['sha']} {one_line(item['reason'])}")
     for item in sorted(skipped_includes, key=lambda item: item["id"]):
         sha = item["sha"] or "none"
         lines.append(f"skipped_include {item['id']} {sha} {one_line(item['reason'])}")
-    for item in sorted(skipped_patches, key=lambda item: item["sha"]):
-        lines.append(f"skipped_patch {item['sha']} {one_line(item['reason'])}")
     return "\n".join(lines) + "\n"
 
 
@@ -661,50 +629,41 @@ def is_ancestor(repo, older, newer):
     return git(["merge-base", "--is-ancestor", older, newer], repo, check=False).returncode == 0
 
 
-def is_upstream_sync(repo, parents, upstream_sha):
-    """A merge whose every non-first parent is already in upstream main."""
-    return all(is_ancestor(repo, parent, upstream_sha) for parent in parents[1:])
+def sync_patches(repo, patches_sha, upstream_sha):
+    """Return a kyle-patches commit that contains upstream main.
 
-
-def check_patch_merges(repo, base, patches_sha, upstream_sha):
-    """Refuse kyle-patches history that a non-merge replay would get wrong.
-
-    Allowed merge commits:
-      - a merge of upstream main (every non-first parent is in upstream main);
-      - a PR merge whose merged-in side holds only plain commits and merges of
-        upstream main.
-    Anything else, such as a branch that merged older kyle-patches or other fork
-    branches into itself, raises before anything is built or pushed.
+    A plain-commit replay onto a newer main loses the conflict resolutions that
+    earlier upstream merges hold, and silently drops the commits that then
+    conflict (2026-11-09, 2026-11-18). So the base is always the kyle-patches
+    tree. When main moved, merge it into kyle-patches here. A conflict stops
+    the rebuild: someone resolves that merge once by hand and pushes it.
     """
-    listed = git(
-        ["rev-list", "--merges", "--parents", f"{base}..{patches_sha}"], repo
-    ).stdout.splitlines()
-    bad = []
-    for line in listed:
-        merge, *parents = line.split()
-        if is_upstream_sync(repo, parents, upstream_sha):
-            continue
-        side_ok = True
-        for parent in parents[1:]:
-            side = git(
-                ["rev-list", "--merges", "--parents", f"{parents[0]}..{parent}"], repo
-            ).stdout.splitlines()
-            for inner in side:
-                _, *inner_parents = inner.split()
-                if not is_upstream_sync(repo, inner_parents, upstream_sha):
-                    side_ok = False
-                    break
-            if not side_ok:
-                break
-        if not side_ok:
-            bad.append(merge)
-    if bad:
+    if is_ancestor(repo, upstream_sha, patches_sha):
+        return patches_sha
+    eprint(f"kyle-patches is behind upstream main; merging {upstream_sha[:12]} into it")
+    worktree = prepare_worktree(repo, patches_sha)
+    message = f"Merge upstream/main {upstream_sha[:9]} into kyle-patches"
+    result = git(["merge", "--no-ff", "--no-edit", "-m", message, upstream_sha], worktree, check=False)
+    if result.returncode != 0:
+        files = conflict_files(worktree)
+        abort_op(worktree, "merge")
         raise RebuildError(
-            "kyle-patches contains merge commits that are not merges of upstream main "
-            "or of a linear PR branch: "
-            + " ".join(sha[:12] for sha in bad)
-            + ". Replace them with plain commits; not pushing"
+            "upstream main conflicts with kyle-patches ("
+            + (" ".join(files) or one_line((result.stdout or "") + (result.stderr or ""))[:200])
+            + "). Merge upstream/main into kyle-patches by hand and push it; not pushing"
         )
+    merged = git(["rev-parse", "HEAD"], worktree).stdout.strip()
+    # Keep the commit reachable until the later worktree reset and the push.
+    git(["update-ref", "refs/rebuild/kyle-patches-sync", merged], repo)
+    return merged
+
+
+def push_kyle_patches(repo, old_sha, new_sha):
+    """Fast-forward origin/kyle-patches to the synced commit. Never forces."""
+    if new_sha == old_sha:
+        return
+    eprint(f"pushing kyle-patches {old_sha[:12]} -> {new_sha[:12]}")
+    git(["push", "origin", f"{new_sha}:refs/heads/kyle-patches"], repo)
 
 
 def format_other_pr(item):
@@ -714,29 +673,18 @@ def format_other_pr(item):
 
 
 def build_steps(repo, patches_sha, upstream_sha, exclude, include_names, fork):
-    base = git(["merge-base", patches_sha, upstream_sha], repo).stdout.strip()
-    check_patch_merges(repo, base, patches_sha, upstream_sha)
+    # patches_sha contains upstream main (see sync_patches), so this range is
+    # the fork-only commits.
     patch_commits = git(
-        ["rev-list", "--reverse", "--no-merges", f"{base}..{patches_sha}"], repo
+        ["rev-list", "--reverse", "--no-merges", f"{upstream_sha}..{patches_sha}"], repo
     ).stdout.split()
     steps = []
-    already_on_main = is_ancestor(repo, upstream_sha, patches_sha)
-    if already_on_main:
-        # kyle-patches already has current main (via a merge). The conflict
-        # resolutions live in that merge commit, which a cherry-pick replay
-        # would skip, so start from the kyle-patches tree instead.
-        eprint("kyle-patches already contains upstream main; using its tree")
-        for sha in patch_commits:
-            steps.append({
-                "kind": "patch-already",
-                "sha": sha,
-                "ident": f"patch:{sha}",
-            })
-    else:
-        # Linear stack on an older main: replay the plain commits onto current
-        # main. Merge commits carry no changes of their own here.
-        for sha in patch_commits:
-            steps.append({"kind": "patch", "sha": sha, "ident": f"patch:{sha}"})
+    for sha in patch_commits:
+        steps.append({
+            "kind": "patch-already",
+            "sha": sha,
+            "ident": f"patch:{sha}",
+        })
 
     prs, others = open_fork_prs(fork["owner"], fork["repos"])
     eprint(f"open fork PRs: {', '.join('#' + str(pr['number']) for pr in prs) or '(none)'}")
@@ -835,7 +783,7 @@ def build_steps(repo, patches_sha, upstream_sha, exclude, include_names, fork):
             "sha": fetched,
             "ident": f"include:{name}",
         })
-    return steps, others, (patches_sha if already_on_main else upstream_sha)
+    return steps, others
 
 
 def omit_step(steps, ident, reason):
@@ -849,17 +797,10 @@ def omit_step(steps, ident, reason):
                 "sha": step["sha"],
                 "reason": reason,
             }
-        elif step["kind"] == "include":
+        else:
             skip = {
                 "kind": "include",
                 "id": step["ref"],
-                "sha": step["sha"],
-                "reason": reason,
-            }
-        else:
-            skip = {
-                "kind": "patch",
-                "id": step["sha"],
                 "sha": step["sha"],
                 "reason": reason,
             }
@@ -923,18 +864,22 @@ def main():
         eprint(f"exclude {sorted(exclude) or '(empty)'}")
         eprint(f"include {include_names or '(empty)'}")
 
-        steps, other_prs, start_sha = build_steps(
+        synced_sha = sync_patches(repo, patches_sha, upstream_sha)
+        if synced_sha != patches_sha and not args.dry_run and patches_ref != "origin/kyle-patches":
+            raise RebuildError(
+                f"{patches_ref} is behind upstream main; merge upstream/main into it first, "
+                "or use --dry-run"
+            )
+        old_patches_sha, patches_sha = patches_sha, synced_sha
+        start_sha = patches_sha
+        steps, other_prs = build_steps(
             repo, patches_sha, upstream_sha, exclude, include_names, fork
         )
         worktree = prepare_worktree(repo, start_sha)
         cache = {}
         asm = None
         guard = 0
-        base_failed = (
-            "kyle-patches already includes upstream main, but that tree failed the test suites; not pushing"
-            if start_sha == patches_sha
-            else "upstream main failed the test suites; not pushing"
-        )
+        base_failed = "kyle-patches (with upstream main) failed the test suites; not pushing"
         while True:
             guard += 1
             if guard > len(steps) + 2:
@@ -959,6 +904,8 @@ def main():
         final_sha = git(["rev-parse", "HEAD"], worktree).stdout.strip()
         eprint(f"marker {final_sha}")
         eprint(message.rstrip())
+        if not args.dry_run:
+            push_kyle_patches(repo, old_patches_sha, patches_sha)
         pushed = push_kyle_develop(repo, final_sha, args.dry_run)
         if pushed:
             git(["worktree", "remove", "--force", str(WORKTREE)], repo, check=False)

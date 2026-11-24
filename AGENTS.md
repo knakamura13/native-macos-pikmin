@@ -5,8 +5,8 @@ This fork (`knakamura13/native-macos-pikmin`, previously `knakamura13/native-mac
 ## Branches
 
 - `main` mirrors `upstream/main`. Change it only by fast-forward. Never commit to it.
-- `kyle-patches` is a small linear stack of fork-only commits on top of `main`: the macOS app bundle, fork notes, and anything else that is not upstream and not in an open upstream PR. Commit fork-only work here. The rebuild replays only its plain (non-merge) commits. Merges of upstream `main`, and PR merges whose branch holds only plain commits and merges of upstream `main`, are fine; any other merge commit makes the rebuild stop without pushing.
-- `kyle-develop` is generated. A rebuild starts from `upstream/main`, cherry-picks `kyle-patches`, then merges every open upstream PR whose head repository is this fork. The fork is `origin`, plus either name this fork has used (`knakamura13/native-macos-pikmin` and `knakamura13/native-macos-pikmin-1`). The result is force-pushed. Never commit to `kyle-develop` directly. A local checkout updates with:
+- `kyle-patches` is a small linear stack of fork-only commits on top of `main`: the macOS app bundle, fork notes, and anything else that is not upstream and not in an open upstream PR. Commit fork-only work here. The rebuild starts from the kyle-patches tree itself, so merge commits of any shape are fine. It never replays the commits one by one.
+- `kyle-develop` is generated. A rebuild starts from `kyle-patches` (which contains `upstream/main`), then merges every open upstream PR whose head repository is this fork. The fork is `origin`, plus either name this fork has used (`knakamura13/native-macos-pikmin` and `knakamura13/native-macos-pikmin-1`). The result is force-pushed. Never commit to `kyle-develop` directly. A local checkout updates with:
 
   ```sh
   git fetch origin
@@ -30,7 +30,7 @@ tools/kyle-develop/rebuild.sh
 
 `--dry-run` does the same work, including the test suites, and does not push.
 
-The script reads the public GitHub API with no token. It needs `origin` (this fork, with push access) and `upstream` (added if missing). If `kyle-patches` already contains the current upstream `main` (because `main` was merged into it), the rebuild uses that tree as the base; it does not cherry-pick the older fork-only commits onto `main`, because those commits were written against a previous `main` and the merge commit holds the conflict resolutions. Otherwise it starts from upstream `main` and replays the plain `kyle-patches` commits. It builds and runs the Pikmin 1 and Pikmin 2 test suites from each game's README (`cmake --build`, then `ctest`). When a merge conflicts and every hunk has text on both sides, the script keeps both sides (the tree so far, then the incoming change) and records a `resolved_pr` line. A delete-against-edit conflict, a binary file, or markers it cannot parse aborts that one step, records the files, and continues. If the tests fail, the script rebuilds without the step that introduced the failure and leaves that step out. It does not push a result whose tests fail. Every open upstream PR is merged, skipped with a reason, or listed as someone else's (`other_open_prs`). A PR from this fork's owner under an unrecognized repository name, or a PR with no head repository and no owner, stops the rebuild instead of being left out.
+The script reads the public GitHub API with no token. It needs `origin` (this fork, with push access) and `upstream` (added if missing). The rebuild always uses the `kyle-patches` tree as the base. If upstream `main` has moved, the script first merges it into `kyle-patches` and, once the tests pass, fast-forward pushes `kyle-patches` (no force, only for the default `--patches-ref`). If that merge conflicts, the rebuild stops without pushing, and someone merges `upstream/main` into `kyle-patches` by hand. It never cherry-picks the fork-only commits onto `main`: those commits were written against an older `main`, and the merge commits hold the conflict resolutions, so a replay silently drops every commit that conflicts (2026-11-09 and 2026-11-18). It builds and runs the Pikmin 1 and Pikmin 2 test suites from each game's README (`cmake --build`, then `ctest`). When a merge conflicts and every hunk has text on both sides, the script keeps both sides (the tree so far, then the incoming change) and records a `resolved_pr` line. A delete-against-edit conflict, a binary file, or markers it cannot parse aborts that one step, records the files, and continues. If the tests fail, the script rebuilds without the step that introduced the failure and leaves that step out. It does not push a result whose tests fail. Every open upstream PR is merged, skipped with a reason, or listed as someone else's (`other_open_prs`). A PR from this fork's owner under an unrecognized repository name, or a PR with no head repository and no owner, stops the rebuild instead of being left out.
 
 The last commit on `kyle-develop` is empty. Its message is the rebuild marker. A scheduled job reads it with `git log -1 --format=%B origin/kyle-develop` and rebuilds only when an input SHA below no longer matches the public API.
 
@@ -46,16 +46,15 @@ resolved_pr <number> <40-hex> both-sides: <path> <path>...
 merged_include <branch> <40-hex>
 skipped_pr <number> <40-hex> <reason>
 skipped_include <branch> <40-hex-or-none> <reason>
-skipped_patch <40-hex> <reason>
 ```
 
 - `upstream_main` is `upstream/main` at build time.
-- `kyle_patches` is the tip of `origin/kyle-patches` that was cherry-picked.
+- `kyle_patches` is the tip of `origin/kyle-patches` that the build started from. It contains `upstream_main`.
 - `merged_pr` is an open upstream PR whose head repository is this fork, in ascending PR number, with the head SHA that was merged. Drafts are included. A PR whose commits were already contained is still listed.
 - `resolved_pr` repeats a `merged_pr` whose merge conflicted. Both sides of every hunk were kept, in the files named after `both-sides:`. The scheduler ignores this line. The PR's number and SHA are already in `merged_pr`.
 - `merged_include` is a branch from `include.txt`. The rebuild merges these in file order, after the PRs. The marker sorts the records by branch name.
 - `skipped_pr` is an open fork PR that was not merged. The SHA is the head that was considered. The reason is the rest of the line (`excluded`, `conflict: path path`, `tests failed when this step was included`, or a fetch error).
-- `skipped_include` and `skipped_patch` are the same idea for include-file branches and for individual `kyle-patches` commits.
+- `skipped_include` is the same idea for include-file branches. `skipped_patch <40-hex> <reason>` is no longer written. Markers from before 2026-11-23 can carry it, and they mean the build is missing `kyle-patches` commits. `auto-install-kyle-develop.sh` refuses to install such a build.
 - SHAs are full 40 hex digits. `none` is used only when a skipped include branch could not be resolved. Reasons are a single line.
 
 Compare, and rebuild when any of these differ:

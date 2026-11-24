@@ -112,6 +112,12 @@ supports_develop_app() {
     grep -q 'Open Nectar Develop.app' "$1" 2>/dev/null
 }
 
+# A kyle-develop marker with skipped_patch lines left out fork-only commits
+# (older rebuilds replayed them and dropped the ones that conflicted).
+marker_has_skipped_patch() {
+    grep -q '^skipped_patch '
+}
+
 write_state() {
     local file="$1"
     local sha="$2"
@@ -147,6 +153,11 @@ self_test() {
         1111111111111111111111111111111111111111 > "${tmp}/nosha.json"
     [[ -z "$(read_json_sha "${tmp}/nosha.json")" ]]
     [[ -z "$(read_json_sha_sed "${tmp}/nosha.json")" ]]
+    printf 'kyle-develop-rebuild-v1\n\nupstream_main a\nskipped_patch b conflict: x\n' | marker_has_skipped_patch
+    if printf 'kyle-develop-rebuild-v1\n\nskipped_pr 1 b excluded\n' | marker_has_skipped_patch; then
+        printf 'flagged a marker with no skipped_patch line\n' >&2
+        return 1
+    fi
     printf 'not-a-sha\n' > "${tmp}/state"
     [[ -z "$(read_state_sha "${tmp}/state")" ]]
     printf 'abcdef0123456789\n' > "${tmp}/state"
@@ -250,6 +261,11 @@ installed="$(printf '%s' "${installed}" | tr 'A-F' 'a-f')"
 sha="$(printf '%s' "${sha}" | tr 'A-F' 'a-f')"
 if [[ -n "${installed}" && "${installed}" == "${sha}" ]]; then
     log "up to date ${sha}"
+    exit 0
+fi
+
+if git -C "${repo}" log -1 --format=%B "${sha}" | marker_has_skipped_patch; then
+    log "kyle-develop ${sha} skipped kyle-patches commits; not installing"
     exit 0
 fi
 

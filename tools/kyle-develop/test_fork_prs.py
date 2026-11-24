@@ -7,6 +7,8 @@ name, follow origin, and refuse to drop a pull it cannot classify.
 
 import importlib.util
 import pathlib
+import subprocess
+import tempfile
 import unittest
 
 
@@ -234,6 +236,63 @@ class SelectForkPullsTest(unittest.TestCase):
                 self.owner,
                 self.repos,
             )
+
+
+class SyncPatchesTest(unittest.TestCase):
+    """kyle-patches must contain upstream main before a rebuild starts."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.repo = pathlib.Path(self.tmp.name) / "repo"
+        self.repo.mkdir()
+        # sync_patches builds in rebuild.WORKTREE, which a real rebuild also uses.
+        original, rebuild.WORKTREE = rebuild.WORKTREE, pathlib.Path(self.tmp.name) / "wt"
+        self.addCleanup(setattr, rebuild, "WORKTREE", original)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.email", "t@example.com")
+        self.git("config", "user.name", "t")
+        self.commit("a.txt", "one\n", "base")
+        self.git("checkout", "-q", "-b", "patches")
+        self.commit("fork.txt", "fork\n", "fork only")
+        self.patches = self.rev("patches")
+        self.git("checkout", "-q", "main")
+
+    def git(self, *args):
+        return subprocess.run(
+            ["git", *args], cwd=self.repo, check=True, text=True, capture_output=True
+        ).stdout.strip()
+
+    def rev(self, ref):
+        return self.git("rev-parse", ref)
+
+    def commit(self, name, body, message):
+        (self.repo / name).write_text(body)
+        self.git("add", name)
+        self.git("commit", "-q", "-m", message)
+
+    def test_already_contains_main_is_unchanged(self):
+        main = self.rev("main")
+        self.assertEqual(rebuild.sync_patches(str(self.repo), self.patches, main), self.patches)
+
+    def test_merges_newer_main_into_patches(self):
+        self.commit("b.txt", "two\n", "upstream moved")
+        main = self.rev("main")
+        synced = rebuild.sync_patches(str(self.repo), self.patches, main)
+        self.assertNotEqual(synced, self.patches)
+        self.assertTrue(rebuild.is_ancestor(str(self.repo), main, synced))
+        self.assertTrue(rebuild.is_ancestor(str(self.repo), self.patches, synced))
+
+    def test_conflict_stops_the_rebuild(self):
+        self.git("checkout", "-q", "patches")
+        self.commit("a.txt", "fork edit\n", "fork edits a.txt")
+        patches = self.rev("patches")
+        self.git("checkout", "-q", "main")
+        self.commit("a.txt", "upstream edit\n", "upstream edits a.txt")
+        with self.assertRaises(rebuild.RebuildError) as caught:
+            rebuild.sync_patches(str(self.repo), patches, self.rev("main"))
+        self.assertIn("a.txt", str(caught.exception))
+        self.assertEqual(self.git("status", "--porcelain"), "")
 
 
 if __name__ == "__main__":
