@@ -1,3 +1,10 @@
+#include "pc_menu_tap.h"
+#if PIKI_PC_MENU_TAP
+#include "Dolphin/pad.h"
+#include "pc_menu_pointer.h"
+#include "gl/pc_gfx.h"
+#include "System.h"
+#endif
 #include "kh/khDayEndResult.h"
 #include "Game/gamePlayData.h"
 #include "Game/Piki.h"
@@ -578,6 +585,62 @@ bool ObjDayEndResultItem::doUpdateFadein()
 	return result;
 }
 
+#if PIKI_PC_MENU_TAP
+#include "pc_menu_hover.h"
+// The A button the game draws at the bottom right of every day-end page. It lifts while hovered.
+// With takeTap a click anywhere on the page presses A.
+static PcHoverGroup sDayEndA;
+static bool pcDayEndPointer(kh::Screen::ObjDayEndResultBase* self, bool takeTap)
+{
+	pc_menu_claim();
+	J2DPane* a      = self->mScreenTitle ? self->mScreenTitle->search(MC8("Nbtn2")) : nullptr;
+	J2DPane* target = a ? pcHoverTarget(a) : nullptr;
+	if (target) pc_menu_pane_hit(target, 0.0f, 0.0f, 0.0f);
+	float hx = 0.0f;
+	float hy = 0.0f;
+	const bool over = target && pc_menu_hover(&hx, &hy) && pc_menu_pane_hit(target, hx, hy, 0.02f);
+	if (over) pc_menu_set_hand(true);
+	pcHoverLift(a, sDayEndA, over);
+	if (!takeTap) return false;
+	float tx = 0.0f;
+	float ty = 0.0f;
+	if (!pc_menu_take_tap(&tx, &ty)) return false;
+	if (a) pc_menu_hover_press(a);
+	pc_menu_queue_button(Controller::PRESS_A);
+	return true;
+}
+#endif
+
+#if PIKI_PC_MENU_TAP
+static int sDayItemRow = -1;
+static int sDayItemPick = -1;
+static float sDayItemScale[48];
+static char sDayItemFeel[48];
+
+// Treasure under the pointer, from the scroll layout. The two row panes are
+// restamped while drawing, so they are not hit targets.
+static int pcDayItemAt(ObjDayEndResultItem* self, float nx, float ny)
+{
+	if (!self->mScreenMain) return -1;
+	J2DPane* mask = self->mScreenMain->search(MC8("Nmask"));
+	if (mask) pc_pointer_track(mask);
+	if (!mask || !(self->mItemRowHeight > 0.0f) || self->mGXScissorBottomY == 0) return -1;
+	const PcPointerRect rect = pc_pointer_rect(mask);
+	if (!rect.valid) return -1;
+	int width = 0, height = 0;
+	pc_gfx_get_drawable_size(&width, &height);
+	float pointerY = 0.0f;
+	if (!pc_result_window_y(nx, ny, rect.x0, rect.y0, rect.x1, rect.y1, width, height, (float)self->mGXScissorBottomY, &pointerY))
+		return -1;
+	if (!self->getDispMember()->isID(OWNER_KH, MEMBER_DAY_END_RESULT)) return -1;
+	DispDayEndResult* disp = static_cast<DispDayEndResult*>(self->getDispMember());
+	if (!disp->mItem.mResultNode) return -1;
+	int count = 0;
+	FOREACH_NODE(Game::Result::TNode, disp->mItem.mResultNode->mChild, node) { count++; }
+	return pc_result_row_at(pointerY, count, self->mItemRowHeight, self->mCurrentScrollYPos, (float)self->mGXScissorBottomY);
+}
+#endif
+
 /**
  * @note Address: 0x8040404C
  * @note Size: 0x2CC
@@ -586,6 +649,31 @@ bool ObjDayEndResultItem::doUpdate()
 {
 	updateCommon();
 	mScreenMain->update();
+#if PIKI_PC_MENU_TAP
+	pcDayEndPointer(this, false);
+	if (mFlags & 0x1) pc_menu_wheel_list(PAD_BUTTON_UP, PAD_BUTTON_DOWN);
+	{
+		float hx = 0.0f, hy = 0.0f;
+		const bool hovering = pc_menu_hover(&hx, &hy);
+		sDayItemRow = pcDayItemAt(this, hovering ? hx : -1.0f, hovering ? hy : -1.0f);
+		if (sDayItemRow >= 0) pc_menu_set_hand(true);
+		float tx = 0.0f, ty = 0.0f;
+		if (pc_menu_take_tap(&tx, &ty)) {
+			const int pressed = pcDayItemAt(this, tx, ty);
+			if (pressed >= 0 && pressed < 48) pc_menu_hover_press(&sDayItemFeel[pressed]);
+			// A click on another row of a long list scrolls to it. Anywhere else is A.
+			if (pressed >= 0 && pressed < 48 && (mFlags & 0x1) && pressed != mCurrentSelectId) {
+				sDayItemPick = pressed;
+			} else {
+				pc_menu_hover_press(mScreenTitle->search(MC8("Nbtn2")));
+				pc_menu_queue_button(Controller::PRESS_A);
+			}
+		}
+		for (int i = 0; i < 48; i++) {
+			sDayItemScale[i] = pc_menu_hover_scale(&sDayItemFeel[i], i == sDayItemRow, 0.06f, sys->mDeltaTime);
+		}
+	}
+#endif
 
 	switch (mStatus) {
 	case ITEMSTATUS_Normal:
@@ -779,6 +867,11 @@ void ObjDayEndResultItem::doDraw(Graphics& gfx)
 			}
 			mTreasurePokoCount[isOdd] = pokos;
 			mTreasurePokoCounter[isOdd]->update();
+#if PIKI_PC_MENU_TAP
+			float rowScale = i < 48 ? sDayItemScale[i] : 1.0f;
+			if (rowScale <= 0.0f) rowScale = 1.0f;
+			panes[isOdd]->updateScale(rowScale);
+#endif
 #if defined(VERSION_PAL)
 			if (mGXScissorBottomY)
 #endif
@@ -792,6 +885,9 @@ void ObjDayEndResultItem::doDraw(Graphics& gfx)
 		panes[!isOdd]->hide();
 		panes[isOdd]->show();
 		panes[isOdd]->add(0.0f, offs);
+#if PIKI_PC_MENU_TAP
+		panes[isOdd]->updateScale(1.0f);
+#endif
 		mScreenMain->search(icons[isOdd])->hide();
 		mScreenMain->search(names[isOdd])->hide();
 		mTreasurePokoCounter[isOdd]->hide();
@@ -799,6 +895,10 @@ void ObjDayEndResultItem::doDraw(Graphics& gfx)
 	}
 
 	GXSetScissor(left, top, width, height);
+#if PIKI_PC_MENU_TAP
+	panes[0]->updateScale(1.0f);
+	panes[1]->updateScale(1.0f);
+#endif
 	if (mFlags & 1 && mStatus != ITEMSTATUS_ForceScroll && mStatus != ITEMSTATUS_DrumRoll && mStatus != ITEMSTATUS_TotalValue) {
 		pane1->hide();
 		pane2->show();
@@ -836,6 +936,13 @@ void ObjDayEndResultItem::statusNormal()
 	}
 
 	if (mFlags & 0x1) {
+#if PIKI_PC_MENU_TAP
+#endif
+		if (getGamePad()->getButton() & (Controller::PRESS_UP | Controller::PRESS_DOWN)) {
+#if PIKI_PC_MENU_TAP
+			sDayItemPick = -1;
+#endif
+		}
 		if (getGamePad()->getButton() & Controller::PRESS_UP && mCurrentSelectId != 0) {
 			mCurrentSelectId--;
 			if (mScrollUpDelay >= 1) {
@@ -858,10 +965,33 @@ void ObjDayEndResultItem::statusNormal()
 			mScrollUpDelay = 0;
 			mStatus        = ITEMSTATUS_ScrollDown;
 			statusScrollDown();
+#if PIKI_PC_MENU_TAP
+		} else if (sDayItemPick >= 0 && sDayItemPick != mCurrentSelectId) {
+			const int step = pc_list_step_toward(mCurrentSelectId, sDayItemPick, mCurrentSelectId != 0,
+			                                     mCurrentSelectId != mMaxScrollId);
+			if (step > 0) {
+				mCurrentSelectId++;
+				mScollMoveTargetTime = ObjDayEndResultBase::msVal._24;
+				mScrollUpDelay       = 0;
+				mStatus              = ITEMSTATUS_ScrollDown;
+				statusScrollDown();
+			} else if (step < 0) {
+				mCurrentSelectId--;
+				mScollMoveTargetTime = ObjDayEndResultBase::msVal._24;
+				mScrollDownDelay     = 0;
+				mStatus              = ITEMSTATUS_ScrollUp;
+				statusScrollUp();
+			} else {
+				sDayItemPick = -1;
+			}
+#endif
 		} else {
 			mScrollDownDelay     = 0;
 			mScrollUpDelay       = 0;
 			mScollMoveTargetTime = ObjDayEndResultBase::msVal._24;
+#if PIKI_PC_MENU_TAP
+			if (sDayItemPick == mCurrentSelectId) sDayItemPick = -1;
+#endif
 		}
 	}
 }
@@ -1330,6 +1460,9 @@ bool ObjDayEndResultIncP::doUpdate()
 		break;
 	}
 
+#if PIKI_PC_MENU_TAP
+	pcDayEndPointer(this, true);
+#endif
 	if (getGamePad()->getButtonDown() & (Controller::PRESS_A | Controller::PRESS_B)) {
 		if (getGamePad()->getButtonDown() & Controller::PRESS_A && mStatus == INCPSTATUS_Slot && !isFlag(0x40)) {
 			mFlags |= 0x20;
@@ -1965,6 +2098,11 @@ bool ObjDayEndResultMail::doUpdateFadeout()
  */
 void ObjDayEndResultMail::statusNormal()
 {
+#if PIKI_PC_MENU_TAP
+	// The wheel turns the pages (L previous, R next); a click anywhere saves.
+	pc_menu_wheel_list(PAD_TRIGGER_L, PAD_TRIGGER_R);
+	pcDayEndPointer(this, true);
+#endif
 	if (getGamePad()->getButtonDown() & Controller::PRESS_A) {
 		mFlags |= 4;
 		mSaveMgr->start();

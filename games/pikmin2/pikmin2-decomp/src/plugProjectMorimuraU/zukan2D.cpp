@@ -16,6 +16,13 @@ extern "C" void pc_gfx_p2_black_sides(void);
 static const int unusedArray[] = { 0, 0, 0 };
 
 #include "nans.h"
+#include "pc_menu_tap.h"
+#include "pc_menu_hover.h"
+#if PIKI_PC_MENU_TAP
+#include "Dolphin/pad.h"
+#include "pc_menu_pointer.h"
+#include "System.h"
+#endif
 
 namespace Morimura {
 s16 TZukanBase::mRequestTimerMax    = 10;
@@ -498,8 +505,60 @@ void TZukanBase::doCreate(JKRArchive* archive)
  * @note Address: 0x803718D8
  * @note Size: 0xFC8
  */
+#if PIKI_PC_MENU_TAP
+static int sZukanRow = -1;
+static int sZukanCol = -1;
+static int sZukanPick = -1;
+static int sZukanPickCol = 0;
+static int sZukanPickSteps = 0;
+// Mouse drag that started over the model picture; the book camera reads it.
+static float sZukanDragX = 0.0f;
+static float sZukanDragY = 0.0f;
+static PcHoverGroup sZukanButtonHover[5];
+// The list tile under the pointer; TIconInfo::update lifts it.
+static const void* sZukanHoverPane = nullptr;
+
+// Icon under the pointer. Big rows only have the center picture.
+static bool pcZukanIconAt(TZukanBase* self, float nx, float ny, int* row, int* col)
+{
+	*row = -1;
+	*col = -1;
+	if (!self->mIndexPaneList) return false;
+	for (int i = 0; i < self->mNumActiveRows; i++) {
+		TIndexPane* pane = self->mIndexPaneList[i];
+		if (!pane || !pane->getMainPane() || !pane->getMainPane()->isVisible() || !pane->mIconInfos) continue;
+		for (int j = 0; j < 3; j++) {
+			if (pane->mSizeType != TIndexPane::Size_Small && j != 1) continue;
+			TIconInfo* icon = pane->mIconInfos[j];
+			if (!icon || icon->mCategoryID < 0 || !icon->mPane || !icon->mPane->isVisible()) continue;
+			if (pc_menu_pane_hit(icon->mPane, nx, ny, 0.01f)) {
+				*row = i;
+				*col = j;
+			}
+		}
+	}
+	return *row >= 0;
+}
+
+const void* pcZukanHoveredIcon() { return sZukanHoverPane; }
+
+bool pcZukanTakeModelDrag(float* dx, float* dy)
+{
+	*dx = sZukanDragX;
+	*dy = sZukanDragY;
+	const bool any = sZukanDragX != 0.0f || sZukanDragY != 0.0f;
+	sZukanDragX = sZukanDragY = 0.0f;
+	return any;
+}
+#endif
+
 bool TZukanBase::doUpdate()
 {
+#if PIKI_PC_MENU_TAP
+	sZukanRow = -1;
+	sZukanCol = -1;
+	sZukanHoverPane = nullptr;
+#endif
 	if (!mIsInDemo) {
 		doUpdateIn();
 	}
@@ -569,9 +628,107 @@ bool TZukanBase::doUpdate()
 
 	if (!mIsInDemo && mCanInput && mState < Screen::Game2DMgr::CHECK2D_Zukan_ExitStart && !isOpenConfirmWindow()) {
 		mIsInFadeInOut = false;
+#if PIKI_PC_MENU_TAP
+		// Mouse: every button the screen draws is a button. L and R switch between the two books,
+		// X and Y change the journal, A zooms. The list scrolls with the wheel; the model turns when dragged.
+		{
+			pc_menu_claim();
+			pc_menu_wheel_list(PAD_BUTTON_UP, PAD_BUTTON_DOWN);
+			J2DPane* lPane = mYajiScreen ? mYajiScreen->mScreenObj->search(MC8("N_Lbtn")) : nullptr;
+			J2DPane* rPane = mYajiScreen ? mYajiScreen->mScreenObj->search(MC8("N_Rbtn")) : nullptr;
+			struct Btn { J2DPane* container; unsigned short pad; bool wide; };
+			// L and R test their glyph. X, Y and A test the icon and its label together.
+			Btn buttons[5] = { { lPane, PAD_TRIGGER_L, false }, { rPane, PAD_TRIGGER_R, false }, { mXButtonPane, PAD_BUTTON_X, true },
+			                   { mYButtonPane, PAD_BUTTON_Y, true }, { mAButtonPane, PAD_BUTTON_A, true } };
+			// A pane is only measured while something asks about it every update.
+			for (int k = 0; k < 5; k++) {
+				if (buttons[k].container) pc_menu_pane_hit(buttons[k].wide ? buttons[k].container : pcHoverTarget(buttons[k].container), 0.0f, 0.0f, 0.0f);
+			}
+			if (mPaneModel) pc_menu_pane_hit(mPaneModel, 0.0f, 0.0f, 0.0f);
+			float hx = 0.0f;
+			float hy = 0.0f;
+			int overButton = -1;
+			bool overModel = false;
+			if (pc_menu_hover(&hx, &hy)) {
+				for (int k = 0; k < 5 && overButton < 0; k++) {
+					if (buttons[k].container && pc_menu_pane_hit(buttons[k].wide ? buttons[k].container : pcHoverTarget(buttons[k].container), hx, hy, 0.015f)) overButton = k;
+				}
+				if (overButton < 0) {
+					overModel = mPaneModel && mPaneModel->isVisible() && pc_menu_pane_hit(mPaneModel, hx, hy, 0.0f);
+					if (pcZukanIconAt(this, hx, hy, &sZukanRow, &sZukanCol)) {
+						TIconInfo* hovered = mIndexPaneList[sZukanRow]->mIconInfos[sZukanCol];
+						sZukanHoverPane    = hovered ? hovered->mPane : nullptr;
+					}
+				}
+				if (overButton >= 0 || sZukanRow >= 0 || overModel) pc_menu_set_hand(overButton >= 0 || sZukanRow >= 0);
+			}
+			for (int k = 0; k < 5; k++) pcHoverLift(buttons[k].container, sZukanButtonHover[k], k == overButton);
+
+			// Dragging over the model turns it. A drag anywhere else is dropped.
+			float ddx = 0.0f;
+			float ddy = 0.0f;
+			if (pc_menu_take_drag(&ddx, &ddy) && overModel) {
+				sZukanDragX += ddx;
+				sZukanDragY += ddy;
+			}
+
+			// Hovering the first or last row of the list scrolls toward it, one step per update.
+			if (sZukanRow >= 0 && !mIsBigWindowOpened && !mWindow->mState && sZukanRow != mCurrActiveRowSel
+			    && (sZukanRow == 0 || sZukanRow == mNumActiveRows - 1) && sZukanPick < 0) {
+				TIndexPane* edge = mIndexPaneList[sZukanRow];
+				const bool big   = edge->mSizeType != TIndexPane::Size_Small;
+				sZukanPick       = edge->getIndex();
+				sZukanPickCol    = big ? 1 : sZukanCol;
+				sZukanPickSteps  = 0;
+			}
+
+			float tx = 0.0f;
+			float ty = 0.0f;
+			int clickRow = -1;
+			int clickCol = -1;
+			if (pc_menu_take_tap(&tx, &ty)) {
+				int clickedButton = -1;
+				for (int k = 0; k < 5 && clickedButton < 0; k++) {
+					if (buttons[k].container && pc_menu_pane_hit(buttons[k].wide ? buttons[k].container : pcHoverTarget(buttons[k].container), tx, ty, 0.015f)) clickedButton = k;
+				}
+				if (clickedButton >= 0) {
+					pc_menu_hover_press(buttons[clickedButton].container);
+					pc_menu_queue_button(buttons[clickedButton].pad);
+				} else if (!mIsBigWindowOpened && !mWindow->mState && pcZukanIconAt(this, tx, ty, &clickRow, &clickCol)) {
+					TIndexPane* clicked = mIndexPaneList[clickRow];
+					TIconInfo* icon     = clicked->mIconInfos[clickCol];
+					if (icon && icon->mPane) pc_menu_hover_press(icon->mPane);
+					const bool big = clicked->mSizeType != TIndexPane::Size_Small;
+					const int col  = big ? 1 : clickCol;
+					if (clickRow == mCurrActiveRowSel && (big || mRightOffset == col)) {
+						sZukanPick = -1;
+						mState     = Screen::Game2DMgr::CHECK2D_Zukan_Changing;
+						if (mCameraFadeInLevel < 0.5f) {
+							if (!mIsBigWindowOpened) PSSystem::spSysIF->playSystemSe(PSSE_SY_CAMERAVIEW_CHANGE, 0);
+							mIsBigWindowOpened = true;
+						}
+						if (mWindow->mState) windowOpenClose(getXMsgID(clicked->getIndex()));
+					} else if (clickRow == mCurrActiveRowSel) {
+						sZukanPick   = -1;
+						mRightOffset = col;
+						isHorizontalScroll = true;
+						icon->startScaleUp(1.0f);
+						PSSystem::spSysIF->playSystemSe(PSSE_SY_MENU_CURSOR, 0);
+					} else {
+						sZukanPick      = clicked->getIndex();
+						sZukanPickCol   = col;
+						sZukanPickSteps = 0;
+					}
+				}
+			}
+		}
+#endif
 		if (!mIsBigWindowOpened && !mWindow->mState) {
 			Controller* pad = mController;
 			if (pad->getButton() & Controller::ANALOG_UP) {
+#if PIKI_PC_MENU_TAP
+				sZukanPick = -1;
+#endif
 				if (mIsPreDebt && !mCanScroll) {
 					if (mCurrActiveRowSel > 0) {
 						mIndexGroup->upIndex();
@@ -585,6 +742,9 @@ bool TZukanBase::doUpdate()
 					mIndexGroup->upIndex();
 				}
 			} else if (pad->getButton() & Controller::ANALOG_DOWN) {
+#if PIKI_PC_MENU_TAP
+				sZukanPick = -1;
+#endif
 				if (mIsPreDebt && !mCanScroll) {
 					bool cantScroll = true;
 					if (_234 < 0) {
@@ -626,6 +786,27 @@ bool TZukanBase::doUpdate()
 					}
 				}
 			}
+#if PIKI_PC_MENU_TAP
+			else if (sZukanPick >= 0 && mIndexGroup && mIndexGroup->mStateID == TIndexGroup::IDGroup_Idle) {
+				TIndexPane* selected = mIndexPaneList[mCurrActiveRowSel];
+				if (selected->getIndex() == sZukanPick) {
+					if (selected->mSizeType == TIndexPane::Size_Small) mRightOffset = sZukanPickCol;
+					if (selected->mIconInfos && selected->mIconInfos[mRightOffset]) {
+						selected->mIconInfos[mRightOffset]->startScaleUp(1.0f);
+					}
+					PSSystem::spSysIF->playSystemSe(PSSE_SY_MENU_CURSOR, 0);
+					sZukanPick = -1;
+				} else if (sZukanPickSteps > mNumActiveRows + 2) {
+					sZukanPick = -1;
+				} else {
+					const int step = pc_list_step_toward(selected->getIndex(), sZukanPick, true, true);
+					if (step > 0) mIndexGroup->downIndex();
+					else if (step < 0) mIndexGroup->upIndex();
+					else sZukanPick = -1;
+					sZukanPickSteps++;
+				}
+			}
+#endif
 		}
 
 		if (!mIndexGroup->mStateID && !isHorizontalScroll) {
@@ -1391,11 +1572,18 @@ void TZukanBase::doUpdateOut()
 				J2DPane* pane   = icon->mPic;
 				if (icon->mParentIndex && icon->mPane->isVisible()) {
 					pane->show();
-					if (mIndexPaneList[i]->mSizeType == TIndexPane::Size_Small) {
-						pane->updateScale(mCategoryScale.x, mCategoryScale.y);
-					} else {
-						pane->updateScale(mCategoryScale.x * mLargeCategoryScale, mCategoryScale.y * mLargeCategoryScale);
+					f32 sx = mCategoryScale.x;
+					f32 sy = mCategoryScale.y;
+					if (mIndexPaneList[i]->mSizeType != TIndexPane::Size_Small) {
+						sx *= mLargeCategoryScale;
+						sy *= mLargeCategoryScale;
 					}
+#if PIKI_PC_MENU_TAP
+					const float hover = pc_menu_hover_scale(icon->mPane, i == sZukanRow && j == sZukanCol, 0.06f, sys->mDeltaTime);
+					sx *= hover;
+					sy *= hover;
+#endif
+					pane->updateScale(sx, sy);
 				} else {
 					pane->hide();
 				}

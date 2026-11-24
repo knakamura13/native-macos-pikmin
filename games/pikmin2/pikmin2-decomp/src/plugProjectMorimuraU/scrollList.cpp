@@ -1,3 +1,5 @@
+#include "pc_menu_tap.h"
+#include "System.h"
 #include "Morimura/ScrollList.h"
 #include "Morimura/Zukan.h"
 
@@ -284,6 +286,9 @@ void TIconInfo::init(TScaleUpCounter* counter, J2DPane* pane1, J2DPane* pane2)
  * @note Address: 0x803A2848
  * @note Size: 0x198
  */
+#if PIKI_PC_MENU_TAP
+const void* pcZukanHoveredIcon();
+#endif
 void TIconInfo::update(f32 base)
 {
 	if (mScaleMgr) {
@@ -303,6 +308,11 @@ void TIconInfo::update(f32 base)
 		} else {
 			mPane->updateScale(base * calc, base * calc);
 		}
+#if PIKI_PC_MENU_TAP
+		// Mouse: the tile under the pointer grows a little, eased.
+		const float lift = pc_menu_hover_scale(mPane, mPane == pcZukanHoveredIcon(), 0.1f, sys->mDeltaTime);
+		mPane->updateScale(mPane->getScaleX() * lift, mPane->mScaleY * lift);
+#endif
 	}
 }
 

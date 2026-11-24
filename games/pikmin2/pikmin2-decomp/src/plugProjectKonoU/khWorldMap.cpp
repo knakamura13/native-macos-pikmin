@@ -14,13 +14,34 @@
 #include "efx2d/T2DChangesmoke.h"
 #include "Controller.h"
 #include "System.h" // PC_ORIG_DT_SCALE / PC_DAMP
-#if PIKI_PC_TOUCH
-extern "C" void pc_touch_claim_game_menu(void);
-extern "C" bool pc_touch_take_game_menu_tap(float* x, float* y);
-extern "C" bool pc_touch_pane_hit(const void* pane, float nx, float ny, float margin);
-// Zona tocada en el mapa: getTarget la devuelve en vez de leer la cruceta.
+#include "pc_menu_tap.h"
+#include "pc_menu_hover.h"
+#if PIKI_PC_MENU_TAP
+// Area tapped or clicked on the map: getTarget returns it instead of reading the D-pad.
 static int sPcTouchTarget = -1;
+static PcHoverGroup sButtonHover[2];
+
+// A landing site is a container whose children include wide effect panes, so its union
+// rectangle covers half the map. Only its small child panes count as the site.
+static bool pcPointHit(J2DPane* pane, float nx, float ny, float margin, int depth = 0)
+{
+	if (!pane || depth > 4) return false;
+	bool hit = false;
+	for (JSUTreeIterator<J2DPane> it = pane->mTree.getFirstChild(); it != pane->mTree.getEndChild(); ++it) {
+		J2DPane* c = it.getObject();
+		if (!c) continue;
+		const float w = (c->mBounds.f.x - c->mBounds.i.x) * c->getScaleX();
+		const float h = (c->mBounds.f.y - c->mBounds.i.y) * c->mScaleY;
+		if (c->getTypeID() != PANETYPE_Pane && w > 0.0f && h > 0.0f && w <= 90.0f && h <= 90.0f) {
+			if (pc_menu_pane_hit(c, nx, ny, margin)) hit = true;
+		}
+		if (pcPointHit(c, nx, ny, margin, depth + 1)) hit = true;
+	}
+	return hit;
+}
+
 #endif
+
 
 static void _Print(char* format, ...)
 {
@@ -1361,24 +1382,58 @@ bool WorldMap::changeState()
 {
 	bool isStateChange = false;
 
-#if PIKI_PC_TOUCH
+#if PIKI_PC_MENU_TAP
 	// Tactil, como el mapa de Pikmin 1: tocar la zona seleccionada es A, otra
 	// zona abierta lleva alli el cohete y L/R abren Piklopedia/Tesoros. Los
 	// paneles se consultan cada frame para que el toque los siga.
 	bool pcTapA = false, pcTapL = false, pcTapR = false;
 	{
-		pc_touch_claim_game_menu();
+		pc_menu_claim();
+		J2DPane* left   = pcHoverTarget(mScreenInfo->search(MC8("Nlbtn")));
+		J2DPane* right  = pcHoverTarget(mScreenInfo->search(MC8("Nrbtn")));
+		J2DPane* points[4] = { nullptr, nullptr, nullptr, nullptr };
+		for (int i = 0; i < mOpenCourses && i < 4; i++) points[i] = mScreenKitagawa->search(getSerialTagName(MC8("Npoint0"), i));
+		// A pane is only measured while something asks about it every update.
+		if (left) pc_menu_pane_hit(left, 0.0f, 0.0f, 0.0f);
+		if (right) pc_menu_pane_hit(right, 0.0f, 0.0f, 0.0f);
+		for (int i = 0; i < 4; i++) pcPointHit(points[i], 0.0f, 0.0f, 0.0f);
+		// A glyph is small, so the buttons take a little slack; a click on one never reaches the other.
 		float nx = 0.0f, ny = 0.0f;
-		const bool tapped = pc_touch_take_game_menu_tap(&nx, &ny);
-		for (int i = 0; i < mOpenCourses && i < 4; i++) {
-			J2DPane* point = mScreenKitagawa->search(getSerialTagName(MC8("Npoint0"), i));
-			if (point && pc_touch_pane_hit(point, nx, ny, 0.04f) && tapped) {
-				if (i == mCurrentCourseIndex) pcTapA = true;
-				else sPcTouchTarget = i;
+		if (pc_menu_take_tap(&nx, &ny)) {
+			if (left && pc_menu_pane_hit(left, nx, ny, 0.02f)) {
+				pc_menu_hover_press(mScreenInfo->search(MC8("Nlbtn")));
+				pcTapL = true;
+			} else if (right && pc_menu_pane_hit(right, nx, ny, 0.02f)) {
+				pc_menu_hover_press(mScreenInfo->search(MC8("Nrbtn")));
+				pcTapR = true;
+			} else {
+				for (int i = 0; i < mOpenCourses && i < 4; i++) {
+					if (pcPointHit(points[i], nx, ny, 0.02f)) {
+						pc_menu_hover_press(points[i]);
+						if (i == mCurrentCourseIndex) pcTapA = true;
+						else sPcTouchTarget = i;
+					}
+				}
 			}
 		}
-		if (pc_touch_pane_hit(mScreenInfo->search(MC8("Nlbtn")), nx, ny, 0.02f) && tapped) pcTapL = true;
-		if (pc_touch_pane_hit(mScreenInfo->search(MC8("Nrbtn")), nx, ny, 0.02f) && tapped) pcTapR = true;
+		// Mouse: the ship follows the pointer to a landing site, like Pikmin 1; the site and the
+		// L/R buttons lift while hovered and the hand shows.
+		float hx = 0.0f, hy = 0.0f;
+		int overPoint = -1;
+		bool overL = false, overR = false;
+		if (pc_menu_hover(&hx, &hy)) {
+			overL = left && pc_menu_pane_hit(left, hx, hy, 0.02f);
+			overR = !overL && right && pc_menu_pane_hit(right, hx, hy, 0.02f);
+			if (!overL && !overR) {
+				for (int i = 0; i < mOpenCourses && i < 4; i++) {
+					if (pcPointHit(points[i], hx, hy, 0.02f)) overPoint = i;
+				}
+			}
+			pc_menu_set_hand(overPoint >= 0 || overL || overR);
+			if (overPoint >= 0 && overPoint != mCurrentCourseIndex && sPcTouchTarget < 0) sPcTouchTarget = overPoint;
+		}
+		pcHoverLift(mScreenInfo->search(MC8("Nlbtn")), sButtonHover[0], overL);
+		pcHoverLift(mScreenInfo->search(MC8("Nrbtn")), sButtonHover[1], overR);
 	}
 	if (sPcTouchTarget >= 0) {
 		isStateChange   = true;
@@ -1517,7 +1572,7 @@ bool WorldMap::newMapOpen()
  */
 int WorldMap::getTarget()
 {
-#if PIKI_PC_TOUCH
+#if PIKI_PC_MENU_TAP
 	if (sPcTouchTarget >= 0) {
 		const int target = sPcTouchTarget;
 		sPcTouchTarget   = -1;
