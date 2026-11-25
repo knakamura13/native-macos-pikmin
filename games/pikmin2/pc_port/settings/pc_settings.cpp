@@ -61,6 +61,7 @@
 #include "pc_speedrun.h"
 #if PIKI_P2_HOST
 #include "pc_p2_captains.h"
+#include "mods/pc_p2_pikmin_models.h"
 #include "pc_p2_coop.h"
 #include "pc_p2_captain_preview.h"
 #include "randomizer/pc_randomizer.h"
@@ -246,6 +247,12 @@ struct PcConfig {
     // pc_p2_captains.h). -1 en el capitán 2 es el original (Louie o el Presidente).
     int p2Captain1 = 0;
     int p2Captain2 = -1;
+    // Personaje del creador de modelos elegido (su carpeta en Load/Characters);
+    // vacío = el de p2Captain1/2. Por carpeta y no por número: el orden cambia
+    // al instalar o quitar personajes.
+    std::string p2Captain1Id, p2Captain2Id;
+    // Modelo de Pikmin del creador de modelos por color (EPikiKind 0-4), por id.
+    std::string pikminModel[PC_P2_PIKMIN_MODEL_COLOURS];
     // Última elección del selector 1P/2P, solo para preseleccionarla. La
     // partida en sí no la guarda (PLAN_COOP).
     int coopPlayers = 1;
@@ -364,6 +371,9 @@ struct PcConfig {
         dayMinutes = 0;
         p2Captain1 = 0;
         p2Captain2 = -1;
+        p2Captain1Id.clear();
+        p2Captain2Id.clear();
+        for (std::string& m : pikminModel) m.clear();
         coopPlayers = 1;
 #if PIKI_PC_TOUCH
         coopSplit = 1;
@@ -1004,6 +1014,26 @@ void startVideoConfirm() {
 }
 
 void saveConfig(); // defined below
+
+#if PIKI_P2_HOST
+// Elección de cada capitán: de serie (p2Captain1/2) o un personaje propio por su
+// carpeta (p2Captain1Id/2Id). Un personaje propio que ya no está vuelve al de serie.
+int p2SavedCaptain(int captain)
+{
+    const std::string& id = captain == 0 ? sConfig.p2Captain1Id : sConfig.p2Captain2Id;
+    const int custom      = pc_p2_custom_character_find(id.c_str());
+    if (custom >= 0) return custom;
+    return captain == 0 ? sConfig.p2Captain1 : sConfig.p2Captain2;
+}
+
+void p2StoreCaptain(int captain, int character)
+{
+    const bool custom = pc_p2_character_is_custom(character);
+    (captain == 0 ? sConfig.p2Captain1 : sConfig.p2Captain2)     = custom ? (captain == 0 ? 0 : -1) : character;
+    (captain == 0 ? sConfig.p2Captain1Id : sConfig.p2Captain2Id) = custom ? pc_p2_custom_character_id(character) : "";
+    pc_p2_captain_set_choice(captain, character);
+}
+#endif
 void mainRowChange(int row, bool left, bool right, bool ok);
 void mainRowValue(int row, char* out, size_t n);
 void advancedRowChange(int row, bool left, bool right);
@@ -1170,6 +1200,11 @@ unsigned char pc_settings_startup_language(void) {
     return language;
 }
 
+const char* pc_settings_get_pikmin_model(int color)
+{
+    return color >= 0 && color < PC_P2_PIKMIN_MODEL_COLOURS ? sConfig.pikminModel[color].c_str() : "";
+}
+
 unsigned char pc_settings_get_language(void) {
     if (sLanguage == 0xFF) pc_settings_startup_language();
     return sLanguage;
@@ -1257,6 +1292,12 @@ void saveConfig() {
 #if PIKI_P2_HOST
     out << "p2Captain1 = " << sConfig.p2Captain1 << "\n";
     out << "p2Captain2 = " << sConfig.p2Captain2 << "\n";
+    out << "p2Captain1Id = " << sConfig.p2Captain1Id << "\n";
+    out << "p2Captain2Id = " << sConfig.p2Captain2Id << "\n";
+    {
+        static const char* const kKeys[PC_P2_PIKMIN_MODEL_COLOURS] = { "Blue", "Red", "Yellow", "Purple", "White" };
+        for (int c = 0; c < PC_P2_PIKMIN_MODEL_COLOURS; c++) out << "pikminModel" << kKeys[c] << " = " << sConfig.pikminModel[c] << "\n";
+    }
 #endif
     out << "coopPlayers = " << sConfig.coopPlayers << "\n";
     out << "coopSplit = " << sConfig.coopSplit << "\n";
@@ -1559,6 +1600,13 @@ void loadConfig() {
             sConfig.p2Captain1 = atoi(val.c_str());
             if (sConfig.p2Captain1 < 0 || sConfig.p2Captain1 >= PC_P2_CHAR_COUNT) sConfig.p2Captain1 = 0;
         }
+        else if (key == "p2Captain1Id") sConfig.p2Captain1Id = val;
+        else if (key == "pikminModelBlue") sConfig.pikminModel[0] = val;
+        else if (key == "pikminModelRed") sConfig.pikminModel[1] = val;
+        else if (key == "pikminModelYellow") sConfig.pikminModel[2] = val;
+        else if (key == "pikminModelPurple") sConfig.pikminModel[3] = val;
+        else if (key == "pikminModelWhite") sConfig.pikminModel[4] = val;
+        else if (key == "p2Captain2Id") sConfig.p2Captain2Id = val;
         else if (key == "p2Captain2") {
             sConfig.p2Captain2 = atoi(val.c_str());
             if (sConfig.p2Captain2 < -1 || sConfig.p2Captain2 >= PC_P2_CHAR_COUNT) sConfig.p2Captain2 = -1;
@@ -1689,8 +1737,8 @@ void loadConfig() {
         }
     }
 #if PIKI_P2_HOST
-    pc_p2_captain_set_choice(0, sConfig.p2Captain1);
-    pc_p2_captain_set_choice(1, sConfig.p2Captain2);
+    pc_p2_captain_set_choice(0, p2SavedCaptain(0));
+    pc_p2_captain_set_choice(1, p2SavedCaptain(1));
 #endif
     if (sConfig.windowWidth <= 0) sConfig.windowWidth = 1280;
     if (sConfig.windowHeight <= 0) sConfig.windowHeight = 720;
@@ -2783,6 +2831,23 @@ void advancedRowChange(int row, bool left, bool right) {
 }
 
 void graphicsRowChange(int row, bool left, bool right, bool ok) {
+    // Modelos de Pikmin: el del juego y los de Load/Pikmin para ese color. Se
+    // aplican al cargar los Pikmin (la próxima zona o cueva).
+    if (row >= 14 && row <= 18) {
+        static const int kColour[5] = { 1, 2, 0, 3, 4 }; // rojo, amarillo, azul, morado, blanco
+        const int color = kColour[row - 14];
+        if (row == 14) pc_p2_pikmin_models_refresh(); // instalados con el juego abierto
+        const int count = pc_p2_pikmin_models_count(color);
+        int at          = -1; // -1 = el del juego
+        for (int k = 0; k < count; k++)
+            if (sPending.pikminModel[color] == pc_p2_pikmin_models_id(color, k)) at = k;
+        at = left ? (at + 1 + count) % (count + 1) - 1 : (at + 2) % (count + 1) - 1;
+        sPending.pikminModel[color] = at < 0 ? std::string() : std::string(pc_p2_pikmin_models_id(color, at));
+        if (!sProbing) sConfig.pikminModel[color] = sPending.pikminModel[color];
+        (void)right;
+        (void)ok;
+        return;
+    }
     // Texture packs lives in the Graphics page: it is a rendering choice,
     // it needs restarting to take effect, and it is opened rather than
     // cycled so the install entry has room next to the pack list.
@@ -6023,11 +6088,49 @@ const int kCsStartH = 38;
 const Colour kCsRed(235, 70, 60, 255);
 const Colour kCsBlue(70, 130, 245, 255);
 
-int csCardIndex(int character) { return character < 0 ? PC_P2_CHAR_LOUIE : character; }
+// Tarjetas: las 9 de serie y después los personajes del creador de modelos
+// (pc_p2_selector_*). Se ven tres filas; las demás, desplazándose.
+int sCsScroll = 0;
+int csCount() { return pc_p2_selector_count(); }
+int csRows() { return (csCount() + kCsCols - 1) / kCsCols; }
+bool csVisible(int card)
+{
+    const int row = card / kCsCols;
+    return card >= 0 && card < csCount() && row >= sCsScroll && row < sCsScroll + 3;
+}
+// Desplaza la rejilla para que se vea la tarjeta.
+void csShow(int card)
+{
+    const int row = card / kCsCols;
+    if (row < sCsScroll) sCsScroll = row;
+    if (row >= sCsScroll + 3) sCsScroll = row - 2;
+    sCsScroll = std::max(0, std::min(sCsScroll, std::max(0, csRows() - 3)));
+}
+// Mueve un cursor por la rejilla. Abajo desde la última fila: toStart.
+void csMove(int& card, int dx, int dy, bool* toStart)
+{
+    const int count = csCount();
+    int row = card / kCsCols, col = card % kCsCols;
+    if (dx) {
+        const int rowLen = std::min(kCsCols, count - row * kCsCols);
+        col              = (col + dx + rowLen) % rowLen;
+    }
+    if (dy < 0 && row > 0) row--;
+    if (dy > 0) {
+        if (row + 1 < csRows()) row++;
+        else if (toStart) *toStart = true;
+    }
+    card = std::min(row * kCsCols + col, count - 1);
+    csShow(card);
+}
+bool csValid(int character) { return (character >= -1 && character < PC_P2_CHAR_COUNT) || pc_p2_character_is_custom(character); }
+
+int csCardIndex(int character) { return character < 0 ? PC_P2_CHAR_LOUIE : pc_p2_selector_card(character); }
 // El original del capitán 2 (-1: Louie, o el Presidente con la deuda pagada)
 // se marca en la tarjeta de Louie y se conserva mientras no se elija otra.
-bool csCardChosen(int captain, int character)
+bool csCardChosen(int captain, int card)
 {
+    const int character = pc_p2_selector_character(card);
     return character == sCapSelChoice[captain] || (sCapSelChoice[captain] < 0 && character == PC_P2_CHAR_LOUIE);
 }
 
@@ -6036,7 +6139,7 @@ int csSideX(int panelX, int captain) { return csLeft(panelX) + captain * (kCsSid
 int csGridX(int panelX) { return csLeft(panelX) + kCsSideW + kCsSpace; }
 int csTop(int panelY) { return panelY + 70; }
 int csCardX(int panelX, int index) { return csGridX(panelX) + (index % kCsCols) * (kCsCardW + kCsGap); }
-int csCardY(int panelY, int index) { return csTop(panelY) + (index / kCsCols) * (kCsCardH + kCsGap); }
+int csCardY(int panelY, int index) { return csTop(panelY) + (index / kCsCols - sCsScroll) * (kCsCardH + kCsGap); }
 int csStartX(int panelX) { return panelX + kCsPanelW / 2 - kCsStartW / 2; }
 int csStartY(int panelY) { return csTop(panelY) + kCsGridH + 14; }
 
@@ -6055,7 +6158,8 @@ int csPointerHit(float nx, float ny, int* which)
         x = (nx - (0.5f - uiWidth * 0.5f)) / uiWidth * float(sw);
     const int panelX = sw / 2 - kCsPanelW / 2;
     const int panelY = sh / 2 - kCsPanelH / 2;
-    for (int i = 0; i < PC_P2_CHAR_COUNT; ++i) {
+    for (int i = 0; i < csCount(); ++i) {
+        if (!csVisible(i)) continue;
         const float cx = float(csCardX(panelX, i)), cy = float(csCardY(panelY, i));
         if (x >= cx && x <= cx + kCsCardW && y >= cy && y <= cy + kCsCardH) {
             *which = i;
@@ -6075,18 +6179,14 @@ int csPointerHit(float nx, float ny, int* which)
     return CS_HIT_NONE;
 }
 
-const char* csShortName(int character)
+const char* csShortName(int card)
 {
     static const char* const kNames[PC_P2_CHAR_COUNT] = { "Olimar", "Louie", "Pres.", "Red", "Yellow", "Blue", "Purple", "White", "Bulbmin" };
-    return kNames[csCardIndex(character)];
+    const int character = pc_p2_selector_character(card);
+    return pc_p2_character_is_custom(character) ? pc_p2_character_name(character) : kNames[pc_p2_character_base(character)];
 }
 
-const char* csLongName(int character)
-{
-    static const char* const kNames[PC_P2_CHAR_COUNT] = { "Olimar", "Louie", "President", "Red Pikmin", "Yellow Pikmin",
-                                                          "Blue Pikmin", "Purple Pikmin", "White Pikmin", "Bulbmin" };
-    return kNames[csCardIndex(character)];
-}
+const char* csLongName(int character) { return pc_p2_character_name(character < 0 ? PC_P2_CHAR_LOUIE : character); }
 
 // Personaje que verá de verdad el capitán (Original del capitán 2 es Louie
 // o el Presidente; para la vista previa basta con Louie).
@@ -6132,12 +6232,13 @@ void csSetActive(int captain)
 {
     sCapSelActive = captain;
     sCapSelIndex  = csCardIndex(sCapSelChoice[captain]);
+    csShow(sCapSelIndex);
 }
 
 // A sobre una tarjeta: es del capitán activo y la burbuja pasa al otro.
 void csAssign(int index)
 {
-    if (!csCardChosen(sCapSelActive, index)) sCapSelChoice[sCapSelActive] = index;
+    if (!csCardChosen(sCapSelActive, index)) sCapSelChoice[sCapSelActive] = pc_p2_selector_character(index);
     csSetActive(1 - sCapSelActive);
 }
 
@@ -6204,10 +6305,8 @@ void csHover(bool* onStart, int* cursor)
 
 void csCoopStart()
 {
-    sConfig.p2Captain1 = sCapSelChoice[0];
-    sConfig.p2Captain2 = sCapSelChoice[1];
-    pc_p2_captain_set_choice(0, sCapSelChoice[0]);
-    pc_p2_captain_set_choice(1, sCapSelChoice[1]);
+    p2StoreCaptain(0, sCapSelChoice[0]);
+    p2StoreCaptain(1, sCapSelChoice[1]);
     saveConfig();
     sCapSelResult = PC_CAPSEL_START;
     sCapSelOpen   = false;
@@ -6251,14 +6350,13 @@ void pcCaptainSelectCoopInput()
             continue;
         }
         if (sCsReady[p]) continue;
-        int& cursor   = sCsCursor[p];
-        const int row = cursor / kCsCols, col = cursor % kCsCols;
-        if (in[CS_Left]) cursor = row * kCsCols + (col + kCsCols - 1) % kCsCols;
-        if (in[CS_Right]) cursor = row * kCsCols + (col + 1) % kCsCols;
-        if (in[CS_Up] && row > 0) cursor -= kCsCols;
-        if (in[CS_Down] && row < 2) cursor += kCsCols;
+        int& cursor = sCsCursor[p];
+        if (in[CS_Left]) csMove(cursor, -1, 0, nullptr);
+        if (in[CS_Right]) csMove(cursor, 1, 0, nullptr);
+        if (in[CS_Up]) csMove(cursor, 0, -1, nullptr);
+        if (in[CS_Down]) csMove(cursor, 0, 1, nullptr);
         if (in[CS_A] || in[CS_Start]) {
-            if (!csCardChosen(p, cursor)) sCapSelChoice[p] = cursor;
+            if (!csCardChosen(p, cursor)) sCapSelChoice[p] = pc_p2_selector_character(cursor);
             sCsReady[p] = true;
         }
     }
@@ -6317,11 +6415,13 @@ void pcCaptainSelectInput()
         const int panelY = sh / 2 - kCsPanelH / 2;
         // Un toque en una tarjeta la asigna al capitán activo; en un panel de
         // capitán, ese pasa a ser el activo; el de Start empieza.
-        for (int i = 0; i < PC_P2_CHAR_COUNT; ++i) {
+        for (int i = 0; i < csCount(); ++i) {
+            if (!csVisible(i)) continue;
             const float cx = float(csCardX(panelX, i)), cy = float(csCardY(panelY, i));
             if (x >= cx && x <= cx + kCsCardW && y >= cy && y <= cy + kCsCardH) {
                 sCapSelStart = false;
                 csAssign(i);
+                break;
             }
         }
         for (int captain = 0; captain < 2; ++captain) {
@@ -6367,19 +6467,17 @@ void pcCaptainSelectInput()
 
     if (sCapSelStart) {
         if (up) {
-            // A la fila de abajo, en la columna de la tarjeta que tenía el foco.
+            // A la última fila que se ve, en la columna de la tarjeta que tenía el foco.
             sCapSelStart = false;
-            sCapSelIndex = 2 * kCsCols + sCapSelIndex % kCsCols;
+            const int row = std::min(csRows() - 1, sCsScroll + 2);
+            sCapSelIndex  = std::min(row * kCsCols + sCapSelIndex % kCsCols, csCount() - 1);
+            csShow(sCapSelIndex);
         }
     } else {
-        const int row = sCapSelIndex / kCsCols, col = sCapSelIndex % kCsCols;
-        if (left)  sCapSelIndex = row * kCsCols + (col + kCsCols - 1) % kCsCols;
-        if (right) sCapSelIndex = row * kCsCols + (col + 1) % kCsCols;
-        if (up && row > 0) sCapSelIndex -= kCsCols;
-        if (down) {
-            if (row < 2) sCapSelIndex += kCsCols;
-            else sCapSelStart = true;
-        }
+        if (left) csMove(sCapSelIndex, -1, 0, nullptr);
+        if (right) csMove(sCapSelIndex, 1, 0, nullptr);
+        if (up) csMove(sCapSelIndex, 0, -1, nullptr);
+        if (down) csMove(sCapSelIndex, 0, 1, &sCapSelStart);
     }
 
     {
@@ -6413,10 +6511,8 @@ void pcCaptainSelectInput()
     if (accept && !sCapSelStart) {
         csAssign(sCapSelIndex);
     } else if (accept || start) {
-        sConfig.p2Captain1 = sCapSelChoice[0];
-        sConfig.p2Captain2 = sCapSelChoice[1];
-        pc_p2_captain_set_choice(0, sCapSelChoice[0]);
-        pc_p2_captain_set_choice(1, sCapSelChoice[1]);
+        p2StoreCaptain(0, sCapSelChoice[0]);
+        p2StoreCaptain(1, sCapSelChoice[1]);
         saveConfig();
         sCapSelResult = PC_CAPSEL_START;
         sCapSelOpen   = false;
@@ -6432,8 +6528,12 @@ void pc_captain_select_open(void)
     sCapSelOpen      = true;
     sCapSelArmed     = false;
     sCapSelResult    = PC_CAPSEL_PENDING;
-    sCapSelChoice[0] = sConfig.p2Captain1 >= 0 && sConfig.p2Captain1 < PC_P2_CHAR_COUNT ? sConfig.p2Captain1 : PC_P2_CHAR_OLIMAR;
-    sCapSelChoice[1] = sConfig.p2Captain2 >= -1 && sConfig.p2Captain2 < PC_P2_CHAR_COUNT ? sConfig.p2Captain2 : -1;
+    pc_p2_custom_characters_scan(); // los instalados desde la última vez
+    sCsScroll        = 0;
+    sCapSelChoice[0] = p2SavedCaptain(0);
+    sCapSelChoice[1] = p2SavedCaptain(1);
+    if (!csValid(sCapSelChoice[0]) || sCapSelChoice[0] < 0) sCapSelChoice[0] = PC_P2_CHAR_OLIMAR;
+    if (!csValid(sCapSelChoice[1])) sCapSelChoice[1] = -1;
     // El cursor empieza sobre Start: lo normal es repetir la última elección.
     sCapSelStart     = true;
     csSetActive(0);
@@ -6520,7 +6620,8 @@ void pc_captain_select_draw(void)
     }
 
     // Rejilla: el fondo de la tarjeta elegida, rojo (1), azul (2) o morado (los dos).
-    for (int i = 0; i < PC_P2_CHAR_COUNT; ++i) {
+    for (int i = 0; i < csCount(); ++i) {
+        if (!csVisible(i)) continue;
         const bool by1 = csCardChosen(0, i), by2 = csCardChosen(1, i);
         const int cx = csCardX(panelX, i), cy = csCardY(panelY, i);
         if (atlas) {
@@ -6546,7 +6647,7 @@ void pc_captain_select_draw(void)
         csCenteredText(cx + kCsCardW / 2, cy + kCsCardH - 22, kCsCardW - 8, csShortName(i), by1 || by2 ? white : dim, 11, 15);
         if (sCsCardCount < int(sizeof(sCsCards) / sizeof(sCsCards[0]))) {
             CsCard& card = sCsCards[sCsCardCount++];
-            card.character = i;
+            card.character = pc_p2_selector_character(i);
             card.x = cx + 10, card.y = cy + 4, card.w = kCsCardW - 20, card.h = kCsCardH - 26;
             card.spin   = false;
             card.tinted = false;
@@ -6560,11 +6661,17 @@ void pc_captain_select_draw(void)
         for (int captain = 0; captain < 2; ++captain) {
             const bool moving = sCsCoop ? !sCsReady[captain] : captain == sCapSelActive && !sCapSelStart;
             const int card    = !moving ? csCardIndex(sCapSelChoice[captain]) : sCsCoop ? sCsCursor[captain] : sCapSelIndex;
+            if (!csVisible(card)) continue; // su tarjeta está fuera de las filas que se ven
             const int bx      = csCardX(panelX, card) + (captain == 0 ? 12 : kCsCardW - 12);
             pc_settings_p2d_cursor_tinted(bx, csCardY(panelY, card) + 12, moving ? 17 : 13, moving ? angle : 0.0f,
                                           captain == 0 ? kCsRed : kCsBlue);
         }
     }
+
+    // Más personajes arriba o abajo de las tres filas que se ven.
+    if (sCsScroll > 0) csCenteredText(csGridX(panelX) + kCsGridW / 2, csTop(panelY) - 14, kCsGridW, "^ more ^", dim, 10, 13);
+    if (sCsScroll + 3 < csRows())
+        csCenteredText(csGridX(panelX) + kCsGridW / 2, csTop(panelY) + kCsGridH - 1, kCsGridW, "v more v", dim, 10, 13);
 
     // Botón Start (co-op: se enciende con los dos listos).
     const bool pcStartLit = sCsCoop ? sCsReady[0] && sCsReady[1] : sCapSelStart;
@@ -8539,6 +8646,16 @@ void graphicsRowValue(int i, char* value, size_t n) {
         break;
     }
     case 12: snprintf(value, n, "%s", sPending.perPixelLighting ? "Smooth" : "Original"); break;
+    case 14:
+    case 15:
+    case 16:
+    case 17:
+    case 18: {
+        static const int kColour[5] = { 1, 2, 0, 3, 4 };
+        const char* name = pc_p2_pikmin_models_name_of(kColour[i - 14], sPending.pikminModel[kColour[i - 14]].c_str());
+        snprintf(value, n, "%s", *name ? name : "Game");
+        break;
+    }
     case 13: {
         const char* names[4] = { "Original", "Soft", "Normal", "Strong" };
         snprintf(value, n, "%s", names[(sPending.shadows >= 0 && sPending.shadows <= 3) ? sPending.shadows : 0]);
@@ -8716,6 +8833,13 @@ const GroupRow kGraphicsRows[] = {
     { SRC_GFX, 10, "Texture Packs", "Replacement textures made by the community. Install one from its zip or switch between them. Changes need a restart." },
 #if !PIKI_P2_HOST // los modelos HD son de Pikmin 1
     { SRC_GFX, 11, "HD Models", "High-detail character models. Install each one from its zip, then turn it On or Off." },
+#endif
+#if PIKI_P2_HOST // modelos del creador de modelos (Load/Pikmin)
+    { SRC_GFX, 14, "Red Pikmin Model", "Game: the original Red Pikmin. Or a model made with the model maker and installed for this game. Applies from the next area." },
+    { SRC_GFX, 15, "Yellow Pikmin Model", "Game: the original Yellow Pikmin. Or a model made with the model maker and installed for this game. Applies from the next area." },
+    { SRC_GFX, 16, "Blue Pikmin Model", "Game: the original Blue Pikmin. Or a model made with the model maker and installed for this game. Applies from the next area." },
+    { SRC_GFX, 17, "Purple Pikmin Model", "Game: the original Purple Pikmin. Or a model made with the model maker and installed for this game. Applies from the next area." },
+    { SRC_GFX, 18, "White Pikmin Model", "Game: the original White Pikmin. Or a model made with the model maker and installed for this game. Applies from the next area." },
 #endif
 };
 

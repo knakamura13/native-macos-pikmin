@@ -220,6 +220,8 @@ include_directories(
     ${PIKMIN2_DECOMP_DIR}/include/Dolphin/OS
     ${PIKMIN2_DECOMP_DIR}/include/Dolphin/GC
     ${PIKMIN2_DECOMP_DIR}/include/Game
+    # Personajes del creador de modelos (nectar_assets/nhm.h), como en Pikmin 1.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/nectar_assets/include
 )
 
 ###############################################################################
@@ -374,6 +376,9 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
         ${PC_PORT_DIR}/pc_icon.cpp
         ${PC_PORT_DIR}/pc_file_dialog.cpp
         ${PC_PORT_DIR}/mods/pc_hd_model_convert.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/nectar_assets/src/nhm.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/nectar_assets/src/charpack.cpp
+        ${PC_PORT_DIR}/mods/pc_p2_pikmin_models.cpp
         ${PC_PORT_DIR}/pc_pad_axis.cpp
         ${PC_PORT_DIR}/pc_menu_pad.cpp
         ${PC_PORT_DIR}/pc_menu_pointer.cpp
@@ -663,6 +668,15 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
         pikmin2_add_host_test(p2_captain_preview_layout_test
             ${PC_PORT_DIR}/pc_p2_captain_preview_layout_test.cpp
         )
+        # Ranuras de los personajes del creador de modelos (Load/Characters).
+        pikmin2_add_host_test(p2_custom_characters_test
+            ${PC_PORT_DIR}/pc_p2_custom_characters_test.cpp
+            ${PC_PORT_DIR}/pc_p2_captains.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/nectar_assets/src/charpack.cpp
+        )
+        target_include_directories(p2_custom_characters_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/nectar_assets/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
         pikmin2_add_host_test(p2_tev_shader_test
             ${PC_PORT_DIR}/gl/pc_tev_shader_test.cpp
             ${PC_PORT_DIR}/gl/pc_tev_shader.cpp
@@ -842,3 +856,8 @@ if(PIKMIN2_TSAN)
     endforeach()
     message(STATUS "ThreadSanitizer: ENABLED (diagnostic build)")
 endif()
+
+# Personajes del creador de modelos (Load/Characters): charpack lee su
+# character.json y comprueba el retrato, como en Pikmin 1.
+set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/../../libs/nectar_assets/src/charpack.cpp PROPERTIES
+    INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../pikmin1/third_party/nlohmann/include;${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")
