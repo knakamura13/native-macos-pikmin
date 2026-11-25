@@ -10,6 +10,12 @@
 // only, null otherwise.
 void pc_netplay_load_keepalive(int site);
 #endif
+#if defined(PIKI_PC_PORT)
+#include "netplay/pc_netplay_det.h"
+#endif
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 
 /// Global thread for async card operations called directly by the game code.
 CardUtilThread CardThread;
@@ -633,6 +639,24 @@ static s32 DoSave(s32 chan, CARDStat* fileState, void* fileData)
 	return CARDFreeBlocks(chan, CardUtilByteNotUsed(), CardUtilFilesNotUsed());
 }
 
+/// True when a command must finish before CardUtilCommand returns: any deterministic
+/// run, so the tick a save screen ends on does not follow the card's wall-clock speed.
+/// A scenario run follows its own switch instead (--scenario-card-async turns the wait
+/// off, and a hand-off returns to the game's asynchronous card).
+static bool CardUtilWaitsForCommand()
+{
+#if PIKI_SCENARIOS
+	if (pc_scenario_active()) {
+		return pc_scenario_card_sync();
+	}
+#endif
+#if defined(PIKI_PC_PORT)
+	return pc_netplay_deterministic();
+#else
+	return false;
+#endif
+}
+
 /**
  * @brief Issues a command to the card utility thread for async execution.
  * @param chan Memory card channel (0 or 1 for Slot A or Slot B).
@@ -668,6 +692,13 @@ static s32 CardUtilCommand(s32 chan, s32 command, void* file, void* workBuffer, 
 		OSSignalCond(&CardControl.mCondition);
 	}
 	OSUnlockMutex(&CardControl.mMutex);
+	// Deterministic runs (scenarios, netplay, recorded days): finish the command
+	// before returning, so a screen that polls hasCardFinished() once per tick
+	// sees it done whatever the card thread's speed. Normal play keeps the
+	// asynchronous card, as on the GameCube.
+	if (res == CARD_RESULT_READY && CardUtilWaitsForCommand()) {
+		CardUtilIdleWhileBusy();
+	}
 	return res;
 }
 
@@ -836,6 +867,9 @@ static void* CardUtilMain(void*)
 		offset = CardControl.mOffset;  // r21
 		length = CardControl.mLength;  // r17
 		OSUnlockMutex(&CardControl.mMutex);
+#if PIKI_SCENARIOS
+		pc_scenario_card_thread_delay(); // --scenario-card-delay-ms: a slow card
+#endif
 
 		// execute command
 		switch (cmd) {

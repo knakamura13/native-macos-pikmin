@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 bool pc_window_init(const char* title, int width, int height);
+void pc_window_set_hidden(bool hidden); // before pc_window_init: create the window hidden (--scenario)
 void pc_window_poll_events(PADStatus* pad);
 void pc_window_swap_buffers(void);
 void pc_window_set_swap_interval(int interval);
