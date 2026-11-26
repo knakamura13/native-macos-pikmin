@@ -17,6 +17,10 @@
 #include "MapCode.h"
 #include "MapMgr.h"
 #include "Pellet.h"
+#if defined(PIKI_PC_PORT)
+#include "Piki.h"
+#include "PikiState.h"
+#endif
 #include "RadarInfo.h"
 #include "SearchSystem.h"
 #include "SoundMgr.h"
@@ -412,6 +416,9 @@ void Creature::adjustDistance(immut Vector3f& targetPos, f32 targetDist)
  */
 void Creature::init()
 {
+#if defined(PIKI_PC_PORT)
+	mPcBallisticClock.reset();
+#endif
 	mSearchBuffer.invalidate();
 	mConstrainedMoveMtx.makeIdentity();
 	mWorldMtx.makeIdentity();
@@ -481,6 +488,9 @@ int Creature::getAtariType()
  */
 void Creature::resetPosition(immut Vector3f& pos)
 {
+#if defined(PIKI_PC_PORT)
+	mPcBallisticClock.reset();
+#endif
 	mSRT.t        = pos;
 	mLastPosition = pos;
 }
@@ -678,6 +688,10 @@ void Creature::update()
 	}
 #endif
 
+#if defined(PIKI_PC_PORT)
+	// A new launch from a surface/attachment starts its own reference interval.
+	if (mGroundTriangle || !mHoldingCreature.isNull() || mRope || mStickTarget) mPcBallisticClock.reset();
+#endif
 	// Handle AI and animations if not frozen
 	if (!mIsFrozen) {
 		doAnimation();
@@ -762,11 +776,25 @@ void Creature::update()
 
 	// Apply movement in two passes - volatile (temporary) and normal velocity
 	f32 deltaTime = gsys->getFrameTime();
+#if defined(PIKI_PC_PORT)
+	const bool referenceMotion = PcBallisticClock::enabled(deltaTime);
+	float remaining = deltaTime;
+	do {
+		if (referenceMotion) {
+			deltaTime = mPcBallisticClock.slice(remaining);
+		} else {
+			mPcBallisticClock.reset();
+		}
+#endif
 	MATCHING_START_TIMER("MOVENEW", true);
 #if defined(PIKI_PC_PORT)
 	// A thrown Pikmin integrates in 1/30 s steps. Smaller ticks make the same
 	// launch speed peak higher (upstream #320). 30 Hz does not take this branch.
-	{
+	// Above 30 Hz the ballistic clock already slices this update into reference
+	// steps, including throws. Stepping the throw arc as well replaces that
+	// slice and returns out of the substep loop, so the arc owns the tick only
+	// when the clock is off.
+	if (!referenceMotion) {
 		bool holdThrow = false;
 		f32 throwStep  = deltaTime;
 		if (pc_throw_arc_movement(this, deltaTime, &holdThrow, &throwStep)) {
@@ -780,8 +808,30 @@ void Creature::update()
 	}
 #endif
 	Vector3f originalVel(mVelocity);
+#if defined(PIKI_PC_PORT)
+	const u32 volatileMode = (usesGravity() ? 1u : 0u) | (isCreatureFlag(CF_EnableAirDrag) ? 2u : 0u);
+	if (referenceMotion && !mPcBallisticClock.boundary() && volatileMode == mPcVolatileMode) {
+		// The discarded pass still owns a reference segment. Retain the
+		// collision-adjusted slope; a floor contact must not be charged again
+		// on every sub-tick. New volatile impulses apply immediately.
+		mVelocity = mPcVolatileTransport + (mVolatileVelocity - mPcVolatileInput);
+	} else {
+		mVelocity = mVolatileVelocity;
+	}
+	mPcVolatileMode = volatileMode;
+	mPcVolatileInput = mVolatileVelocity;
+	const float volatileStartY = mSRT.t.y;
+	moveNewStep(deltaTime, referenceMotion ? (mPcBallisticClock.boundary() ? PcBallisticClock::step : 0.0f) : deltaTime);
+	mPcVolatileTransport = mVelocity;
+	if (referenceMotion && mGroundTriangle) {
+		// traceMove retains a damped downward physical velocity at a floor,
+		// even though the reference segment's actual displacement is clamped.
+		mPcVolatileTransport.y = (mSRT.t.y - volatileStartY) / deltaTime;
+	}
+#else
 	mVelocity = mVolatileVelocity;
 	moveNew(deltaTime);
+#endif
 
 	// Handle fixed position on non-slippery surfaces, with a slope < 60 degrees
 	if (mVolatileVelocity.length() > 0.0f && isCreatureFlag(CF_AllowFixPosition) && isCreatureFlag(CF_IsPositionFixed) && mGroundTriangle
@@ -790,7 +840,11 @@ void Creature::update()
 	}
 
 	mVelocity = originalVel;
+#if defined(PIKI_PC_PORT)
+	moveNewStep(deltaTime, referenceMotion ? (mPcBallisticClock.boundary() ? PcBallisticClock::step : 0.0f) : deltaTime);
+#else
 	moveNew(deltaTime);
+#endif
 
 	// Update the fixed position status
 	if (isCreatureFlag(CF_AllowFixPosition)) {
@@ -834,9 +888,26 @@ void Creature::update()
 		}
 	}
 
-	mVolatileVelocity.set(0.0f, 0.0f, 0.0f);
 	moveRotation(deltaTime);
 	MATCHING_STOP_TIMER("MOVENEW");
+#if defined(PIKI_PC_PORT)
+		if (referenceMotion) {
+			mPcBallisticClock.advance(deltaTime);
+			// ViewPiki runs its state handler after Creature movement. Preserve
+			// that ordering, including inherited downward velocity and impulses
+			// applied at the apex, at each completed reference interval.
+			if (mPcBallisticClock.boundary() && mObjType == OBJTYPE_Piki) {
+				Piki* piki = static_cast<Piki*>(this);
+				if (piki->getState() == PIKISTATE_Flying) {
+					static_cast<PikiFlyingState*>(piki->getCurrState())->integrateFlight(piki, PcBallisticClock::step, false);
+				}
+			}
+		}
+		remaining -= deltaTime;
+	} while (remaining > 0.0000001f);
+	if (mGroundTriangle) mPcBallisticClock.reset();
+#endif
+	mVolatileVelocity.set(0.0f, 0.0f, 0.0f);
 }
 
 /**

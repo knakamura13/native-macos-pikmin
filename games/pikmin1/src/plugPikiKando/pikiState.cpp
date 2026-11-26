@@ -1,4 +1,7 @@
 #include "PikiState.h"
+#if PIKI_SCENARIOS
+#include <cstdlib>
+#endif
 #include "AIConstant.h"
 #include "BombItem.h"
 #include "CPlate.h"
@@ -1071,6 +1074,9 @@ PikiFlickState::PikiFlickState()
  */
 void PikiFlickState::init(Piki* piki)
 {
+#if defined(PIKI_PC_PORT)
+	if (piki->mGroundTriangle || !piki->mHoldingCreature.isNull()) piki->mPcBallisticClock.reset();
+#endif
 	mState            = FLS_FlyingBack;
 	mInitialAngle     = piki->mRotationAngle;
 	mRotationDelta    = 0.1f * (PI * gsys->getRand(1.0f));
@@ -1935,6 +1941,9 @@ void PikiFlyingState::restartEffect()
  */
 void PikiFlyingState::init(Piki* piki)
 {
+#if defined(PIKI_PC_PORT)
+	piki->mPcBallisticClock.reset();
+#endif
 	PRINT_KANDO("flying state init\n");
 	PRINT_KANDO("piki is %s\n", piki->isHolding() ? "holding" : "not holding");
 	piki->mMotionSpeed = 30.0f;
@@ -1969,15 +1978,27 @@ void PikiFlyingState::exec(Piki* piki)
 	}
 
 	mSparkleEffect.updatePos(piki->mSRT.t);
-
+	const f32 dt = gsys->getFrameTime();
 #if defined(PIKI_PC_PORT)
-	// Movement already took this tick's 30 Hz step, or held. A hold must not
-	// start the glide or draw another random fall offset.
+	if (PcBallisticClock::enabled(dt)) {
+		// Visual spin stays at the configured cadence. Ballistic terms run
+		// from the shared movement clock at every reference boundary.
+		if (mIsFlowerGliding) piki->mFaceDirection = roundAng(dt * PI / 0.42f + piki->mFaceDirection);
+		return;
+	}
+	// 30 Hz, where the ballistic clock does not run. A held throw must not
+	// start the glide or draw another random fall offset. Above 30 Hz the
+	// ballistic clock owns the step, and Creature::update calls integrateFlight
+	// on each reference boundary.
 	if (pc_throw_arc_would_hold(piki)) {
 		return;
 	}
 #endif
+	integrateFlight(piki, dt, true);
+}
 
+void PikiFlyingState::integrateFlight(Piki* piki, f32 forceTime, bool spin)
+{
 	f32 startGrav          = AICONST.mGravity() * 0.8f;
 	f32 glideGrav          = AICONST.mGravity() * C_PIKI_PARM(piki, mFlowerGravityScale);
 	f32 gravTransitionTime = 0.15f;
@@ -2027,16 +2048,17 @@ void PikiFlyingState::exec(Piki* piki)
 		return;
 	}
 
-#if defined(PIKI_PC_PORT)
-	const f32 step = pc_throw_arc_integrate_dt(piki, gsys->getFrameTime());
-#else
-	const f32 step = gsys->getFrameTime();
-#endif
-	piki->mFaceDirection = roundAng(step * PI / 0.42f + piki->mFaceDirection);
-	mGlideTimer += step;
+	if (spin) piki->mFaceDirection = roundAng(forceTime * PI / 0.42f + piki->mFaceDirection);
+	mGlideTimer += forceTime;
 
 	// for some natural variation in fall speed
 	f32 randomFactor = (gsys->getRand(1.0f) - 0.5f) * 0.01f;
+#if PIKI_SCENARIOS
+	// Controlled trajectory fixtures isolate integration from the world's
+	// rate-dependent RNG stream. Keep the draw, and never change release builds.
+	const char* fixedNoise = std::getenv("PIKMIN_BALLISTIC_GLIDE_NOISE_ZERO");
+	if (fixedNoise && fixedNoise[0] == '1' && fixedNoise[1] == '\0') randomFactor = 0.0f;
+#endif
 
 	STACK_PAD_TERNARY(randomFactor, 1);
 
@@ -2047,7 +2069,7 @@ void PikiFlyingState::exec(Piki* piki)
 		gravAdjust = glideGrav;
 	}
 
-	piki->mVelocity.y += ((AICONST.mGravity() - gravAdjust) * (randomFactor + 1.0f)) * step;
+	piki->mVelocity.y += ((AICONST.mGravity() - gravAdjust) * (randomFactor + 1.0f)) * forceTime;
 
 	STACK_PAD_VAR(4);
 }
