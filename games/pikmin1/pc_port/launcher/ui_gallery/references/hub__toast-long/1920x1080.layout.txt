@@ -1,0 +1,42 @@
+# ui 1387x780 scale 1.385
+logo 343 18 1043 171 ##hub | logo
+button 463 181 607 223 ##hub | Games
+label 463 181 607 223 ##hub | Games
+button 621 181 765 223 ##hub | Settings
+label 621 181 765 223 ##hub | Settings
+button 779 181 923 223 ##hub | Move Install
+label 779 181 923 223 ##hub | Move Install
+button 543 239 687 277 ##hub | Pikmin
+label 543 239 687 277 ##hub | Pikmin
+button 699 239 843 277 ##hub | Pikmin 2
+label 699 239 843 277 ##hub | Pikmin 2
+button 193 301 383 334 ##hub | Display
+label 193 301 383 334 ##hub | Display
+button 193 342 383 375 ##hub | Graphics
+label 193 342 383 375 ##hub | Graphics
+button 193 383 383 416 ##hub | Controls
+label 193 383 383 416 ##hub | Controls
+button 193 424 383 456 ##hub | Camera
+label 193 424 383 456 ##hub | Camera
+button 193 464 383 497 ##hub | Gameplay
+label 193 464 383 497 ##hub | Gameplay
+button 193 505 383 538 ##hub | Cheats
+label 193 505 383 538 ##hub | Cheats
+button 193 546 383 579 ##hub | Texture Packs
+label 193 546 383 579 ##hub | Texture Packs
+button 193 587 383 619 ##hub | HD Models
+label 193 587 383 619 ##hub | HD Models
+button 193 627 383 660 ##hub | Saves
+label 193 627 383 660 ##hub | Saves
+button 193 672 383 716 ##hub | Reset all
+label 193 672 383 716 ##hub | Reset all
+button 421 410 634 449 ##hub | Off (original textures)
+button-disabled 421 461 541 500 ##hub | HD 1080p
+button 1052 464 1172 498 ##hub | Install
+label 1052 464 1172 498 ##hub | Install
+button-disabled 421 512 513 551 ##hub | HD 4K
+button 1052 515 1172 549 ##hub | Install
+label 1052 515 1172 549 ##hub | Install
+button 421 618 721 664 ##hub | Install a pack from a .zip
+label 421 618 721 664 ##hub | Install a pack from a .zip
+toast 225 685 1162 722 foreground | Installed HD 4K (1.2 GB) to /home/player/Games/Open Nectar/Load/Textures/hd-4k. It applies the next time the game starts.
